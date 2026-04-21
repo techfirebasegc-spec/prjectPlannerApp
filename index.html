@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CliniQ Agile Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-block">
+        <p class="brand-kicker">Portfolio View</p>
+        <h1>CliniQ Agile Planner</h1>
+        <p class="brand-subtitle">Sprint execution board</p>
+      </div>
+
+      <section class="filter-panel">
+        <h2>Filters</h2>
+        <label for="piFilter">PI</label>
+        <select id="piFilter" class="filter-select">
+          <option value="all">All PI</option>
+        </select>
+
+        <label for="sprintFilter">Sprint</label>
+        <select id="sprintFilter" class="filter-select">
+          <option value="all">All Sprints</option>
+        </select>
+
+        <label for="featureFilter">Feature</label>
+        <select id="featureFilter" class="filter-select">
+          <option value="all">All Features</option>
+        </select>
+
+        <label for="assigneeFilter">Assignee</label>
+        <select id="assigneeFilter" class="filter-select">
+          <option value="all">All Assignees</option>
+        </select>
+      </section>
+
+      <section class="controls-panel">
+        <h2>Board Controls</h2>
+        <label for="sortBy">Sort Cards</label>
+        <select id="sortBy" class="filter-select">
+          <option value="default">Default Order</option>
+          <option value="dueDate">Due Date</option>
+          <option value="priority">Priority</option>
+          <option value="assignee">Assignee</option>
+          <option value="task">Task Name</option>
+        </select>
+
+        <p class="control-subhead">WIP Limits</p>
+        <div class="wip-grid">
+          <label for="todoLimit">To Do</label>
+          <input id="todoLimit" type="number" min="0" class="wip-input" placeholder="No limit">
+
+          <label for="inprogressLimit">In Progress</label>
+          <input id="inprogressLimit" type="number" min="0" class="wip-input" placeholder="No limit">
+
+          <label for="doneLimit">Done</label>
+          <input id="doneLimit" type="number" min="0" class="wip-input" placeholder="No limit">
+        </div>
+      </section>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <label class="search-wrap" for="searchInput">
+          <span class="search-icon" aria-hidden="true">&#128269;</span>
+          <input id="searchInput" type="search" placeholder="Search by task, story, assignee, feature..." autocomplete="off">
+        </label>
+
+        <div class="stats-grid">
+          <article class="stat-card">
+            <p>Total Tasks</p>
+            <strong id="totalTasks">0</strong>
+          </article>
+          <article class="stat-card">
+            <p>Completed</p>
+            <strong id="completedPercent">0%</strong>
+          </article>
+          <article class="stat-card">
+            <p>In Progress</p>
+            <strong id="inProgressCount">0</strong>
+          </article>
+        </div>
+      </header>
+
+      <section class="progress-panel" aria-label="Completion progress">
+        <div class="progress-head">
+          <h2>Completion Progress</h2>
+          <span id="progressLabel">0%</span>
+        </div>
+        <div class="progress-track">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+      </section>
+
+      <main class="board" aria-label="Kanban board">
+        <section class="column" data-status="todo">
+          <header class="column-header">
+            <h3>To Do</h3>
+            <span class="column-count" id="todoCount">0</span>
+          </header>
+          <div class="task-list" id="todoList" data-status="todo"></div>
+        </section>
+
+        <section class="column" data-status="inprogress">
+          <header class="column-header">
+            <h3>In Progress</h3>
+            <span class="column-count" id="inprogressCount">0</span>
+          </header>
+          <div class="task-list" id="inprogressList" data-status="inprogress"></div>
+        </section>
+
+        <section class="column" data-status="done">
+          <header class="column-header">
+            <h3>Done</h3>
+            <span class="column-count" id="doneCount">0</span>
+          </header>
+          <div class="task-list" id="doneList" data-status="done"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div id="taskModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-card" role="document">
+      <button id="closeModal" class="modal-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="modalTitle"></h2>
+      <div id="modalBody" class="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
