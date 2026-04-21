@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CliniQ Planner Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+  <main class="login-shell">
+    <section class="login-card" aria-label="Login form">
+      <p class="login-kicker">Secure Access</p>
+      <h1>CliniQ Project Planner</h1>
+      <p class="login-subtitle">Sign in to access the planning board</p>
+
+      <form id="loginForm" novalidate>
+        <label for="userId">Login ID</label>
+        <input id="userId" name="userId" type="text" autocomplete="username" required>
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+        <button id="loginBtn" type="submit">Sign In</button>
+        <p id="loginError" class="login-error" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="auth.js" defer></script>
+  <script src="login.js" defer></script>
+</body>
+</html>

@@ -142,6 +142,13 @@ body {
   flex-wrap: wrap;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .search-wrap {
   flex: 1;
   min-width: 260px;
@@ -193,6 +200,23 @@ body {
   display: block;
   margin-top: 6px;
   font-size: 1.2rem;
+}
+
+.logout-btn {
+  border: 1px solid #b8c8de;
+  border-radius: 10px;
+  background: #fff;
+  color: #244264;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 10px 14px;
+  transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+  border-color: #8ea8ca;
+  background: #f5f9ff;
 }
 
 .progress-panel {
@@ -520,6 +544,14 @@ body {
   .stats-grid {
     width: 100%;
     grid-template-columns: 1fr;
+  }
+
+  .topbar-right {
+    width: 100%;
+  }
+
+  .logout-btn {
+    width: 100%;
   }
 
   .filter-panel,

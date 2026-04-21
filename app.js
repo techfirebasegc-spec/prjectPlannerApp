@@ -51,6 +51,7 @@
     todoColumn: document.querySelector('.column[data-status="todo"]'),
     inprogressColumn: document.querySelector('.column[data-status="inprogress"]'),
     doneColumn: document.querySelector('.column[data-status="done"]'),
+    logoutBtn: document.getElementById("logoutBtn"),
     modal: document.getElementById("taskModal"),
     modalTitle: document.getElementById("modalTitle"),
     modalBody: document.getElementById("modalBody"),
@@ -58,6 +59,10 @@
   };
 
   function init() {
+    if (!ensureAuthenticated()) {
+      return;
+    }
+
     loadPreferences();
     bindEvents();
     loadData();
@@ -95,6 +100,7 @@
     els.todoLimit.addEventListener("input", onWipLimitChange);
     els.inprogressLimit.addEventListener("input", onWipLimitChange);
     els.doneLimit.addEventListener("input", onWipLimitChange);
+    els.logoutBtn.addEventListener("click", onLogoutClick);
 
     [els.todoList, els.inprogressList, els.doneList].forEach((list) => {
       list.addEventListener("dragover", onListDragOver);
@@ -734,6 +740,21 @@
     if (selectEl === els.assigneeFilter) {
       appState.filters.assignee = selectEl.value;
     }
+  }
+
+  function ensureAuthenticated() {
+    if (!window.AuthGate || !window.AuthGate.isAuthenticated()) {
+      window.location.href = "login.html";
+      return false;
+    }
+    return true;
+  }
+
+  function onLogoutClick() {
+    if (window.AuthGate) {
+      window.AuthGate.clearSession();
+    }
+    window.location.href = "login.html";
   }
 
   function escapeHtml(value) {

@@ -73,19 +73,22 @@
           <input id="searchInput" type="search" placeholder="Search by task, story, assignee, feature..." autocomplete="off">
         </label>
 
-        <div class="stats-grid">
-          <article class="stat-card">
-            <p>Total Tasks</p>
-            <strong id="totalTasks">0</strong>
-          </article>
-          <article class="stat-card">
-            <p>Completed</p>
-            <strong id="completedPercent">0%</strong>
-          </article>
-          <article class="stat-card">
-            <p>In Progress</p>
-            <strong id="inProgressCount">0</strong>
-          </article>
+        <div class="topbar-right">
+          <div class="stats-grid">
+            <article class="stat-card">
+              <p>Total Tasks</p>
+              <strong id="totalTasks">0</strong>
+            </article>
+            <article class="stat-card">
+              <p>Completed</p>
+              <strong id="completedPercent">0%</strong>
+            </article>
+            <article class="stat-card">
+              <p>In Progress</p>
+              <strong id="inProgressCount">0</strong>
+            </article>
+          </div>
+          <button id="logoutBtn" class="logout-btn" type="button">Logout</button>
         </div>
       </header>
 
@@ -135,6 +138,7 @@
     </div>
   </div>
 
+  <script src="auth.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>
