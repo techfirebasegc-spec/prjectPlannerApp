@@ -1056,5 +1056,28 @@
         "Sprint End Date": "2026-05-10",
         "Spill over": "",
         "Backlog": ""
+    },
+    {
+        "PI_ID ": "PI2",
+        " PI ": "PI Planning -2",
+        " Sprint ": "Sprint 3",
+        " App ": "The CliniQ Mobile App",
+        " Feature_ID ": "F12",
+        " Feature ": "UI/UX",
+        " Story_ID ": "S38",
+        " User Story ": "The CliniQ - History and Appointment Cared Redesign",
+        " Story Points ": 2,
+        " Task_ID ": "",
+        " Task ": "",
+        " Description ": "",
+        " Assignee ": "Kalyan",
+        " Start Date ": "",
+        " End Date ": "",
+        " Status": "Defined",
+        "Capacity": 10,
+        "Sprint Start Date ": "2026-05-01",
+        "Sprint End Date": "2026-05-10",
+        "Spill over": "",
+        "Backlog": ""
     }
 ]
