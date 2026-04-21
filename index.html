@@ -92,41 +92,95 @@
         </div>
       </header>
 
-      <section class="progress-panel" aria-label="Completion progress">
-        <div class="progress-head">
-          <h2>Completion Progress</h2>
-          <span id="progressLabel">0%</span>
-        </div>
-        <div class="progress-track">
-          <div id="progressBar" class="progress-bar"></div>
-        </div>
+      <section class="view-switch" aria-label="View switcher">
+        <button id="boardViewBtn" class="view-btn is-active" type="button">Kanban Board</button>
+        <button id="insightsViewBtn" class="view-btn" type="button">Agile Insights</button>
       </section>
 
-      <main class="board" aria-label="Kanban board">
-        <section class="column" data-status="todo">
-          <header class="column-header">
-            <h3>To Do</h3>
-            <span class="column-count" id="todoCount">0</span>
-          </header>
-          <div class="task-list" id="todoList" data-status="todo"></div>
+      <div id="boardView">
+        <section class="progress-panel" aria-label="Completion progress">
+          <div class="progress-head">
+            <h2>Completion Progress</h2>
+            <span id="progressLabel">0%</span>
+          </div>
+          <div class="progress-track">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
         </section>
 
-        <section class="column" data-status="inprogress">
-          <header class="column-header">
-            <h3>In Progress</h3>
-            <span class="column-count" id="inprogressCount">0</span>
-          </header>
-          <div class="task-list" id="inprogressList" data-status="inprogress"></div>
-        </section>
+        <main class="board" aria-label="Kanban board">
+          <section class="column" data-status="todo">
+            <header class="column-header">
+              <h3>To Do</h3>
+              <span class="column-count" id="todoCount">0</span>
+            </header>
+            <div class="task-list" id="todoList" data-status="todo"></div>
+          </section>
 
-        <section class="column" data-status="done">
-          <header class="column-header">
-            <h3>Done</h3>
-            <span class="column-count" id="doneCount">0</span>
-          </header>
-          <div class="task-list" id="doneList" data-status="done"></div>
-        </section>
-      </main>
+          <section class="column" data-status="inprogress">
+            <header class="column-header">
+              <h3>In Progress</h3>
+              <span class="column-count" id="inprogressCount">0</span>
+            </header>
+            <div class="task-list" id="inprogressList" data-status="inprogress"></div>
+          </section>
+
+          <section class="column" data-status="done">
+            <header class="column-header">
+              <h3>Done</h3>
+              <span class="column-count" id="doneCount">0</span>
+            </header>
+            <div class="task-list" id="doneList" data-status="done"></div>
+          </section>
+        </main>
+      </div>
+
+      <section id="insightsView" class="insights-view is-hidden" aria-label="Agile insights">
+        <div class="insights-header">
+          <h2>Sprint Calendar & Delivery Insights</h2>
+          <select id="calendarMonth" class="filter-select"></select>
+        </div>
+
+        <div id="sprintLegend" class="sprint-legend"></div>
+        <div id="sprintCalendar" class="sprint-calendar"></div>
+
+        <div class="agile-metrics">
+          <article class="metric-card">
+            <p>Committed Points</p>
+            <strong id="committedPoints">0</strong>
+          </article>
+          <article class="metric-card">
+            <p>Completed Points</p>
+            <strong id="completedPoints">0</strong>
+          </article>
+          <article class="metric-card">
+            <p>Spillover Tasks</p>
+            <strong id="spilloverTasks">0</strong>
+          </article>
+          <article class="metric-card">
+            <p>Overdue Open</p>
+            <strong id="overdueOpen">0</strong>
+          </article>
+        </div>
+
+        <div class="chart-grid">
+          <section class="chart-card">
+            <header>
+              <h3>Burndown Chart</h3>
+              <p id="burndownSubtitle">Current sprint trend</p>
+            </header>
+            <canvas id="burndownChart" height="140"></canvas>
+          </section>
+
+          <section class="chart-card">
+            <header>
+              <h3>Velocity Chart</h3>
+              <p>Committed vs completed by sprint</p>
+            </header>
+            <canvas id="velocityChart" height="140"></canvas>
+          </section>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -138,6 +192,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="auth.js" defer></script>
   <script src="app.js" defer></script>
 </body>

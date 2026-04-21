@@ -18,10 +18,10 @@ def excel_to_json(excel_file, output_file="output.json", sheet_name=0):
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
 
-        print(f"✅ Successfully converted to {output_file}")
+        print(f" Successfully converted to {output_file}")
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f" Error: {e}")
 
 if __name__ == "__main__":
-    excel_to_json("input.xlsx", "output.json")
+    excel_to_json("input.xlsx", "data.json")
