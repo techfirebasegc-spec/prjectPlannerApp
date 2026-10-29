@@ -4673,3 +4673,16 @@ textarea:focus-visible {
 .advanced-filter-fields label { margin-top:3px; }
 .advanced-filter-fields .filter-select { margin-bottom:3px; }
 @media(max-width:760px) { .view-switch { overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; } .view-switch .view-btn { flex:0 0 auto; } }
+
+
+/* Keep task creation focused on the few fields used most often. */
+.task-advanced-details { border:1px solid #e2e9f1; border-radius:10px; background:#fbfcfe; padding:0 12px 12px; }
+.task-advanced-details > summary { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 2px; color:#385675; font-size:.78rem; font-weight:800; cursor:pointer; list-style:none; }
+.task-advanced-details > summary::-webkit-details-marker { display:none; }
+.task-advanced-details > summary::before { content:"＋"; display:inline-grid; place-items:center; width:20px; height:20px; margin-right:2px; border:1px solid #d9e4f0; border-radius:6px; color:#4479b8; font-size:.9rem; }
+.task-advanced-details[open] > summary::before { content:"−"; }
+.task-advanced-details > summary span { margin-left:auto; color:#91a0b2; font-size:.68rem; font-weight:600; }
+.task-advanced-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; padding-top:8px; border-top:1px solid #e8edf4; }
+.task-advanced-grid label { min-width:0; }
+.task-advanced-grid .task-form-wide { grid-column:1/-1; }
+@media(max-width:560px) { .task-advanced-grid { grid-template-columns:1fr; } .task-advanced-grid .task-form-wide { grid-column:auto; } }
