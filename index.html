@@ -132,9 +132,20 @@
         <article class="overview-card todo"><span class="overview-icon">◷</span><div><p>To Do</p><strong id="todoStat">0</strong><small>Tasks yet to start</small></div></article>
       </section>
 
-      <section class="dashboard-work-panel" aria-label="Dashboard task overview">
-        <div class="dashboard-panel-heading"><div><p class="brand-kicker">WORK OVERVIEW</p><h2>Tasks to focus on</h2><p>Based on your current filters and sort order</p></div><span class="dashboard-preview-count">Top 6</span></div>
-        <div id="dashboardTasks" class="dashboard-task-list"></div>
+      <div class="dashboard-main-grid">
+        <section class="dashboard-work-panel dashboard-focus-panel" aria-label="Dashboard task overview">
+          <div class="dashboard-panel-heading"><div><p class="brand-kicker">WORK OVERVIEW</p><h2>Tasks to focus on</h2><p>Priority work at a glance</p></div><span class="dashboard-preview-count">Top 6</span></div>
+          <div id="dashboardTasks" class="dashboard-task-list"></div>
+        </section>
+        <section class="dashboard-work-panel dashboard-chart-panel" aria-label="Sprint velocity chart">
+          <div class="dashboard-panel-heading"><div><p class="brand-kicker">DELIVERY</p><h2>Velocity</h2><p>Committed vs completed story points</p></div></div>
+          <div class="dashboard-chart-canvas"><canvas id="dashboardVelocityChart" height="180"></canvas></div>
+          <p class="dashboard-chart-note">Use completed points across multiple sprints to understand delivery patterns.</p>
+        </section>
+      </div>
+      <section class="dashboard-work-panel dashboard-burndown-panel" aria-label="Sprint burndown chart">
+        <div class="dashboard-panel-heading"><div><p class="brand-kicker">CURRENT SPRINT</p><h2>Burndown</h2><p id="dashboardBurndownSubtitle">Remaining story points</p></div></div>
+        <div class="dashboard-chart-canvas dashboard-burndown-canvas"><canvas id="dashboardBurndownChart" height="120"></canvas></div>
       </section>
 
       </section>
