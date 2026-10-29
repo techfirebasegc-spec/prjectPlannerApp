@@ -2102,3 +2102,7 @@ body { background: #f3f6fb; }
   #taskModal .task-editor-actions { grid-template-columns: minmax(0, 1fr); }
   #taskModal #saveStatusBtn { grid-column: 1; }
 }
+
+
+/* Checklist and dependency panels */
+.task-breakdown{margin-top:14px;padding:14px;border:1px solid #dce5f2;border-radius:12px;background:#fbfcff}.breakdown-heading h3{margin:0;font-size:15px}.breakdown-heading p,.breakdown-empty{color:#72819a;font-size:12px}.subtask-list,.dependency-list{display:grid;gap:7px}.subtask-item,.dependency-item{display:flex;align-items:center;gap:9px;padding:9px;border:1px solid #e7edf5;border-radius:9px;background:#fff}.subtask-item span{flex:1;overflow-wrap:anywhere}.subtask-item .is-complete{text-decoration:line-through;color:#8793a6}.breakdown-add-form{display:flex;gap:8px;margin-top:10px}.breakdown-add-form input,.breakdown-add-form select{flex:1;min-width:0;min-height:40px;padding:8px;border:1px solid #d7e1ef;border-radius:8px}.breakdown-add-form button{padding:8px 12px;border:1px solid #c8d7f1;border-radius:8px;background:#edf3ff;color:#244fc5}.dependency-item span:nth-child(2){flex:1;min-width:0}.dependency-item small{display:block;color:#72819a}.dependency-status{width:9px;height:9px;border-radius:50%;background:#e9a23b}.dependency-status.done{background:#1f9d69}.dependency-status.inprogress{background:#3678e5}@media(max-width:520px){.task-breakdown{padding:10px}.breakdown-add-form{flex-direction:column}.breakdown-add-form button{min-height:40px}}
