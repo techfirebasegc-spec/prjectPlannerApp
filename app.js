@@ -714,9 +714,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     tasks.forEach((task) => {
       const title = String(task.raw.userStory || task.story || "").trim();
       if (!title || title === "-") return;
-      if (!groups.has(title)) groups.set(title, { title, description: "", tasks: [] });
-      const group = groups.get(title); group.tasks.push(task);
+      const stableId = String(task.raw.userStoryId || "").trim();
+      // Prefer the stable ID. Legacy tasks without an ID are grouped by title until migrated.
+      const key = stableId ? `id:${stableId}` : `legacy:${title.toLocaleLowerCase()}`;
+      if (!groups.has(key)) groups.set(key, { id: stableId, title, description: "", tasks: [] });
+      const group = groups.get(key);
+      group.tasks.push(task);
       if (!group.description) group.description = String(task.raw.userStoryDescription || "").trim();
+      // If the same ID exists on tasks with inconsistent titles, use the first title and surface the data issue.
     });
     const stories = [...groups.values()].sort((a,b) => a.title.localeCompare(b.title));
     els.storiesSummary.textContent = `${stories.length} user stor${stories.length === 1 ? "y" : "ies"} · ${stories.reduce((n,s) => n+s.tasks.length,0)} linked tasks`;
@@ -753,10 +758,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     }));
   }
 
-  async function editUserStory(currentTitle, currentDescription) {
-    const linkedTasks = appState.allTasks.filter((task) =>
-      String(task.raw.userStory || task.story || "").trim() === currentTitle
-    );
+  async function editUserStory(currentTitle, currentDescription, currentStoryId = "") {
+    const linkedTasks = currentStoryId
+      ? appState.allTasks.filter((task) => String(task.raw.userStoryId || "").trim() === currentStoryId)
+      : appState.allTasks.filter((task) =>
+          String(task.raw.userStory || task.story || "").trim() === currentTitle
+        );
     if (!linkedTasks.length) {
       window.alert("This story has no linked tasks to store its details. Add a task to this story first.");
       return;
@@ -781,10 +788,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       return;
     }
 
-    const affectedTasks = appState.allTasks.filter((task) =>
-      String(task.raw.userStory || task.story || "").trim() === currentTitle
-    );
-    const storyId = affectedTasks.find((task) => task.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id;
+    const affectedTasks = currentStoryId
+      ? appState.allTasks.filter((task) => String(task.raw.userStoryId || "").trim() === currentStoryId)
+      : appState.allTasks.filter((task) =>
+          String(task.raw.userStory || task.story || "").trim() === currentTitle
+        );
+    const storyId = currentStoryId || affectedTasks.find((task) => task.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id;
     try {
       for (let start = 0; start < affectedTasks.length; start += 450) {
         const batch = writeBatch(db);
@@ -1685,7 +1694,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         <label class="story-lifecycle-control" for="userStoryStatusSelect"><span>Story status</span>
           <select id="userStoryStatusSelect">${STORY_LIFECYCLE_STATES.map((value) => `<option value="${value}" ${value === state ? "selected" : ""}>${value}</option>`).join("")}</select>
         </label>
-        <p class="story-lifecycle-note">Changing this status updates every task in this project with the same User Story title.</p>
+        <p class="story-lifecycle-note">Changing this status updates tasks linked by stable User Story ID; legacy tasks without an ID are matched by title.</p>
       </section>`;
   }
 
