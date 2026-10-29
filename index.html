@@ -400,6 +400,37 @@
     </section>
   </div>
 
+  <div id="storyEditorModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="storyEditorTitle">
+    <form id="storyEditorForm" class="modal-card task-editor story-editor" novalidate>
+      <button id="closeStoryEditor" class="modal-close" type="button" aria-label="Close">&times;</button>
+      <header class="task-editor-header">
+        <span class="task-editor-icon story-editor-icon" aria-hidden="true">✦</span>
+        <div><h2 id="storyEditorTitle">Create User Story</h2><p class="task-editor-subtitle">Capture the outcome first. You can add tasks later.</p></div>
+      </header>
+      <div class="story-form-grid">
+        <label class="task-form-wide">Story title <span class="required-mark">*</span>
+          <input id="storyTitleInput" name="title" required maxlength="160" autocomplete="off" placeholder="e.g. As a patient, I want to book an appointment">
+        </label>
+        <label class="task-form-wide">Description
+          <textarea id="storyDescriptionInput" name="description" rows="3" maxlength="1500" placeholder="What does the user need and why?"></textarea>
+        </label>
+        <label class="task-form-wide">Acceptance criteria <span class="field-optional">Optional · one per line</span>
+          <textarea id="storyCriteriaInput" name="acceptanceCriteria" rows="4" placeholder="User can search available doctors&#10;User can select an available time slot"></textarea>
+        </label>
+        <label>PI <span class="field-optional">Optional</span><input id="storyPiInput" name="pi" maxlength="100" autocomplete="off" placeholder="e.g. PI 2026 Q4"></label>
+        <label>Feature <span class="field-optional">Optional</span><input id="storyFeatureInput" name="feature" maxlength="120" autocomplete="off" placeholder="Related feature"></label>
+        <label>Start date <input id="storyStartDateInput" name="startDate" type="date"></label>
+        <label>Target date <input id="storyEndDateInput" name="endDate" type="date"></label>
+      </div>
+      <p class="story-form-note"><span aria-hidden="true">ⓘ</span> Tasks are not required. Save the story now and break it into tasks whenever you're ready.</p>
+      <p id="storyEditorError" class="task-editor-error" aria-live="polite"></p>
+      <div class="task-editor-actions">
+        <button id="cancelStoryEditor" class="secondary-action" type="button">Cancel</button>
+        <button id="saveStoryBtn" class="save-task-btn" type="submit">Create User Story</button>
+      </div>
+    </form>
+  </div>
+
   <div id="taskEditorModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="taskEditorTitle">
     <form id="taskEditorForm" class="modal-card task-editor" novalidate>
       <button id="closeTaskEditor" class="modal-close" type="button" aria-label="Close">&times;</button>
