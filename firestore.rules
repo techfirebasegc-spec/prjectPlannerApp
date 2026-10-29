@@ -32,7 +32,7 @@ service cloud.firestore {
 
     function validUserStory(data) {
       return data.keys().hasOnly([
-          "title", "description", "acceptanceCriteria", "pi", "piId", "feature", "featureId",
+          "title", "description", "acceptanceCriteria", "owner", "ownerUid", "pi", "piId", "feature", "featureId",
           "startDate", "endDate", "lifecycle", "createdBy", "createdAt", "updatedAt", "archived"
         ])
         && data.title is string && data.title.size() > 0 && data.title.size() <= 160
