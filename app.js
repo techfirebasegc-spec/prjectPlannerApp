@@ -162,7 +162,6 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     storiesGrid: document.getElementById("storiesGrid"),
     toggleArchivedStoriesBtn: document.getElementById("toggleArchivedStoriesBtn"),
     storiesSummary: document.getElementById("storiesSummary"),
-    userStoryOptions: document.getElementById("userStoryOptions"),
     taskUserStoryInput: document.getElementById("taskUserStoryInput"),
     profileViewBtn: document.getElementById("profileViewBtn"),
     boardView: document.getElementById("boardView"),
