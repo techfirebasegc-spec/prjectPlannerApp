@@ -28,7 +28,14 @@
       </div>
 
       <section class="filter-panel">
-        <h2>Filters</h2>
+        <div class="filter-panel-heading">
+          <h2>Filters</h2>
+          <button id="resetFiltersBtn" class="reset-filters-btn" type="button" title="Reset all filters" aria-label="Reset all filters">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3.5 11a8.5 8.5 0 1 1 2.2 6.8"/><path d="M3.5 4.8V11h6.2"/>
+            </svg>
+          </button>
+        </div>
         <label for="piFilter">PI</label>
         <select id="piFilter" class="filter-select">
           <option value="all">All PI</option>
