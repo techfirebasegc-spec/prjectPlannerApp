@@ -751,38 +751,51 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   function renderUserStories(tasks) {
     const groups = new Map();
+    appState.userStories.forEach((record) => {
+      const title = String(record.title || "").trim();
+      if (!title) return;
+      groups.set(`id:${record.id}`, {
+        id: record.id, title, description: String(record.description || ""),
+        acceptanceCriteria: Array.isArray(record.acceptanceCriteria) ? record.acceptanceCriteria : [],
+        lifecycle: record.lifecycle || "Draft", pi: record.pi || "", feature: record.feature || "",
+        startDate: record.startDate || "", endDate: record.endDate || "", tasks: []
+      });
+    });
     tasks.forEach((task) => {
       const title = String(task.raw.userStory || task.story || "").trim();
       if (!title || title === "-") return;
       const stableId = String(task.raw.userStoryId || "").trim();
-      // Prefer the stable ID. Legacy tasks without an ID are grouped by title until migrated.
       const key = stableId ? `id:${stableId}` : `legacy:${title.toLocaleLowerCase()}`;
-      if (!groups.has(key)) groups.set(key, { id: stableId, title, description: "", tasks: [] });
+      if (!groups.has(key)) groups.set(key, {
+        id: stableId, title, description: "", acceptanceCriteria: [],
+        lifecycle: "Draft", pi: "", feature: "", startDate: "", endDate: "", tasks: []
+      });
       const group = groups.get(key);
       group.tasks.push(task);
       if (!group.description) group.description = String(task.raw.userStoryDescription || "").trim();
-      // If the same ID exists on tasks with inconsistent titles, use the first title and surface the data issue.
+      if (!group.pi) group.pi = task.raw.pi || "";
+      if (!group.feature) group.feature = task.raw.feature || "";
+      if (group.lifecycle === "Draft" && task.raw.userStoryStatus) group.lifecycle = task.raw.userStoryStatus;
     });
     const stories = [...groups.values()].sort((a,b) => a.title.localeCompare(b.title));
     els.storiesSummary.textContent = `${stories.length} user stor${stories.length === 1 ? "y" : "ies"} · ${stories.reduce((n,s) => n+s.tasks.length,0)} linked tasks`;
     if (!stories.length) {
-      els.storiesGrid.innerHTML = '<div class="stories-empty"><strong>No user stories yet</strong><p>Create a story and link tasks to it using the story field.</p><button class="save-task-btn" type="button" data-create-story>+ Create User Story</button></div>';
-      els.storiesGrid.querySelector("[data-create-story]")?.addEventListener("click", () => { openTaskEditor(); els.taskUserStoryInput.focus(); });
+      els.storiesGrid.innerHTML = '<div class="stories-empty"><strong>No user stories yet</strong><p>Create your first story. You can add tasks whenever you are ready.</p><button class="save-task-btn" type="button" data-create-story>+ Create User Story</button></div>';
+      els.storiesGrid.querySelector("[data-create-story]")?.addEventListener("click", () => openStoryEditor());
       return;
     }
     els.storiesGrid.innerHTML = stories.map((story) => {
       const counts = { todo: 0, inprogress: 0, done: 0 };
       story.tasks.forEach((task) => counts[task.statusKey] = (counts[task.statusKey] || 0) + 1);
       const storyPoints = story.tasks.reduce((total, task) => total + (Number(task.storyPoints) || 0), 0);
-      const lifecycleStates = ["Draft", "Ready", "In Progress", "In Review", "Accepted"];
-      const lifecycle = story.tasks.find((task) => lifecycleStates.includes(task.raw.userStoryStatus))?.raw.userStoryStatus || "Draft";
+      const criteria = story.acceptanceCriteria.length ? `<p class="story-criteria-count">${story.acceptanceCriteria.length} acceptance criteria</p>` : "";
       return `<article class="story-card"><div class="story-card-top"><span class="story-card-label">USER STORY</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
-        <h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No user story description added yet.")}</p>
+        <h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p>${criteria}
         <div class="story-status-summary"><span>${counts.todo} To do</span><span>${counts.inprogress} In progress</span><span>${counts.done} Done</span></div>
-        <div class="story-metrics"><span><small>Lifecycle</small><strong>${escapeHtml(lifecycle)}</strong></span><span><small>Total task points</small><strong>${storyPoints}</strong></span></div>
-        <div class="story-task-list">${story.tasks.slice(0,4).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${story.tasks.length>4?`<p class="story-more">+${story.tasks.length-4} more tasks</p>`:""}</div>
+        <div class="story-metrics"><span><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></span><span><small>Total task points</small><strong>${storyPoints}</strong></span></div>
+        ${story.tasks.length ? `<div class="story-task-list">${story.tasks.slice(0,4).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${story.tasks.length>4?`<p class="story-more">+${story.tasks.length-4} more tasks</p>`:""}</div>` : '<div class="story-no-tasks"><span aria-hidden="true">＋</span><div><strong>No tasks yet</strong><p>Add tasks when you are ready to break down this story.</p></div></div>'}
         <div class="story-card-actions">
-          <button type="button" class="story-edit" data-edit-story="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">Edit story</button>
+          <button type="button" class="story-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit story</button>
           <button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>
         </div></article>`;
     }).join("");
@@ -793,65 +806,87 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       openTaskEditor(); els.taskUserStoryInput.value = button.dataset.storyTitle || ""; els.taskUserStoryInput.dataset.storyId = button.dataset.storyId || "";
       els.taskEditorForm.elements.namedItem("userStoryDescription").value = button.dataset.storyDescription || ""; els.newTaskName.focus();
     }));
-    els.storiesGrid.querySelectorAll("[data-edit-story]").forEach(button => button.addEventListener("click", () => {
-      editUserStory(button.dataset.editStory || "", button.dataset.storyDescription || "", button.dataset.storyId || "");
+    els.storiesGrid.querySelectorAll("[data-edit-story-id]").forEach(button => button.addEventListener("click", () => {
+      const story = appState.userStories.find(item => item.id === button.dataset.editStoryId);
+      if (story) openStoryEditor(story);
+      else {
+        const legacy = stories.find(item => item.id === button.dataset.editStoryId);
+        if (legacy) openStoryEditor({ id: legacy.id, title: legacy.title, description: legacy.description, lifecycle: legacy.lifecycle, pi: legacy.pi, feature: legacy.feature, startDate: legacy.startDate, endDate: legacy.endDate, acceptanceCriteria: legacy.acceptanceCriteria, legacy: true });
+      }
     }));
   }
 
-  async function editUserStory(currentTitle, currentDescription, currentStoryId = "") {
-    const linkedTasks = currentStoryId
-      ? appState.allTasks.filter((task) => String(task.raw.userStoryId || "").trim() === currentStoryId)
-      : appState.allTasks.filter((task) =>
-          !String(task.raw.userStoryId || "").trim()
-          && String(task.raw.userStory || task.story || "").trim() === currentTitle
-        );
-    if (!linkedTasks.length) {
-      window.alert("This story has no linked tasks to store its details. Add a task to this story first.");
-      return;
-    }
+  function openStoryEditor(story = null) {
+    appState.editingStoryId = story?.id || null;
+    els.storyEditorForm.reset();
+    els.storyEditorTitle.textContent = story ? "Edit User Story" : "Create User Story";
+    els.saveStoryBtn.textContent = story ? "Save Changes" : "Create User Story";
+    els.storyTitleInput.value = story?.title || "";
+    els.storyDescriptionInput.value = story?.description || "";
+    els.storyCriteriaInput.value = Array.isArray(story?.acceptanceCriteria) ? story.acceptanceCriteria.join("\\n") : "";
+    els.storyPiInput.value = story?.pi || "";
+    els.storyFeatureInput.value = story?.feature || "";
+    els.storyStartDateInput.value = story?.startDate || "";
+    els.storyEndDateInput.value = story?.endDate || "";
+    els.storyEditorError.textContent = "";
+    els.storyEditorModal.classList.add("is-open");
+    els.storyEditorModal.setAttribute("aria-hidden", "false");
+    els.storyTitleInput.focus();
+  }
 
-    const nextTitle = window.prompt("User story title", currentTitle);
-    if (nextTitle === null) return;
-    const title = nextTitle.trim();
-    if (!title) {
-      window.alert("The user story title cannot be empty.");
-      return;
-    }
-    if (title.length > 160) {
-      window.alert("The user story title must be 160 characters or fewer.");
-      return;
-    }
-    const nextDescription = window.prompt("User story description", currentDescription);
-    if (nextDescription === null) return;
-    const description = nextDescription.trim();
-    if (description.length > 1500) {
-      window.alert("The description must be 1,500 characters or fewer.");
-      return;
-    }
+  function closeStoryEditor() {
+    els.storyEditorModal.classList.remove("is-open");
+    els.storyEditorModal.setAttribute("aria-hidden", "true");
+    appState.editingStoryId = null;
+  }
 
-    const affectedTasks = currentStoryId
-      ? appState.allTasks.filter((task) => String(task.raw.userStoryId || "").trim() === currentStoryId)
-      : appState.allTasks.filter((task) =>
-          !String(task.raw.userStoryId || "").trim()
-          && String(task.raw.userStory || task.story || "").trim() === currentTitle
-        );
-    const storyId = currentStoryId || affectedTasks.find((task) => task.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id;
+  async function saveUserStory(event) {
+    event.preventDefault();
+    const title = els.storyTitleInput.value.trim();
+    const description = els.storyDescriptionInput.value.trim();
+    const criteria = els.storyCriteriaInput.value.split("\\n").map(value => value.trim()).filter(Boolean);
+    if (!title) { els.storyEditorError.textContent = "Enter a User Story title."; els.storyTitleInput.focus(); return; }
+    if (title.length > 160) { els.storyEditorError.textContent = "Title must be 160 characters or fewer."; return; }
+    if (description.length > 1500) { els.storyEditorError.textContent = "Description must be 1,500 characters or fewer."; return; }
+    if (criteria.length > 50 || criteria.some(value => value.length > 500)) { els.storyEditorError.textContent = "Add up to 50 acceptance criteria, each no longer than 500 characters."; return; }
+    const startDate = els.storyStartDateInput.value;
+    const endDate = els.storyEndDateInput.value;
+    if (startDate && endDate && endDate < startDate) { els.storyEditorError.textContent = "Target date cannot be before the start date."; return; }
+    els.saveStoryBtn.disabled = true;
+    els.saveStoryBtn.textContent = "Saving...";
+    els.storyEditorError.textContent = "";
+    const data = {
+      title, description, acceptanceCriteria: criteria,
+      pi: els.storyPiInput.value.trim(), feature: els.storyFeatureInput.value.trim(),
+      startDate, endDate, lifecycle: appState.userStories.find(item => item.id === appState.editingStoryId)?.lifecycle || "Draft",
+      createdBy: appState.user.uid, updatedAt: serverTimestamp()
+    };
     try {
-      for (let start = 0; start < affectedTasks.length; start += 450) {
-        const batch = writeBatch(db);
-        affectedTasks.slice(start, start + 450).forEach((task) => {
-          batch.update(taskReference(task.id), {
-            userStory: title,
-            userStoryId: storyId,
-            userStoryDescription: description,
-            updatedAt: serverTimestamp()
-          });
-        });
-        await batch.commit();
+      if (appState.editingStoryId) {
+        const existing = appState.userStories.find(item => item.id === appState.editingStoryId);
+        if (existing) await updateDoc(userStoryReference(appState.editingStoryId), data);
+        else {
+          // Legacy stories are upgraded into independent records; linked task IDs are preserved.
+          const legacyId = appState.editingStoryId;
+          await setDoc(userStoryReference(legacyId), { ...data, createdAt: serverTimestamp() });
+          const linked = appState.allTasks.filter(task => String(task.raw.userStoryId || "") === legacyId || (!task.raw.userStoryId && String(task.raw.userStory || task.story || "").trim() === title));
+          for (let start = 0; start < linked.length; start += 450) {
+            const batch = writeBatch(db);
+            linked.slice(start, start + 450).forEach(task => batch.update(taskReference(task.id), { userStoryId: legacyId, userStory: title, userStoryDescription: description, updatedAt: serverTimestamp() }));
+            await batch.commit();
+          }
+        }
+      } else {
+        data.createdAt = serverTimestamp();
+        await addDoc(userStoryCollection(), data);
       }
+      closeStoryEditor();
     } catch (error) {
-      console.error("Could not update user story", error);
-      window.alert("The story could not be updated. Check your project permissions and try again.");
+      console.error("Could not save User Story", error);
+      els.storyEditorError.textContent = "Could not save the User Story. Check project permissions and try again.";
+    } finally {
+      els.saveStoryBtn.disabled = false;
+      els.saveStoryBtn.textContent = appState.editingStoryId ? "Save Changes" : "Create User Story";
     }
   }
 
