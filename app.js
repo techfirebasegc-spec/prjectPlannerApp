@@ -16,6 +16,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   const appState = {
     allTasks: [],
+    userStories: [],
     filteredTasks: [],
     sprintCatalog: [],
     filters: {
@@ -36,6 +37,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     charts: { burndown: null, velocity: null },
     user: null,
     unsubscribeTasks: null,
+    unsubscribeStories: null,
+    editingStoryId: null,
     unsubscribeProjects: null,
     unsubscribeOwnedProjects: null,
     unsubscribeUserProjectPointers: null,
@@ -127,6 +130,20 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     storiesViewBtn: document.getElementById("storiesViewBtn"),
     sidebarStoriesBtn: document.getElementById("sidebarStoriesBtn"),
     newStoryBtn: document.getElementById("newStoryBtn"),
+    storyEditorModal: document.getElementById("storyEditorModal"),
+    storyEditorForm: document.getElementById("storyEditorForm"),
+    storyEditorTitle: document.getElementById("storyEditorTitle"),
+    storyTitleInput: document.getElementById("storyTitleInput"),
+    storyDescriptionInput: document.getElementById("storyDescriptionInput"),
+    storyCriteriaInput: document.getElementById("storyCriteriaInput"),
+    storyPiInput: document.getElementById("storyPiInput"),
+    storyFeatureInput: document.getElementById("storyFeatureInput"),
+    storyStartDateInput: document.getElementById("storyStartDateInput"),
+    storyEndDateInput: document.getElementById("storyEndDateInput"),
+    storyEditorError: document.getElementById("storyEditorError"),
+    saveStoryBtn: document.getElementById("saveStoryBtn"),
+    cancelStoryEditor: document.getElementById("cancelStoryEditor"),
+    closeStoryEditor: document.getElementById("closeStoryEditor"),
     storiesView: document.getElementById("storiesView"),
     storiesGrid: document.getElementById("storiesGrid"),
     storiesSummary: document.getElementById("storiesSummary"),
@@ -283,6 +300,15 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   function loadData() {
     if (appState.unsubscribeTasks) appState.unsubscribeTasks();
+    if (appState.unsubscribeStories) appState.unsubscribeStories();
+    appState.unsubscribeStories = onSnapshot(userStoryCollection(), (snapshot) => {
+      appState.userStories = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      applyFiltersAndRender();
+    }, (error) => {
+      console.error("Could not load user stories", error);
+      appState.userStories = [];
+      applyFiltersAndRender();
+    });
     appState.unsubscribeTasks = onSnapshot(taskCollection(), (snapshot) => {
       const raw = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       appState.allTasks = normalizeRecords(raw).filter((task) => task.archived !== true);
@@ -347,7 +373,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.knowledgeViewBtn?.addEventListener("click", () => setActiveView("knowledge"));
     els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
     els.sidebarStoriesBtn?.addEventListener("click", () => { setActiveView("stories"); if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true); });
-    els.newStoryBtn.addEventListener("click", () => { openTaskEditor(); els.taskUserStoryInput.focus(); });
+    els.newStoryBtn.addEventListener("click", () => openStoryEditor());
+    els.storyEditorForm.addEventListener("submit", saveUserStory);
+    els.cancelStoryEditor.addEventListener("click", closeStoryEditor);
+    els.closeStoryEditor.addEventListener("click", closeStoryEditor);
+    els.storyEditorModal.addEventListener("click", (event) => { if (event.target === els.storyEditorModal) closeStoryEditor(); });
     els.profileViewBtn.addEventListener("click", () => setActiveView("profile"));
     els.profileForm.addEventListener("submit", saveProfile);
     els.calendarMonth.addEventListener("change", onCalendarMonthChange);
@@ -406,6 +436,16 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   function taskReference(taskId) {
     return doc(taskCollection(), taskId);
+  }
+
+  function userStoryCollection() {
+    return appState.activeProjectId === "default"
+      ? collection(db, "plannerUserStories")
+      : collection(db, "plannerProjects", appState.activeProjectId, "userStories");
+  }
+
+  function userStoryReference(storyId) {
+    return doc(userStoryCollection(), storyId);
   }
 
   function onProjectChange(event) {
