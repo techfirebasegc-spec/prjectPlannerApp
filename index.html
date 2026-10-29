@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f7fc">
+  <meta name="description" content="Arcflow project planner for tasks, user stories, sprints, and delivery insights.">
   <title>Arcflow</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10,12 +12,14 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <a class="skip-link" href="#boardView">Skip to planner content</a>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Planner navigation and controls">
       <button id="sidebarToggleBtn" class="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true">☰</button>
       <nav class="sidebar-shortcuts" aria-label="Collapsed sidebar">
         <button type="button" data-sidebar-expand title="Show filters" aria-label="Show filters">⌕</button>
         <button type="button" data-sidebar-expand title="Show board controls" aria-label="Show board controls">☷</button>
+        <button type="button" id="sidebarStoriesBtn" class="sidebar-story-shortcut" title="Open User Stories" aria-label="Open User Stories">Stories</button>
       </nav>
       <div class="brand-block">
         <p class="brand-kicker">Portfolio View</p>
@@ -30,20 +34,23 @@
           <option value="all">All PI</option>
         </select>
 
-        <label for="sprintFilter">Sprint</label>
-        <select id="sprintFilter" class="filter-select">
-          <option value="all">All Sprints</option>
-        </select>
-
-        <label for="featureFilter">Feature</label>
-        <select id="featureFilter" class="filter-select">
-          <option value="all">All Features</option>
-        </select>
-
-        <label for="assigneeFilter">Assignee</label>
-        <select id="assigneeFilter" class="filter-select">
-          <option value="all">All Assignees</option>
-        </select>
+        <details class="advanced-filter-details">
+          <summary>More filters <span>＋</span></summary>
+          <div class="advanced-filter-fields">
+            <label for="sprintFilter">Sprint</label>
+            <select id="sprintFilter" class="filter-select">
+              <option value="all">All Sprints</option>
+            </select>
+            <label for="featureFilter">Feature</label>
+            <select id="featureFilter" class="filter-select">
+              <option value="all">All Features</option>
+            </select>
+            <label for="assigneeFilter">Assignee</label>
+            <select id="assigneeFilter" class="filter-select">
+              <option value="all">All Assignees</option>
+            </select>
+          </div>
+        </details>
       </section>
 
       <section class="controls-panel">
@@ -76,7 +83,7 @@
         <span id="currentUserName" class="user-name nav-user-name"></span>
         <label class="search-wrap" for="searchInput">
           <span class="search-icon" aria-hidden="true">&#128269;</span>
-          <input id="searchInput" type="search" placeholder="Search by task, story, assignee, feature..." autocomplete="off">
+          <input id="searchInput" type="search" placeholder="Search tasks, stories, people..." autocomplete="off">
         </label>
 
         <div class="topbar-right">
@@ -100,7 +107,21 @@
         </div>
       </header>
 
-      <section class="portfolio-hero" aria-label="Planner overview">
+      <section class="view-switch" aria-label="View switcher">
+        <button id="dashboardViewBtn" class="view-btn is-active" type="button">Overview</button>
+        <button id="listViewBtn" class="view-btn" type="button">Work Items</button>
+        <button id="boardViewBtn" class="view-btn" type="button">Board</button>
+        <button id="storiesViewBtn" class="view-btn" type="button">User Stories</button>
+        <button id="piViewBtn" class="view-btn" type="button">PIs</button>
+        <button id="featuresViewBtn" class="view-btn" type="button">Features</button>
+        <button id="insightsViewBtn" class="view-btn" type="button">Reports</button>
+        <button id="knowledgeViewBtn" class="view-btn" type="button">Knowledge</button>
+        <button id="profileViewBtn" class="view-btn is-hidden" type="button">Profile</button>
+      </section>
+
+
+      <section id="dashboardView" aria-label="Dashboard overview">
+      <section id="portfolioHero" class="portfolio-hero" aria-label="Planner overview">
         <div>
           <p class="brand-kicker">Portfolio View</p>
           <h2>Arcflow</h2>
@@ -109,18 +130,41 @@
         <div class="hero-quote"><strong>“Progress, one task at a time.”</strong><span>Delivering value, together</span></div>
       </section>
 
-      <section class="overview-stats" aria-label="Task summary">
-        <article class="overview-card total"><span class="overview-icon">▤</span><div><p>Total Tasks</p><strong id="totalTasks">0</strong><small>Across your portfolio</small></div></article>
-        <article class="overview-card complete"><span class="overview-icon">✓</span><div><p>Completed</p><strong id="completedPercent">0%</strong><small>Completion rate</small></div></article>
-        <article class="overview-card active"><span class="overview-icon">◌</span><div><p>In Progress</p><strong id="inProgressCount">0</strong><small>Active tasks</small></div></article>
-        <article class="overview-card todo"><span class="overview-icon">◷</span><div><p>To Do</p><strong id="todoStat">0</strong><small>Tasks yet to start</small></div></article>
+      <section id="overviewStats" class="overview-stats" aria-label="Task summary">
+        <article class="overview-card total">
+          <div class="overview-card-copy"><p>Total tasks</p><strong id="totalTasks">0</strong><small>Across your portfolio</small></div>
+          <div class="overview-card-visual" aria-hidden="true"><span class="metric-caption">WORKLOAD</span><svg viewBox="0 0 112 38" role="presentation"><path class="metric-sparkline-area" d="M2 31 L18 23 L32 26 L47 12 L62 19 L77 8 L93 14 L110 3 L110 37 L2 37 Z"/><path class="metric-sparkline" d="M2 31 L18 23 L32 26 L47 12 L62 19 L77 8 L93 14 L110 3"/></svg></div>
+        </article>
+        <article class="overview-card complete">
+          <div class="overview-card-copy"><p>Completion rate</p><strong id="completedPercent">0%</strong><small>Tasks marked done</small></div>
+          <div class="overview-card-visual metric-ring-wrap" aria-hidden="true"><span class="metric-caption">PROGRESS</span><div class="metric-ring"><span>✓</span></div></div>
+        </article>
+        <article class="overview-card active">
+          <div class="overview-card-copy"><p>In progress</p><strong id="inProgressCount">0</strong><small>Currently being worked on</small></div>
+          <div class="overview-card-visual" aria-hidden="true"><span class="metric-caption">ACTIVE</span><div class="metric-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        </article>
+        <article class="overview-card todo">
+          <div class="overview-card-copy"><p>To do</p><strong id="todoStat">0</strong><small>Tasks yet to start</small></div>
+          <div class="overview-card-visual" aria-hidden="true"><span class="metric-caption">BACKLOG</span><div class="metric-backlog"><i></i><i></i><i></i></div></div>
+        </article>
       </section>
 
-      <section class="view-switch" aria-label="View switcher">
-        <button id="listViewBtn" class="view-btn" type="button">List View</button>
-        <button id="boardViewBtn" class="view-btn is-active" type="button">Kanban View</button>
-        <button id="insightsViewBtn" class="view-btn" type="button">Agile Insights</button>
-        <button id="profileViewBtn" class="view-btn is-hidden" type="button">Profile</button>
+      <div class="dashboard-main-grid">
+        <section class="dashboard-work-panel dashboard-focus-panel" aria-label="Dashboard task overview">
+          <div class="dashboard-panel-heading"><div><p class="brand-kicker">WORK OVERVIEW</p><h2>Tasks to focus on</h2><p>Priority work at a glance</p></div><span class="dashboard-preview-count">Top 6</span></div>
+          <div id="dashboardTasks" class="dashboard-task-list"></div>
+        </section>
+        <section class="dashboard-work-panel dashboard-chart-panel" aria-label="Sprint velocity chart">
+          <div class="dashboard-panel-heading"><div><p class="brand-kicker">DELIVERY</p><h2>Velocity</h2><p>Committed vs completed story points</p></div></div>
+          <div class="dashboard-chart-canvas"><canvas id="dashboardVelocityChart" height="180"></canvas></div>
+          <p class="dashboard-chart-note">Use completed points across multiple sprints to understand delivery patterns.</p>
+        </section>
+      </div>
+      <section class="dashboard-work-panel dashboard-burndown-panel" aria-label="Sprint burndown chart">
+        <div class="dashboard-panel-heading"><div><p class="brand-kicker">CURRENT SPRINT</p><h2>Burndown</h2><p id="dashboardBurndownSubtitle">Remaining story points</p></div></div>
+        <div class="dashboard-chart-canvas dashboard-burndown-canvas"><canvas id="dashboardBurndownChart" height="120"></canvas></div>
+      </section>
+
       </section>
 
       <div id="boardView">
@@ -164,12 +208,11 @@
       <section id="listView" class="list-view is-hidden" aria-label="Task list">
         <div class="list-toolbar">
           <div class="list-title-wrap">
-            <span class="list-title-icon" aria-hidden="true">☑</span>
-            <div><h2>Tasks</h2><p>Track and manage your work items</p></div>
+            <div class="list-title-copy"><p class="list-eyebrow">WORK MANAGEMENT</p><h2>Tasks <span class="list-title-divider">/</span> <span class="list-title-context">All work items</span></h2><p>Review ownership, delivery status and upcoming deadlines.</p></div>
           </div>
           <div class="list-toolbar-actions">
             <span id="listSummary" class="list-summary"></span>
-            <button id="archiveSelectedTasksBtn" class="list-archive-btn" type="button" disabled>Archive selected</button>
+            <label class="bulk-status-label" for="bulkTaskStatus">Move to</label><select id="bulkTaskStatus" class="bulk-status-select" aria-label="Status for selected tasks"><option value="todo">To Do</option><option value="inprogress">In Progress</option><option value="done">Done</option></select><button id="applyBulkStatusBtn" class="secondary-action bulk-status-apply" type="button" disabled>Update status</button><button id="archiveSelectedTasksBtn" class="list-archive-btn" type="button" disabled>Archive selected</button>
           </div>
         </div>
         <div class="task-table-wrap">
@@ -190,6 +233,111 @@
         </div>
       </section>
 
+      <section id="storiesView" class="stories-view is-hidden" aria-label="User stories">
+        <div class="stories-toolbar"><div><h2>User Stories</h2><p>Browse stories and the tasks linked to each one.</p></div><button id="newStoryBtn" class="save-task-btn" type="button">+ Create User Story</button></div>
+        <div class="stories-list-controls"><div id="storiesSummary" class="stories-summary" aria-live="polite"></div><div class="stories-toolbar-actions"><span class="stories-layout-label" aria-label="Current layout">☷ List view</span><button id="toggleArchivedStoriesBtn" class="story-archive-toggle" type="button" aria-pressed="false">Show archived</button></div></div><div id="storiesGrid" class="stories-grid"></div>
+      </section>
+      <section id="piManagementView" class="planning-view is-hidden" aria-label="Program Increment management">
+        <header class="planning-page-header">
+          <div><p class="planning-eyebrow">AGILE PLANNING</p><h2>Program Increments</h2><p>Create and manage project planning horizons. Each PI can contain multiple Features.</p></div>
+          <span id="piCount" class="planning-count">0 PIs</span>
+        </header>
+        <div class="planning-layout">
+          <form id="piForm" class="planning-form">
+            <input id="piRecordId" type="hidden">
+            <h3 id="piFormTitle">Create a Program Increment</h3>
+            <label>PI name<input id="piNameInput" maxlength="100" required placeholder="e.g. PI 2027 Q1"></label>
+            <label>Description<textarea id="piDescriptionInput" maxlength="1200" rows="3" placeholder="Planning objectives and outcomes"></textarea></label>
+            <div class="planning-form-row"><label>Start date<input id="piStartInput" type="date" required></label><label>End date<input id="piEndInput" type="date" required></label></div>
+            <label>Status<select id="piStatusInput"><option value="PLANNED">Planned</option><option value="ACTIVE">Active</option><option value="COMPLETED">Completed</option></select></label>
+            <p id="piFormError" class="task-editor-error" aria-live="polite"></p>
+            <div class="planning-form-actions"><button id="piCancelBtn" class="secondary-action" type="button">Clear</button><button id="piSaveBtn" class="save-task-btn" type="submit">Create PI</button></div>
+          </form>
+          <section class="planning-records-panel"><div class="planning-records-heading"><div><h3>Planning increments</h3><p>Project-scoped, reusable records</p></div><input id="piSearchInput" type="search" placeholder="Search PIs" aria-label="Search Program Increments"></div><div id="piRecords" class="planning-record-list"></div></section>
+        </div>
+      </section>
+
+      <section id="featuresManagementView" class="planning-view is-hidden" aria-label="Feature management">
+        <header class="planning-page-header">
+          <div><p class="planning-eyebrow">DELIVERY SCOPE</p><h2>Features</h2><p>Define product capabilities, assign each Feature to a PI, and connect stories and tasks to the same records.</p></div>
+          <span id="featureCount" class="planning-count">0 Features</span>
+        </header>
+        <div class="planning-layout">
+          <form id="featureForm" class="planning-form">
+            <input id="featureRecordId" type="hidden">
+            <h3 id="featureFormTitle">Create a Feature</h3>
+            <label>Feature name<input id="featureNameInput" maxlength="120" required placeholder="e.g. Secure account recovery"></label>
+            <label>Program Increment<select id="featurePIInput" required><option value="">Select a PI</option></select></label>
+            <label>Description<textarea id="featureDescriptionInput" maxlength="1500" rows="3" placeholder="Capability and expected value"></textarea></label>
+            <div class="planning-form-row"><label>Owner<input id="featureOwnerInput" maxlength="120" placeholder="Feature owner"></label><label>Priority<select id="featurePriorityInput"><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="LOW">Low</option></select></label></div>
+            <label>Status<select id="featureStatusInput"><option value="PLANNED">Planned</option><option value="IN_PROGRESS">In progress</option><option value="COMPLETED">Completed</option></select></label>
+            <p id="featureFormError" class="task-editor-error" aria-live="polite"></p>
+            <div class="planning-form-actions"><button id="featureCancelBtn" class="secondary-action" type="button">Clear</button><button id="featureSaveBtn" class="save-task-btn" type="submit">Create Feature</button></div>
+          </form>
+          <section class="planning-records-panel"><div class="planning-records-heading"><div><h3>Feature catalogue</h3><p>Every Feature belongs to one PI</p></div><div class="planning-records-tools"><button id="reconcilePlanningBtn" class="secondary-action" type="button">Map existing records</button><input id="featureSearchInput" type="search" placeholder="Search Features" aria-label="Search Features"></div></div><div class="planning-filter-row"><label for="featurePIFilter">Program Increment</label><select id="featurePIFilter"><option value="all">All PIs</option></select></div><div id="featureRecords" class="planning-record-list"></div></section>
+        </div>
+      </section>
+
+      <section id="knowledgeView" class="knowledge-view is-hidden" aria-label="Arcflow Knowledge Center">
+        <div class="knowledge-hero">
+          <p class="brand-kicker">START HERE</p>
+          <h2>Arcflow Knowledge Center</h2>
+          <p>A practical guide to planning work, understanding Agile terminology, tracking delivery, and reading your charts.</p>
+          <div class="knowledge-hero-actions"><a href="#kc-quick-start">Quick start</a><a href="#kc-hierarchy">Understand the hierarchy</a><a href="#kc-charts">Read the charts</a></div>
+        </div>
+        <nav class="knowledge-toc" aria-label="Knowledge Center sections">
+          <a href="#kc-quick-start">Quick start</a><a href="#kc-hierarchy">Work hierarchy</a><a href="#kc-terms">Terminology</a><a href="#kc-workflow">Workflow</a><a href="#kc-points">Story points</a><a href="#kc-tracking">Tracking practices</a><a href="#kc-charts">Charts and metrics</a><a href="#kc-filters">Filters and controls</a><a href="#kc-examples">Worked example</a>
+        </nav>
+        <section class="knowledge-section" id="kc-quick-start"><span class="knowledge-step">01</span><div><h2>Get started in 5 steps</h2><ol class="knowledge-steps">
+          <li><strong>Create or select a project.</strong><p>Use the project selector to work in the right project. Keep work for one product or team together.</p></li>
+          <li><strong>Create a PI and Feature.</strong><p>Open <b>Program Increments</b> to set the planning horizon, then create Features within that PI. This keeps names consistent across the project.</p></li>
+          <li><strong>Create a User Story.</strong><p>Open <b>User Stories</b>, select a Feature, and add a short, user-focused outcome with acceptance criteria.</p></li>
+          <li><strong>Break the story into tasks.</strong><p>Make tasks small enough to estimate, assign, and finish. Add a clear description, owner, priority, and dates when useful.</p></li>
+          <li><strong>Plan delivery.</strong><p>Select the saved User Story when creating a task. Its Feature and PI are inherited; choose a Sprint independently and estimate story points.</p></li>
+          <li><strong>Update work honestly.</strong><p>Move tasks from To Do to In Progress to Done as work changes. Review insights regularly and adjust the plan when reality differs.</p></li>
+        </ol></div></section>
+        <section class="knowledge-section" id="kc-hierarchy"><span class="knowledge-step">02</span><div><h2>Understand the work hierarchy</h2><p>Arcflow provides fields to organize work. Teams may use different Agile frameworks, so agree on definitions and use them consistently.</p>
+          <div class="knowledge-hierarchy"><div><b>Portfolio / Project</b><small>The product, initiative, or shared workspace being planned.</small></div><span>↓</span><div><b>Program Increment (PI)</b><small>A larger planning horizon used by some teams to align multiple sprints.</small></div><span>↓</span><div><b>Feature</b><small>A meaningful capability or slice of product functionality.</small></div><span>↓</span><div><b>User Story</b><small>A user-centered outcome or need, with acceptance conditions.</small></div><span>↓</span><div><b>Task</b><small>A concrete piece of work required to deliver the story.</small></div><span>↓</span><div><b>Subtask</b><small>A smaller step within a task, where further breakdown helps.</small></div></div>
+          <div class="knowledge-callout"><strong>Important:</strong> Program Increments and Features are managed as project-scoped records. Features belong to one PI, User Stories are linked to a Feature, and Tasks select a saved User Story. Sprint remains an independent timebox; dependencies separately describe ordering or blockers.</div>
+        </div></section>
+        <section class="knowledge-section" id="kc-terms"><span class="knowledge-step">03</span><div><h2>Glossary: the words you'll see</h2><div class="knowledge-term-grid">
+          <article><h3>Project</h3><p>A workspace for a team's related tasks, stories, and planning.</p></article><article><h3>Program Increment (PI)</h3><p>A longer planning period that may contain multiple sprints. Use your organization's agreed PI names.</p></article><article><h3>Sprint</h3><p>A fixed timebox, often one to four weeks, in which a team plans and completes work.</p></article><article><h3>Feature</h3><p>A product capability that may be delivered through several user stories.</p></article><article><h3>User Story</h3><p>A concise description of value from a user's perspective. Example: “As a customer, I want to track my order so I know when it will arrive.”</p></article><article><h3>Acceptance criteria</h3><p>Specific conditions that must be true for the story to be accepted. Write them so another person can verify them.</p></article><article><h3>Task</h3><p>A unit of work that someone can own and move through the board.</p></article><article><h3>Subtask</h3><p>A smaller action inside a task. Use it for clarity, not to fragment every tiny action.</p></article><article><h3>Dependency</h3><p>A relationship where one task relies on another. A blocked task may not progress until its dependency is resolved.</p></article><article><h3>WIP limit</h3><p>Work-in-progress limit: a cap on items in a status column, used to expose overload and encourage finishing.</p></article><article><h3>Backlog</h3><p>Work considered for future delivery but not necessarily committed to a sprint.</p></article><article><h3>Spillover</h3><p>Work planned for one sprint that remains incomplete at the sprint's end.</p></article>
+        </div></div></section>
+        <section class="knowledge-section" id="kc-workflow"><span class="knowledge-step">04</span><div><h2>Statuses and the right workflow</h2><div class="knowledge-status-flow"><div><b>To Do</b><p>Work is understood enough to be queued but has not started.</p></div><span>→</span><div><b>In Progress</b><p>Someone is actively working on it. Keep WIP realistic.</p></div><span>→</span><div><b>Done</b><p>The agreed completion conditions are met and the work is verified.</p></div></div>
+          <p>Update status when the work actually changes, not just to make a chart look better. If review or testing is a distinct stage, define how your team represents it (for example, task description/checklist or story lifecycle).</p>
+          <h3>User Story lifecycle</h3><p><b>Draft → Ready → In Progress → In Review → Accepted.</b> Draft means the story is still being shaped; Ready means the team believes it can start; In Progress means implementation has started; In Review means it is awaiting validation; Accepted means the story has been reviewed and meets its acceptance criteria. This lifecycle is distinct from the To Do / In Progress / Done status on individual tasks.</p>
+        </div></section>
+        <section class="knowledge-section" id="kc-points"><span class="knowledge-step">05</span><div><h2>What are story points?</h2><p>Story points are a <b>relative estimate of effort and uncertainty</b> for a story or piece of work. They are not hours, days, money, or a measure of an individual's productivity.</p>
+          <div class="knowledge-term-grid"><article><h3>1 point</h3><p>Very small and well understood compared with the team's baseline.</p></article><article><h3>2–3 points</h3><p>Small, limited complexity, few unknowns.</p></article><article><h3>5 points</h3><p>Moderate work with several steps or some uncertainty.</p></article><article><h3>8+ points</h3><p>Large or uncertain. Consider splitting it into smaller deliverable stories.</p></article></div>
+          <div class="knowledge-callout"><strong>These are examples, not universal rules.</strong> Each team calibrates estimates using shared reference stories. Many teams use a Fibonacci-like scale (1, 2, 3, 5, 8, 13). Estimate complexity, effort, and uncertainty together; do not compare points between teams.</div>
+          <h3>How Arcflow uses points</h3><p>The task editor stores points on each task. Story cards can show the sum of points across linked tasks; Agile Insights uses committed and completed points for its sprint metrics. Avoid assigning the full story estimate to every task, or the totals will be inflated. Choose one consistent policy: estimate stories and report story-level points, or estimate tasks and sum them—do not mix the two.</p>
+        </div></section>
+        <section class="knowledge-section" id="kc-tracking"><span class="knowledge-step">06</span><div><h2>How to track work well</h2><ul class="knowledge-checklist">
+          <li><strong>Write outcomes, not vague titles.</strong> Prefer “Allow a customer to reset a password” over “Password work.”</li>
+          <li><strong>Define acceptance criteria.</strong> State how the team will know the story is complete.</li>
+          <li><strong>Keep tasks actionable.</strong> Each task should have one clear outcome and an owner where possible.</li>
+          <li><strong>Use consistent labels.</strong> Pick one naming convention for PI, sprint, and feature; avoid variants such as “Sprint 1”, “S1”, and “sprint-01” for the same sprint.</li>
+          <li><strong>Estimate before committing.</strong> Include testing, review, integration, and other necessary work in the plan.</li>
+          <li><strong>Limit work in progress.</strong> Finish or unblock existing work before starting too many new tasks.</li>
+          <li><strong>Review dependencies and dates.</strong> Set realistic start/end dates and call out blocked work early.</li>
+          <li><strong>Close only verified work.</strong> Done means the team's definition of done is satisfied, not merely that coding stopped.</li>
+          <li><strong>Use charts to learn.</strong> Investigate missed forecasts and bottlenecks; do not use velocity to rank people.</li>
+        </ul></div></section>
+        <section class="knowledge-section" id="kc-charts"><span class="knowledge-step">07</span><div><h2>Read Agile Insights and graphs</h2><div class="knowledge-term-grid">
+          <article><h3>Completion rate / progress bar</h3><p>Shows the share of tasks marked Done out of the tasks included in the view. A high percentage is only meaningful if statuses are current and the scope is clear.</p></article>
+          <article><h3>Committed Points</h3><p>The points planned or committed for the selected sprint, based on the app's sprint data and fields. Treat it as the planned workload, not a promise of guaranteed delivery.</p></article>
+          <article><h3>Completed Points</h3><p>Points attached to work recorded as completed. Compare with committed points to understand how much planned work was finished.</p></article>
+          <article><h3>Velocity Chart</h3><p>Compares committed and completed points across sprints. Use several sprints to understand a team's own delivery pattern; one sprint is noisy. Velocity is for forecasting, not individual performance evaluation.</p></article>
+          <article><h3>Burndown Chart</h3><p>Shows remaining work over time against a reference/ideal trend. If actual remaining work stays above the ideal line, work may be progressing more slowly than planned or scope may have increased. A flat line can mean no work has been completed or data has not been updated.</p></article>
+          <article><h3>Spillover Tasks</h3><p>Work that remains incomplete after the sprint it was planned for. Repeated spillover can point to over-commitment, hidden dependencies, interruptions, or work that is too large.</p></article>
+          <article><h3>Overdue Open</h3><p>Open tasks whose end/due date has passed. Review date accuracy, blockers, priority, and whether the plan needs to change.</p></article>
+          <article><h3>Sprint Calendar</h3><p>A calendar view to see work dates and sprint timing. It depends on task dates and consistent sprint labels.</p></article>
+        </div><div class="knowledge-callout"><strong>Read trends, not isolated numbers.</strong> Check that sprint names, points, dates, and task statuses are maintained consistently before drawing conclusions. If a chart looks wrong, first inspect the underlying task records and selected filters.</div></div></section>
+        <section class="knowledge-section" id="kc-filters"><span class="knowledge-step">08</span><div><h2>Filters, sorting, and board controls</h2><div class="knowledge-term-grid">
+          <article><h3>Search</h3><p>Find tasks by task name, story, assignee, feature, or other indexed/displayed text.</p></article><article><h3>PI / Sprint / Feature / Assignee filters</h3><p>Narrow the displayed work to a planning period, capability, or owner. Remember that metrics may reflect the currently selected scope.</p></article><article><h3>Sort cards</h3><p>Change the order in which tasks appear; sorting does not change their status or priority.</p></article><article><h3>WIP limits</h3><p>Set a maximum for a column to highlight overload. A limit is a conversation starter; it does not replace team coordination.</p></article><article><h3>List View</h3><p>A table for scanning, sorting, selecting, and bulk-updating tasks.</p></article><article><h3>Kanban View</h3><p>A visual board grouped by task status. Move work through the flow as it progresses.</p></article><article><h3>User Stories</h3><p>Review stories, their linked tasks, lifecycle, and aggregate points.</p></article><article><h3>Agile Insights</h3><p>Review sprint calendar and delivery metrics to support planning and retrospectives.</p></article>
+        </div></div></section>
+        <section class="knowledge-section" id="kc-examples"><span class="knowledge-step">09</span><div><h2>Worked example: from idea to delivery</h2><div class="knowledge-example"><p><b>Feature:</b> Account security</p><p><b>User Story:</b> As a user, I want to reset my password so I can regain access securely.</p><p><b>Acceptance criteria:</b> A valid reset request sends a time-limited link; invalid/expired links are rejected; success confirms the password was changed.</p><p><b>Tasks:</b> Build reset-request screen (3 points); implement reset-token validation (5 points); add tests and review (2 points).</p><p><b>Total task-estimated points:</b> 10, if your team uses task-level estimates consistently.</p><p><b>Sprint:</b> Sprint 04. <b>PI:</b> PI 2026-Q4. <b>Owner:</b> assigned team member. <b>Status:</b> tasks move To Do → In Progress → Done; story moves through its own lifecycle to Accepted after verification.</p></div></div></section>
+      </section>
       <section id="insightsView" class="insights-view is-hidden" aria-label="Agile insights">
         <div class="insights-header">
           <h2>Sprint Calendar & Delivery Insights</h2>
@@ -271,7 +419,7 @@
     <div class="modal-card task-detail-modal" role="document">
       <button id="closeModal" class="modal-close" type="button" aria-label="Close">&times;</button>
       <header class="task-detail-header">
-        <span class="task-editor-icon" aria-hidden="true">▧</span>
+        <span class="task-editor-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2.2"></rect><path d="M9 3.5h6v3H9zM8.5 11h7M8.5 15h7"></path></svg></span>
         <div><h2 id="modalTitle"></h2><p>Task details</p></div>
       </header>
       <div class="task-detail-layout">
@@ -288,6 +436,7 @@
       </div>
       <div class="task-editor-actions">
         <button id="saveStatusBtn" class="save-task-btn" type="button">Save Status</button>
+        <button id="copyTaskBtn" class="secondary-action" type="button">Copy Task</button>
         <button id="editTaskBtn" class="secondary-action" type="button">Edit Task</button>
         <button id="deleteTaskBtn" class="danger-action" type="button">Delete Task</button>
       </div>
@@ -330,11 +479,42 @@
     </section>
   </div>
 
+  <div id="storyEditorModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="storyEditorTitle">
+    <form id="storyEditorForm" class="modal-card task-editor story-editor" novalidate>
+      <button id="closeStoryEditor" class="modal-close" type="button" aria-label="Close">&times;</button>
+      <header class="task-editor-header">
+        <span class="task-editor-icon story-editor-icon" aria-hidden="true">✦</span>
+        <div><h2 id="storyEditorTitle">Create User Story</h2><p class="task-editor-subtitle">Capture the outcome first. You can add tasks later.</p></div>
+      </header>
+      <div class="story-form-grid">
+        <label class="task-form-wide">Story title <span class="required-mark">*</span>
+          <input id="storyTitleInput" name="title" required maxlength="160" autocomplete="off" placeholder="e.g. As a patient, I want to book an appointment">
+        </label>
+        <label class="task-form-wide">Description
+          <textarea id="storyDescriptionInput" name="description" rows="3" maxlength="1500" placeholder="What does the user need and why?"></textarea>
+        </label>
+        <label class="task-form-wide">Acceptance criteria <span class="field-optional">Optional · one per line</span>
+          <textarea id="storyCriteriaInput" name="acceptanceCriteria" rows="4" placeholder="User can search available doctors&#10;User can select an available time slot"></textarea>
+        </label>
+        <label>Program Increment <span class="field-optional">Optional</span><select id="storyPiInput" name="pi"><option value="">Select a PI</option></select></label>
+        <label>Feature <span class="field-optional">Required</span><select id="storyFeatureInput" name="feature" required><option value="">Select a Feature</option></select></label>
+        <label>Start date <input id="storyStartDateInput" name="startDate" type="date"></label>
+        <label>Target date <input id="storyEndDateInput" name="endDate" type="date"></label>
+      </div>
+      <p class="story-form-note"><span aria-hidden="true">ⓘ</span> Tasks are not required. Save the story now and break it into tasks whenever you're ready.</p>
+      <p id="storyEditorError" class="task-editor-error" aria-live="polite"></p>
+      <div class="task-editor-actions">
+        <button id="cancelStoryEditor" class="secondary-action" type="button">Cancel</button>
+        <button id="saveStoryBtn" class="save-task-btn" type="submit">Create User Story</button>
+      </div>
+    </form>
+  </div>
+
   <div id="taskEditorModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="taskEditorTitle">
     <form id="taskEditorForm" class="modal-card task-editor" novalidate>
       <button id="closeTaskEditor" class="modal-close" type="button" aria-label="Close">&times;</button>
       <header class="task-editor-header">
-        <span class="task-editor-icon" aria-hidden="true">▧</span>
+        <span class="task-editor-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2.2"></rect><path d="M9 3.5h6v3H9zM8.5 11h7M8.5 15h7"></path></svg></span>
         <div>
           <h2 id="taskEditorTitle">New Task</h2>
           <p class="task-editor-subtitle">Add the details needed to plan and track this work.</p>
@@ -344,11 +524,16 @@
         <section class="task-editor-fields" aria-label="Task details">
           <label class="task-form-wide">Task name<input id="newTaskName" name="task" required maxlength="160" autocomplete="off"></label>
           <div class="task-form-grid">
-            <label class="task-form-wide">User story<input name="userStory" maxlength="160" autocomplete="off"></label>
-            <label>PI<input name="pi" maxlength="100" autocomplete="off"></label>
-            <label>Sprint<input name="sprint" maxlength="100" autocomplete="off"></label>
-            <label>Feature<input name="feature" maxlength="120" autocomplete="off"></label>
-            <label>Assignee<input name="assignee" maxlength="120" autocomplete="off"></label>
+            <label class="task-form-wide">User story
+              <select name="userStory" id="taskUserStoryInput"><option value="">Standalone task — no User Story</option></select>
+              <small class="field-help">Select a saved User Story to link this task to its Feature and PI.</small>
+            </label>
+            <label>Assignee
+              <select name="assigneeUid" id="taskAssigneeInput" aria-describedby="taskAssigneeHelp">
+                <option value="">Unassigned</option>
+              </select>
+              <small id="taskAssigneeHelp" class="field-help">Choose a project member.</small>
+            </label>
             <label>Priority
               <select name="priority">
                 <option value="">No priority</option>
@@ -357,9 +542,18 @@
                 <option value="Low">Low</option>
               </select>
             </label>
-            <label>Story points<input name="storyPoints" type="number" min="0" step="0.5" value="0"></label>
-            <label>Start date<input name="startDate" type="date"></label>
-            <label>End date<input name="endDate" type="date"></label>
+            <details class="task-advanced-details task-form-wide">
+              <summary>Planning & scheduling <span>Optional details</span></summary>
+              <div class="task-advanced-grid">
+                <label>Program Increment<select name="pi" id="taskPIInput"><option value="">Select a PI</option></select></label>
+                <label>Feature<select name="feature" id="taskFeatureInput"><option value="">Select a Feature</option></select></label>
+                <label>Sprint<input name="sprint" maxlength="100" autocomplete="off"></label>
+                <label>Story points<input name="storyPoints" type="number" min="0" step="0.5" value="0"></label>
+                <label>Start date<input name="startDate" type="date"></label>
+                <label>End date<input name="endDate" type="date"></label>
+                <label class="task-form-wide">User story description<textarea name="userStoryDescription" rows="3" maxlength="1500" placeholder="Describe the user need and expected outcome"></textarea></label>
+              </div>
+            </details>
           </div>
         </section>
         <section class="task-editor-notes" aria-label="Task description">

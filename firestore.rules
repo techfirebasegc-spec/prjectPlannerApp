@@ -7,18 +7,45 @@ service cloud.firestore {
 
     function validTask(data) {
       return data.keys().hasOnly([
-          "task", "userStory", "pi", "sprint", "feature", "assignee",
+          "task", "userStory", "userStoryId", "userStoryDescription", "pi", "piId", "sprint", "feature", "featureId", "assignee", "assigneeUid",
           "storyPoints", "priority", "startDate", "endDate", "description",
-          "status", "archived", "createdBy", "createdAt", "updatedAt"
+          "status", "archived", "createdBy", "createdAt", "updatedAt", "subtasks", "dependencies", "acceptanceCriteria", "userStoryStatus"
         ])
         && data.task is string && data.task.size() > 0 && data.task.size() <= 160
-        && data.userStory is string && data.pi is string && data.sprint is string
+        && data.userStory is string
+        && (!data.keys().hasAll(["userStoryId"]) || (data.userStoryId is string && data.userStoryId.size() <= 100))
+        && data.pi is string && data.sprint is string
         && data.feature is string && data.assignee is string
+        && (!data.keys().hasAll(["piId"]) || (data.piId is string && data.piId.size() <= 100))
+        && (!data.keys().hasAll(["featureId"]) || (data.featureId is string && data.featureId.size() <= 100))
+        && (!data.keys().hasAll(["assigneeUid"]) || data.assigneeUid is string)
         && data.storyPoints is number && data.storyPoints >= 0
         && data.priority is string && data.startDate is string && data.endDate is string
         && data.description is string && data.status in ["To Do", "In Progress", "Done"]
         && (!data.keys().hasAll(["archived"]) || data.archived is bool)
-        && data.createdBy is string;
+        && data.createdBy is string
+        && (!data.keys().hasAll(["subtasks"]) || (data.subtasks is list && data.subtasks.size() <= 50))
+        && (!data.keys().hasAll(["dependencies"]) || (data.dependencies is list && data.dependencies.size() <= 50))
+        && (!data.keys().hasAll(["acceptanceCriteria"]) || (data.acceptanceCriteria is list && data.acceptanceCriteria.size() <= 50))
+        && (!data.keys().hasAll(["userStoryStatus"]) || data.userStoryStatus in ["Draft", "Ready", "In Progress", "In Review", "Accepted"]);
+    }
+
+    function validUserStory(data) {
+      return data.keys().hasOnly([
+          "title", "description", "acceptanceCriteria", "pi", "piId", "feature", "featureId",
+          "startDate", "endDate", "lifecycle", "createdBy", "createdAt", "updatedAt", "archived"
+        ])
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 160
+        && data.description is string && data.description.size() <= 1500
+        && data.acceptanceCriteria is list && data.acceptanceCriteria.size() <= 50
+        && data.pi is string && data.pi.size() <= 100
+        && data.feature is string && data.feature.size() <= 120
+        && (!data.keys().hasAll(["piId"]) || (data.piId is string && data.piId.size() <= 100))
+        && (!data.keys().hasAll(["featureId"]) || (data.featureId is string && data.featureId.size() <= 100))
+        && data.startDate is string && data.endDate is string
+        && data.lifecycle in ["Draft", "Ready", "In Progress", "In Review", "Accepted"]
+        && data.createdBy is string
+        && (!data.keys().hasAll(["archived"]) || data.archived is bool);
     }
 
     function validNewTask(data) {
@@ -75,17 +102,80 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Program Increment and Feature catalogue for the shared Default Project.
+    match /plannerProgramIncrements/{piId} {
+      allow get, list: if isVerifiedUser();
+      allow create: if isVerifiedUser()
+        && request.resource.data.keys().hasOnly(["name", "description", "startDate", "endDate", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.description is string && request.resource.data.startDate is string && request.resource.data.endDate is string
+        && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"]
+        && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "description", "startDate", "endDate", "status", "archived", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.description is string && request.resource.data.startDate is string && request.resource.data.endDate is string
+        && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"] && request.resource.data.archived is bool;
+      allow delete: if false;
+    }
+
+    match /plannerFeatures/{featureId} {
+      allow get, list: if isVerifiedUser();
+      allow create: if isVerifiedUser()
+        && request.resource.data.keys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+        && request.resource.data.piId is string && exists(/databases/$(database)/documents/plannerProgramIncrements/$(request.resource.data.piId))
+        && request.resource.data.pi is string && request.resource.data.description is string
+        && request.resource.data.owner is string && request.resource.data.priority in ["HIGH", "MEDIUM", "LOW"]
+        && request.resource.data.status in ["PLANNED", "IN_PROGRESS", "COMPLETED"]
+        && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+        && request.resource.data.piId is string && exists(/databases/$(database)/documents/plannerProgramIncrements/$(request.resource.data.piId))
+        && request.resource.data.pi is string && request.resource.data.description is string
+        && request.resource.data.owner is string && request.resource.data.priority in ["HIGH", "MEDIUM", "LOW"]
+        && request.resource.data.status in ["PLANNED", "IN_PROGRESS", "COMPLETED"] && request.resource.data.archived is bool;
+      allow delete: if false;
+    }
+
+    // Standalone User Stories in the shared Default Project.
+    match /plannerUserStories/{storyId} {
+      allow get, list: if isVerifiedUser();
+      allow create: if isVerifiedUser() && validUserStory(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.featureId is string
+        && exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
+        && get(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId)).data.piId == request.resource.data.piId;
+      allow update: if isVerifiedUser() && resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validUserStory(request.resource.data)
+        && request.resource.data.featureId is string
+        && exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
+        && get(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId)).data.piId == request.resource.data.piId;
+      allow delete: if isVerifiedUser() && resource.data.createdBy == request.auth.uid;
+    }
+
     // Existing data remains the shared Default Project and is not migrated or overwritten.
     match /plannerTasks/{taskId} {
       allow get, list: if isVerifiedUser();
       allow create: if isVerifiedUser() && validNewTask(request.resource.data)
-        && request.resource.data.createdBy == request.auth.uid;
+        && request.resource.data.createdBy == request.auth.uid
+        && (!request.resource.data.keys().hasAll(["featureId"]) || request.resource.data.featureId == ""
+          || (exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
+            && get(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId)).data.piId == request.resource.data.piId));
       allow update: if isVerifiedUser() && (
         (request.resource.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])
           && request.resource.data.status in ["To Do", "In Progress", "Done"])
         || (resource.data.createdBy == request.auth.uid
           && request.resource.data.createdBy == resource.data.createdBy
-          && validTask(request.resource.data))
+          && validTask(request.resource.data)
+          && (!request.resource.data.keys().hasAll(["featureId"]) || request.resource.data.featureId == ""
+            || (exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
+              && get(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId)).data.piId == request.resource.data.piId)))
         || (resource.data.createdBy == request.auth.uid
           && request.resource.diff(resource.data).affectedKeys().hasOnly(["archived", "updatedAt"])
           && request.resource.data.archived is bool)
@@ -116,7 +206,8 @@ service cloud.firestore {
     }
 
     match /plannerProjects/{projectId}/members/{memberId} {
-      allow get, list: if isVerifiedUser() && (resource.data.uid == request.auth.uid || isProjectOwner(projectId));
+      allow get: if isVerifiedUser() && (resource.data.uid == request.auth.uid || isProjectOwner(projectId));
+      allow list: if isVerifiedUser() && isProjectMember(projectId);
       allow create: if isVerifiedUser() && (
         (memberId == request.auth.uid && request.resource.data.uid == request.auth.uid
           && request.resource.data.role == "owner"
@@ -156,15 +247,76 @@ service cloud.firestore {
         && (request.auth.uid == uid || isProjectOwner(projectId));
     }
 
+    // Project-scoped PI and Feature catalogue. Members may read; owners/editors may write.
+    match /plannerProjects/{projectId}/programIncrements/{piId} {
+      allow get, list: if isVerifiedUser() && isProjectMember(projectId);
+      allow create: if isVerifiedUser() && canEditProject(projectId)
+        && request.resource.data.keys().hasOnly(["name", "description", "startDate", "endDate", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.description is string && request.resource.data.startDate is string && request.resource.data.endDate is string
+        && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"]
+        && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser() && canEditProject(projectId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "description", "startDate", "endDate", "status", "archived", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.description is string && request.resource.data.startDate is string && request.resource.data.endDate is string
+        && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"] && request.resource.data.archived is bool;
+      allow delete: if false;
+    }
+
+    match /plannerProjects/{projectId}/features/{featureId} {
+      allow get, list: if isVerifiedUser() && isProjectMember(projectId);
+      allow create: if isVerifiedUser() && canEditProject(projectId)
+        && request.resource.data.keys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+        && request.resource.data.piId is string
+        && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/programIncrements/$(request.resource.data.piId))
+        && request.resource.data.pi is string && request.resource.data.description is string && request.resource.data.owner is string
+        && request.resource.data.priority in ["HIGH", "MEDIUM", "LOW"] && request.resource.data.status in ["PLANNED", "IN_PROGRESS", "COMPLETED"]
+        && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser() && canEditProject(projectId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+        && request.resource.data.piId is string
+        && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/programIncrements/$(request.resource.data.piId))
+        && request.resource.data.pi is string && request.resource.data.description is string && request.resource.data.owner is string
+        && request.resource.data.priority in ["HIGH", "MEDIUM", "LOW"] && request.resource.data.status in ["PLANNED", "IN_PROGRESS", "COMPLETED"] && request.resource.data.archived is bool;
+      allow delete: if false;
+    }
+
+    match /plannerProjects/{projectId}/userStories/{storyId} {
+      allow get, list: if isVerifiedUser() && isProjectMember(projectId);
+      allow create: if isVerifiedUser() && canEditProject(projectId)
+        && validUserStory(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.featureId is string
+        && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
+        && get(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId)).data.piId == request.resource.data.piId;
+      allow update: if isVerifiedUser() && canEditProject(projectId)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validUserStory(request.resource.data)
+        && request.resource.data.featureId is string
+        && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
+        && get(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId)).data.piId == request.resource.data.piId;
+      allow delete: if isVerifiedUser() && canEditProject(projectId);
+    }
+
     match /plannerProjects/{projectId}/tasks/{taskId} {
       allow get, list: if isVerifiedUser() && isProjectMember(projectId);
       allow create: if isVerifiedUser() && canEditProject(projectId)
         && validNewTask(request.resource.data)
-        && request.resource.data.createdBy == request.auth.uid;
+        && request.resource.data.createdBy == request.auth.uid
+        && (!request.resource.data.keys().hasAll(["featureId"]) || request.resource.data.featureId == ""
+          || (exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
+            && get(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId)).data.piId == request.resource.data.piId));
       allow update: if isVerifiedUser() && canEditProject(projectId)
         && (
           (request.resource.data.createdBy == resource.data.createdBy
-            && validTask(request.resource.data))
+            && validTask(request.resource.data)
+            && (!request.resource.data.keys().hasAll(["featureId"]) || request.resource.data.featureId == ""
+              || (exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
+                && get(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId)).data.piId == request.resource.data.piId)))
           || (request.resource.diff(resource.data).affectedKeys().hasOnly(["archived", "updatedAt"])
             && request.resource.data.archived is bool)
         );

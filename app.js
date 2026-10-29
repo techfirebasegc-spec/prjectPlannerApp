@@ -16,6 +16,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   const appState = {
     allTasks: [],
+    userStories: [],
     filteredTasks: [],
     sprintCatalog: [],
     filters: {
@@ -28,14 +29,19 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     sortBy: "default",
     listSort: { key: "default", direction: "asc" },
     selectedTaskIds: new Set(),
-    activeView: "board",
+    activeView: "dashboard",
     calendarMonth: "",
     wipLimits: { todo: null, inprogress: null, done: null },
     dragTaskId: null,
     hierarchy: {},
-    charts: { burndown: null, velocity: null },
+    charts: { burndown: null, velocity: null, dashboardBurndown: null, dashboardVelocity: null },
     user: null,
     unsubscribeTasks: null,
+    unsubscribeStories: null,
+    editingStoryId: null,
+    showArchivedStories: false,
+    storyViewMode: "list",
+    expandedStoryTaskIds: new Set(),
     unsubscribeProjects: null,
     unsubscribeOwnedProjects: null,
     unsubscribeUserProjectPointers: null,
@@ -44,6 +50,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     ownedProjects: [],
     memberProjects: [],
     pointerProjects: [],
+    programIncrements: [],
+    features: [],
+    unsubscribePlanning: null,
     activeProjectId: "default",
     editingTaskId: null,
     viewedTaskId: null,
@@ -92,6 +101,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     modalBody: document.getElementById("modalBody"),
     closeModal: document.getElementById("closeModal"),
     editTaskBtn: document.getElementById("editTaskBtn"),
+    copyTaskBtn: document.getElementById("copyTaskBtn"),
     deleteTaskBtn: document.getElementById("deleteTaskBtn"),
     taskStatusSelect: document.getElementById("taskStatusSelect"),
     saveStatusBtn: document.getElementById("saveStatusBtn"),
@@ -118,9 +128,41 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     saveMemberBtn: document.getElementById("saveMemberBtn"),
     memberError: document.getElementById("memberError"),
     memberList: document.getElementById("memberList"),
+    dashboardViewBtn: document.getElementById("dashboardViewBtn"),
+    dashboardView: document.getElementById("dashboardView"),
+    dashboardTasks: document.getElementById("dashboardTasks"),
+    dashboardVelocityChart: document.getElementById("dashboardVelocityChart"),
+    dashboardBurndownChart: document.getElementById("dashboardBurndownChart"),
+    dashboardBurndownSubtitle: document.getElementById("dashboardBurndownSubtitle"),
+    portfolioHero: document.getElementById("portfolioHero"),
+    overviewStats: document.getElementById("overviewStats"),
     boardViewBtn: document.getElementById("boardViewBtn"),
     listViewBtn: document.getElementById("listViewBtn"),
     insightsViewBtn: document.getElementById("insightsViewBtn"),
+    knowledgeViewBtn: document.getElementById("knowledgeViewBtn"),
+    knowledgeView: document.getElementById("knowledgeView"),
+    storiesViewBtn: document.getElementById("storiesViewBtn"),
+    sidebarStoriesBtn: document.getElementById("sidebarStoriesBtn"),
+    newStoryBtn: document.getElementById("newStoryBtn"),
+    storyEditorModal: document.getElementById("storyEditorModal"),
+    storyEditorForm: document.getElementById("storyEditorForm"),
+    storyEditorTitle: document.getElementById("storyEditorTitle"),
+    storyTitleInput: document.getElementById("storyTitleInput"),
+    storyDescriptionInput: document.getElementById("storyDescriptionInput"),
+    storyCriteriaInput: document.getElementById("storyCriteriaInput"),
+    storyPiInput: document.getElementById("storyPiInput"),
+    storyFeatureInput: document.getElementById("storyFeatureInput"),
+    storyStartDateInput: document.getElementById("storyStartDateInput"),
+    storyEndDateInput: document.getElementById("storyEndDateInput"),
+    storyEditorError: document.getElementById("storyEditorError"),
+    saveStoryBtn: document.getElementById("saveStoryBtn"),
+    cancelStoryEditor: document.getElementById("cancelStoryEditor"),
+    closeStoryEditor: document.getElementById("closeStoryEditor"),
+    storiesView: document.getElementById("storiesView"),
+    storiesGrid: document.getElementById("storiesGrid"),
+    toggleArchivedStoriesBtn: document.getElementById("toggleArchivedStoriesBtn"),
+    storiesSummary: document.getElementById("storiesSummary"),
+    taskUserStoryInput: document.getElementById("taskUserStoryInput"),
     profileViewBtn: document.getElementById("profileViewBtn"),
     boardView: document.getElementById("boardView"),
     listView: document.getElementById("listView"),
@@ -128,6 +170,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     listSummary: document.getElementById("listSummary"),
     selectAllTasks: document.getElementById("selectAllTasks"),
     archiveSelectedTasksBtn: document.getElementById("archiveSelectedTasksBtn"),
+    bulkTaskStatus: document.getElementById("bulkTaskStatus"),
+    applyBulkStatusBtn: document.getElementById("applyBulkStatusBtn"),
     insightsView: document.getElementById("insightsView"),
     profileView: document.getElementById("profileView"),
     profileFirstName: document.getElementById("profileFirstName"),
@@ -151,8 +195,459 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     overdueOpen: document.getElementById("overdueOpen"),
     burndownSubtitle: document.getElementById("burndownSubtitle"),
     burndownChart: document.getElementById("burndownChart"),
-    velocityChart: document.getElementById("velocityChart")
+    velocityChart: document.getElementById("velocityChart"),
+    piViewBtn: document.getElementById("piViewBtn"),
+    featuresViewBtn: document.getElementById("featuresViewBtn"),
+    piManagementView: document.getElementById("piManagementView"),
+    featuresManagementView: document.getElementById("featuresManagementView"),
+    piForm: document.getElementById("piForm"),
+    piRecordId: document.getElementById("piRecordId"),
+    piFormTitle: document.getElementById("piFormTitle"),
+    piNameInput: document.getElementById("piNameInput"),
+    piDescriptionInput: document.getElementById("piDescriptionInput"),
+    piStartInput: document.getElementById("piStartInput"),
+    piEndInput: document.getElementById("piEndInput"),
+    piStatusInput: document.getElementById("piStatusInput"),
+    piFormError: document.getElementById("piFormError"),
+    piSaveBtn: document.getElementById("piSaveBtn"),
+    piCancelBtn: document.getElementById("piCancelBtn"),
+    piRecords: document.getElementById("piRecords"),
+    piCount: document.getElementById("piCount"),
+    piSearchInput: document.getElementById("piSearchInput"),
+    featureForm: document.getElementById("featureForm"),
+    featureRecordId: document.getElementById("featureRecordId"),
+    featureFormTitle: document.getElementById("featureFormTitle"),
+    featureNameInput: document.getElementById("featureNameInput"),
+    featurePIInput: document.getElementById("featurePIInput"),
+    featureDescriptionInput: document.getElementById("featureDescriptionInput"),
+    featureOwnerInput: document.getElementById("featureOwnerInput"),
+    featurePriorityInput: document.getElementById("featurePriorityInput"),
+    featureStatusInput: document.getElementById("featureStatusInput"),
+    featureFormError: document.getElementById("featureFormError"),
+    featureSaveBtn: document.getElementById("featureSaveBtn"),
+    featureCancelBtn: document.getElementById("featureCancelBtn"),
+    featureRecords: document.getElementById("featureRecords"),
+    featureCount: document.getElementById("featureCount"),
+    featureSearchInput: document.getElementById("featureSearchInput"),
+    featurePIFilter: document.getElementById("featurePIFilter"),
+    reconcilePlanningBtn: document.getElementById("reconcilePlanningBtn"),
+    taskPIInput: document.getElementById("taskPIInput"),
+    taskFeatureInput: document.getElementById("taskFeatureInput")
   };
+
+
+  function planningCollection(kind) {
+    const defaultName = kind === "pi" ? "plannerProgramIncrements" : "plannerFeatures";
+    const projectName = kind === "pi" ? "programIncrements" : "features";
+    return appState.activeProjectId === "default"
+      ? collection(db, defaultName)
+      : collection(db, "plannerProjects", appState.activeProjectId, projectName);
+  }
+
+  function planningReference(kind, id) {
+    return doc(planningCollection(kind), id);
+  }
+
+  function planningCanEdit() {
+    if (appState.activeProjectId === "default") return true;
+    const project = appState.projects.find((item) => item.id === appState.activeProjectId);
+    return Boolean(project && (project.role === "owner" || project.role === "editor"));
+  }
+
+  function loadPlanningRecords() {
+    if (Array.isArray(appState.unsubscribePlanning)) appState.unsubscribePlanning.forEach((unsubscribe) => unsubscribe());
+    const unsubscribePI = onSnapshot(planningCollection("pi"), (snapshot) => {
+      appState.programIncrements = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
+        .sort((a, b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+      refreshNormalizedTasksFromCatalog();
+      refreshPlanningSelectors();
+      populatePlanningFilterOptions();
+      renderProgramIncrements();
+      renderFeatures();
+      applyFiltersAndRender();
+    }, (error) => {
+      console.error("Could not load Program Increments", error);
+      appState.programIncrements = [];
+      refreshPlanningSelectors();
+      renderProgramIncrements("Could not load Program Increments. Check project membership permissions.");
+    });
+    const unsubscribeFeature = onSnapshot(planningCollection("feature"), (snapshot) => {
+      appState.features = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
+        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      refreshNormalizedTasksFromCatalog();
+      refreshPlanningSelectors();
+      populatePlanningFilterOptions();
+      renderFeatures();
+      renderProgramIncrements();
+      applyFiltersAndRender();
+    }, (error) => {
+      console.error("Could not load Features", error);
+      appState.features = [];
+      refreshPlanningSelectors();
+      renderFeatures("Could not load Features. Check project membership permissions.");
+    });
+    appState.unsubscribePlanning = [unsubscribePI, unsubscribeFeature];
+  }
+
+  function setSelectOptions(select, items, placeholder, selectedValue = "") {
+    if (!select) return;
+    const previous = selectedValue || select.value;
+    select.replaceChildren(new Option(placeholder, ""));
+    items.forEach((item) => {
+      const option = new Option(item.name, item.id);
+      select.add(option);
+    });
+    if (previous && [...select.options].some((option) => option.value === previous)) select.value = previous;
+  }
+
+  function refreshPlanningSelectors() {
+    const selectedTaskPI = els.taskPIInput?.value || "";
+    const selectedStoryPI = els.storyPiInput?.value || "";
+    const selectedFeature = els.taskFeatureInput?.value || "";
+    const selectedStoryFeature = els.storyFeatureInput?.value || "";
+    const selectedFeaturePI = els.featurePIInput?.value || "";
+    setSelectOptions(els.taskPIInput, appState.programIncrements, "Select a PI", selectedTaskPI);
+    setSelectOptions(els.storyPiInput, appState.programIncrements, "Optional — select a PI", selectedStoryPI);
+    setSelectOptions(els.featurePIInput, appState.programIncrements, "Select a PI", selectedFeaturePI);
+    if (els.featurePIFilter) {
+      const previousPI = els.featurePIFilter.value || "all";
+      els.featurePIFilter.replaceChildren(new Option("All PIs", "all"));
+      appState.programIncrements.forEach((pi) => els.featurePIFilter.add(new Option(pi.name, pi.id)));
+      els.featurePIFilter.value = previousPI === "all" || appState.programIncrements.some((pi) => pi.id === previousPI) ? previousPI : "all";
+    }
+    const featureOptions = appState.features.filter((feature) => !selectedTaskPI || feature.piId === selectedTaskPI);
+    const storyFeatureOptions = appState.features.filter((feature) => !selectedStoryPI || feature.piId === selectedStoryPI);
+    setSelectOptions(els.taskFeatureInput, featureOptions, "Select a Feature", selectedFeature);
+    setSelectOptions(els.storyFeatureInput, storyFeatureOptions, "Optional — select a Feature", selectedStoryFeature);
+    if (els.taskPIInput) els.taskPIInput.disabled = !appState.programIncrements.length;
+    if (els.storyPiInput) els.storyPiInput.disabled = !appState.programIncrements.length;
+    if (els.featurePIInput) els.featurePIInput.disabled = !appState.programIncrements.length;
+    if (els.taskFeatureInput) els.taskFeatureInput.disabled = !featureOptions.length;
+    if (els.storyFeatureInput) els.storyFeatureInput.disabled = !storyFeatureOptions.length;
+    if (els.featureSaveBtn) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
+    if (els.piSaveBtn) els.piSaveBtn.disabled = !planningCanEdit();
+  }
+
+  function refreshNormalizedTasksFromCatalog() {
+    if (!appState.allTasks.length) return;
+    appState.allTasks = normalizeRecords(appState.allTasks.map((task) => ({ id: task.id, ...task.raw }))).filter((task) => task.archived !== true);
+    appState.hierarchy = groupByHierarchy(appState.allTasks);
+    appState.sprintCatalog = buildSprintCatalog(appState.allTasks);
+  }
+
+  function populatePlanningFilterOptions() {
+    const selectedPI = appState.filters.pi || els.piFilter?.value || "all";
+    const selectedFeature = appState.filters.feature || els.featureFilter?.value || "all";
+    const piNames = [...new Set([...appState.programIncrements.map((item) => String(item.name || "").trim()), ...collectUnique(appState.allTasks, "pi")].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const featureNames = [...new Set([...appState.features.map((item) => String(item.name || "").trim()), ...collectUnique(appState.allTasks, "feature")].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    fillSelect(els.piFilter, piNames, "All PI");
+    fillSelect(els.featureFilter, featureNames, "All Features");
+    els.piFilter.value = piNames.includes(selectedPI) ? selectedPI : "all";
+    els.featureFilter.value = featureNames.includes(selectedFeature) ? selectedFeature : "all";
+    appState.filters.pi = els.piFilter.value;
+    appState.filters.feature = els.featureFilter.value;
+  }
+
+  function formatPlanningDate(value) {
+    if (!value) return "Date not set";
+    const parsed = new Date(value + "T00:00:00");
+    return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(parsed);
+  }
+
+  function statusClass(value) {
+    return String(value || "").toLowerCase().replace(/[^a-z]+/g, "_");
+  }
+
+  function renderProgramIncrements(errorMessage = "") {
+    if (!els.piRecords) return;
+    const queryText = String(els.piSearchInput?.value || "").trim().toLowerCase();
+    const records = appState.programIncrements.filter((pi) => [pi.name, pi.description, pi.status].join(" ").toLowerCase().includes(queryText));
+    els.piCount.textContent = `${appState.programIncrements.length} PI${appState.programIncrements.length === 1 ? "" : "s"}`;
+    if (errorMessage || !records.length) {
+      els.piRecords.innerHTML = `<div class="planning-empty"><strong>${errorMessage ? "Unable to load PIs" : (queryText ? "No matching PIs" : "No Program Increments yet")}</strong>${escapeHtml(errorMessage || (queryText ? "Try another search term." : "Create a PI to establish the planning horizon for your Features."))}</div>`;
+      return;
+    }
+    els.piRecords.innerHTML = records.map((pi) => {
+      const features = appState.features.filter((feature) => feature.piId === pi.id);
+      const storyCount = appState.userStories.filter((story) => story.piId === pi.id || story.pi === pi.name).length;
+      const taskCount = appState.allTasks.filter((task) => task.raw.piId === pi.id || task.pi === pi.name).length;
+      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><h4>${escapeHtml(pi.name)}</h4><span class="planning-status ${statusClass(pi.status)}">${escapeHtml(String(pi.status || "PLANNED").replaceAll("_", " "))}</span></div><p class="planning-record-description">${escapeHtml(pi.description || "No description added.")}</p><div class="planning-record-meta"><span>${escapeHtml(formatPlanningDate(pi.startDate))} – ${escapeHtml(formatPlanningDate(pi.endDate))}</span><span><strong>${features.length}</strong> Features</span><span><strong>${storyCount}</strong> Stories</span><span><strong>${taskCount}</strong> Tasks</span></div></div><div class="planning-record-actions"><button type="button" data-edit-pi="${escapeHtml(pi.id)}">Edit</button><button type="button" data-delete-pi="${escapeHtml(pi.id)}" data-delete-name="${escapeHtml(pi.name)}">Archive</button></div></article>`;
+    }).join("");
+    els.piRecords.querySelectorAll("[data-edit-pi]").forEach((button) => button.addEventListener("click", () => editProgramIncrement(button.dataset.editPi)));
+    els.piRecords.querySelectorAll("[data-delete-pi]").forEach((button) => button.addEventListener("click", () => archiveProgramIncrement(button.dataset.deletePi, button.dataset.deleteName)));
+  }
+
+  function renderFeatures(errorMessage = "") {
+    if (!els.featureRecords) return;
+    const queryText = String(els.featureSearchInput?.value || "").trim().toLowerCase();
+    const piFilter = els.featurePIFilter?.value || "all";
+    const records = appState.features.filter((feature) =>
+      (piFilter === "all" || feature.piId === piFilter)
+      && [feature.name, feature.description, feature.owner, feature.status].join(" ").toLowerCase().includes(queryText));
+    els.featureCount.textContent = `${appState.features.length} Feature${appState.features.length === 1 ? "" : "s"}`;
+    if (errorMessage || !records.length) {
+      els.featureRecords.innerHTML = `<div class="planning-empty"><strong>${errorMessage ? "Unable to load Features" : (queryText ? "No matching Features" : "No Features yet")}</strong>${escapeHtml(errorMessage || (queryText ? "Try another search term or PI." : "Create a PI first, then add Features and connect User Stories to them."))}</div>`;
+      return;
+    }
+    els.featureRecords.innerHTML = records.map((feature) => {
+      const pi = appState.programIncrements.find((item) => item.id === feature.piId);
+      const stories = appState.userStories.filter((story) => story.featureId === feature.id || story.feature === feature.name);
+      const tasks = appState.allTasks.filter((task) => task.raw.featureId === feature.id || task.feature === feature.name);
+      const done = tasks.filter((task) => task.statusKey === "done").length;
+      const progress = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><h4>${escapeHtml(feature.name)}</h4><span class="planning-status ${statusClass(feature.status)}">${escapeHtml(String(feature.status || "PLANNED").replaceAll("_", " "))}</span><span class="planning-status">${escapeHtml(String(feature.priority || "MEDIUM"))} priority</span></div><p class="planning-record-description">${escapeHtml(feature.description || "No description added.")}</p><div class="planning-record-meta"><span>PI: <strong>${escapeHtml(pi?.name || "Missing PI")}</strong></span><span>Owner: <strong>${escapeHtml(feature.owner || "Unassigned")}</strong></span><span><strong>${stories.length}</strong> Stories</span><span><strong>${tasks.length}</strong> Tasks</span><span><strong>${progress}%</strong> task completion</span></div><div class="planning-record-progress"><span style="width:${progress}%"></span></div></div><div class="planning-record-actions"><button type="button" data-edit-feature="${escapeHtml(feature.id)}">Edit</button><button type="button" data-delete-feature="${escapeHtml(feature.id)}" data-delete-name="${escapeHtml(feature.name)}">Archive</button></div></article>`;
+    }).join("");
+    els.featureRecords.querySelectorAll("[data-edit-feature]").forEach((button) => button.addEventListener("click", () => editFeature(button.dataset.editFeature)));
+    els.featureRecords.querySelectorAll("[data-delete-feature]").forEach((button) => button.addEventListener("click", () => archiveFeature(button.dataset.deleteFeature, button.dataset.deleteName)));
+  }
+
+  function resetPIForm() {
+    els.piForm.reset();
+    els.piRecordId.value = "";
+    els.piFormTitle.textContent = "Create a Program Increment";
+    els.piSaveBtn.textContent = "Create PI";
+    els.piFormError.textContent = "";
+  }
+
+  function editProgramIncrement(id) {
+    const pi = appState.programIncrements.find((item) => item.id === id);
+    if (!pi) return;
+    els.piRecordId.value = pi.id;
+    els.piNameInput.value = pi.name || "";
+    els.piDescriptionInput.value = pi.description || "";
+    els.piStartInput.value = pi.startDate || "";
+    els.piEndInput.value = pi.endDate || "";
+    els.piStatusInput.value = pi.status || "PLANNED";
+    els.piFormTitle.textContent = "Edit Program Increment";
+    els.piSaveBtn.textContent = "Save PI";
+    els.piFormError.textContent = "";
+    els.piNameInput.focus();
+  }
+
+  async function saveProgramIncrement(event) {
+    event.preventDefault();
+    if (!planningCanEdit()) { els.piFormError.textContent = "You have read-only access to this project."; return; }
+    const id = els.piRecordId.value;
+    const name = els.piNameInput.value.trim();
+    const description = els.piDescriptionInput.value.trim();
+    const startDate = els.piStartInput.value;
+    const endDate = els.piEndInput.value;
+    if (!name) { els.piFormError.textContent = "Enter a PI name."; return; }
+    if (!startDate || !endDate || endDate < startDate) { els.piFormError.textContent = "Enter a valid date range; the end date must not be before the start date."; return; }
+    if (appState.programIncrements.some((pi) => pi.name.toLowerCase() === name.toLowerCase() && pi.id !== id)) { els.piFormError.textContent = "A PI with this name already exists in this project."; return; }
+    const previous = appState.programIncrements.find((pi) => pi.id === id);
+    const data = { name, description, startDate, endDate, status: els.piStatusInput.value, archived: false, createdBy: previous?.createdBy || appState.user.uid, updatedAt: serverTimestamp() };
+    els.piSaveBtn.disabled = true;
+    try {
+      if (id) await updateDoc(planningReference("pi", id), data);
+      else await addDoc(planningCollection("pi"), { ...data, createdAt: serverTimestamp() });
+      resetPIForm();
+      await loadPlanningRecords();
+    } catch (error) {
+      console.error("Could not save Program Increment", error);
+      els.piFormError.textContent = "Could not save the PI. Check project permissions and try again.";
+    } finally {
+      els.piSaveBtn.disabled = !planningCanEdit();
+    }
+  }
+
+  async function archiveProgramIncrement(id, name) {
+    if (!planningCanEdit()) return;
+    const linkedFeatures = appState.features.filter((feature) => feature.piId === id);
+    if (linkedFeatures.length) { window.alert("Move or archive the linked Features before archiving this PI."); return; }
+    if (!window.confirm(`Archive Program Increment "${name}"? Existing task records will be preserved.`)) return;
+    try {
+      await updateDoc(planningReference("pi", id), { archived: true, updatedAt: serverTimestamp() });
+      appState.programIncrements = appState.programIncrements.filter((pi) => pi.id !== id);
+      refreshPlanningSelectors(); renderProgramIncrements(); renderFeatures();
+    } catch (error) {
+      console.error("Could not archive PI", error);
+      window.alert("Could not archive the PI. Check project permissions and try again.");
+    }
+  }
+
+  function resetFeatureForm() {
+    els.featureForm.reset();
+    els.featureRecordId.value = "";
+    els.featureFormTitle.textContent = "Create a Feature";
+    els.featureSaveBtn.textContent = "Create Feature";
+    els.featureFormError.textContent = "";
+    refreshPlanningSelectors();
+  }
+
+  function editFeature(id) {
+    const feature = appState.features.find((item) => item.id === id);
+    if (!feature) return;
+    els.featureRecordId.value = feature.id;
+    els.featureNameInput.value = feature.name || "";
+    els.featurePIInput.value = feature.piId || "";
+    els.featureDescriptionInput.value = feature.description || "";
+    els.featureOwnerInput.value = feature.owner || "";
+    els.featurePriorityInput.value = feature.priority || "MEDIUM";
+    els.featureStatusInput.value = feature.status || "PLANNED";
+    els.featureFormTitle.textContent = "Edit Feature";
+    els.featureSaveBtn.textContent = "Save Feature";
+    els.featureFormError.textContent = "";
+    els.featureNameInput.focus();
+  }
+
+  async function saveFeature(event) {
+    event.preventDefault();
+    if (!planningCanEdit()) { els.featureFormError.textContent = "You have read-only access to this project."; return; }
+    const id = els.featureRecordId.value;
+    const name = els.featureNameInput.value.trim();
+    const piId = els.featurePIInput.value;
+    const pi = appState.programIncrements.find((item) => item.id === piId);
+    if (!name) { els.featureFormError.textContent = "Enter a Feature name."; return; }
+    if (!pi) { els.featureFormError.textContent = "Select a valid Program Increment first."; return; }
+    if (appState.features.some((feature) => feature.name.toLowerCase() === name.toLowerCase() && feature.id !== id)) { els.featureFormError.textContent = "A Feature with this name already exists in this project."; return; }
+    const previous = appState.features.find((feature) => feature.id === id);
+    const data = { name, piId, pi: pi.name, description: els.featureDescriptionInput.value.trim(), owner: els.featureOwnerInput.value.trim(), priority: els.featurePriorityInput.value, status: els.featureStatusInput.value, archived: false, createdBy: previous?.createdBy || appState.user.uid, updatedAt: serverTimestamp() };
+    els.featureSaveBtn.disabled = true;
+    try {
+      if (id) await updateDoc(planningReference("feature", id), data);
+      else await addDoc(planningCollection("feature"), { ...data, createdAt: serverTimestamp() });
+      resetFeatureForm();
+      await loadPlanningRecords();
+    } catch (error) {
+      console.error("Could not save Feature", error);
+      els.featureFormError.textContent = "Could not save the Feature. Check project permissions and try again.";
+    } finally {
+      els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
+    }
+  }
+
+  async function archiveFeature(id, name) {
+    if (!planningCanEdit()) return;
+    const linkedFeature = appState.features.find((feature) => feature.id === id);
+    const linkedStories = appState.userStories.filter((story) => story.featureId === id || (linkedFeature && story.feature === linkedFeature.name));
+    const linkedTasks = appState.allTasks.filter((task) => task.raw.featureId === id || (linkedFeature && task.feature === linkedFeature.name));
+    if (linkedStories.length || linkedTasks.length) { window.alert("This Feature still has linked User Stories or Tasks. Reassign them before archiving the Feature."); return; }
+    if (!window.confirm(`Archive Feature "${name}"?`)) return;
+    try {
+      await updateDoc(planningReference("feature", id), { archived: true, updatedAt: serverTimestamp() });
+      appState.features = appState.features.filter((feature) => feature.id !== id);
+      refreshPlanningSelectors(); renderFeatures(); renderProgramIncrements();
+    } catch (error) {
+      console.error("Could not archive Feature", error);
+      window.alert("Could not archive the Feature. Check project permissions and try again.");
+    }
+  }
+
+  async function reconcileLegacyPlanningLinks() {
+    if (!planningCanEdit()) {
+      window.alert("You have read-only access to this project. Ask a project owner or editor to map existing records.");
+      return;
+    }
+    if (!appState.features.length) {
+      window.alert("Create PI and Feature records first. Existing text values can only be mapped when there is a unique matching Feature.");
+      return;
+    }
+    const button = els.reconcilePlanningBtn;
+    if (button) { button.disabled = true; button.textContent = "Mapping…"; }
+    let storiesMapped = 0, tasksMapped = 0, skipped = 0, failed = 0;
+    const featureGroups = new Map();
+    appState.features.forEach((feature) => {
+      const key = String(feature.name || "").trim().toLocaleLowerCase();
+      if (!featureGroups.has(key)) featureGroups.set(key, []);
+      featureGroups.get(key).push(feature);
+    });
+    const uniqueFeatureByName = (name) => {
+      const matches = featureGroups.get(String(name || "").trim().toLocaleLowerCase()) || [];
+      return matches.length === 1 ? matches[0] : null;
+    };
+    const storyFeatureMap = new Map();
+    for (const story of appState.userStories) {
+      const relatedTasks = appState.allTasks.filter((task) =>
+        (story.id && String(task.raw.userStoryId || "") === story.id)
+        || (!task.raw.userStoryId && String(task.raw.userStory || "").trim().toLocaleLowerCase() === String(story.title || "").trim().toLocaleLowerCase()));
+      const taskFeatureCandidates = relatedTasks.map((task) => uniqueFeatureByName(task.raw.feature)).filter(Boolean);
+      const taskFeatureIds = new Set(taskFeatureCandidates.map((feature) => feature.id));
+      const inferredTaskFeature = taskFeatureIds.size === 1 ? taskFeatureCandidates[0] : null;
+      const feature = appState.features.find((item) => item.id === story.featureId) || uniqueFeatureByName(story.feature) || inferredTaskFeature;
+      if (!feature) { skipped++; continue; }
+      storyFeatureMap.set(story.id, feature);
+      const patch = {};
+      if (story.featureId !== feature.id) patch.featureId = feature.id;
+      if (story.feature !== feature.name) patch.feature = feature.name;
+      if (story.piId !== feature.piId) patch.piId = feature.piId;
+      if (story.pi !== feature.pi) patch.pi = feature.pi;
+      if (Object.keys(patch).length) {
+        try { await updateDoc(userStoryReference(story.id), { ...patch, updatedAt: serverTimestamp() }); storiesMapped++; }
+        catch (error) { failed++; console.warn("Could not map User Story", story.id, error); }
+      }
+    }
+    for (const task of appState.allTasks) {
+      const title = String(task.raw.userStory || task.story || "").trim();
+      const titleMatches = title ? appState.userStories.filter((item) => item.title?.trim().toLocaleLowerCase() === title.toLocaleLowerCase()) : [];
+      const story = appState.userStories.find((item) => item.id === task.raw.userStoryId)
+        || (titleMatches.length === 1 ? titleMatches[0] : null);
+      if (!task.raw.userStoryId && titleMatches.length > 1) skipped++;
+      const feature = (story && storyFeatureMap.get(story.id))
+        || appState.features.find((item) => item.id === task.raw.featureId)
+        || uniqueFeatureByName(task.raw.feature);
+      if (!feature) { if (title && title !== "-") skipped++; continue; }
+      const patch = {};
+      if (task.raw.featureId !== feature.id) patch.featureId = feature.id;
+      if (task.raw.feature !== feature.name) patch.feature = feature.name;
+      if (task.raw.piId !== feature.piId) patch.piId = feature.piId;
+      if (task.raw.pi !== feature.pi) patch.pi = feature.pi;
+      if (story && task.raw.userStoryId !== story.id) patch.userStoryId = story.id;
+      if (Object.keys(patch).length) {
+        try { await updateDoc(taskReference(task.id), { ...patch, updatedAt: serverTimestamp() }); tasksMapped++; }
+        catch (error) { failed++; console.warn("Could not map Task", task.id, error); }
+      }
+    }
+    if (button) { button.disabled = !planningCanEdit(); button.textContent = "Map existing records"; }
+    window.alert(`Mapping complete. User Stories updated: ${storiesMapped}. Tasks updated: ${tasksMapped}. Unmatched or ambiguous records: ${skipped}. Updates denied or failed: ${failed}. No records were deleted.`);
+  }
+
+  function onTaskStoryChange() {
+    const value = String(els.taskUserStoryInput?.value || "");
+    if (!value) return;
+    const title = value.startsWith("legacy:") ? value.slice("legacy:".length) : "";
+    const story = appState.userStories.find((item) => item.id === value)
+      || appState.allTasks.map((task) => task.raw).find((raw) => String(raw.userStoryId || "") === value || (!raw.userStoryId && String(raw.userStory || "").trim() === title));
+    if (!story) return;
+    const descriptionField = els.taskEditorForm.elements.namedItem("userStoryDescription");
+    if (descriptionField) descriptionField.value = String(story.description || story.userStoryDescription || "").trim();
+    const pi = appState.programIncrements.find((item) => item.id === story.piId || item.name === story.pi);
+    const feature = appState.features.find((item) => item.id === story.featureId || item.name === story.feature);
+    if (pi) els.taskPIInput.value = pi.id;
+    onPlanningPIChange(els.taskPIInput, els.taskFeatureInput);
+    if (feature) els.taskFeatureInput.value = feature.id;
+  }
+
+  function onPlanningPIChange(select, featureSelect) {
+    if (!select || !featureSelect) return;
+    const current = featureSelect.value;
+    const options = appState.features.filter((feature) => !select.value || feature.piId === select.value);
+    setSelectOptions(featureSelect, options, "Select a Feature", current);
+  }
+
+  function bindPlanningEvents() {
+    els.piViewBtn?.addEventListener("click", () => setActiveView("pis"));
+    els.featuresViewBtn?.addEventListener("click", () => setActiveView("features"));
+    els.piForm?.addEventListener("submit", saveProgramIncrement);
+    els.featureForm?.addEventListener("submit", saveFeature);
+    els.piCancelBtn?.addEventListener("click", resetPIForm);
+    els.featureCancelBtn?.addEventListener("click", resetFeatureForm);
+    els.piSearchInput?.addEventListener("input", () => renderProgramIncrements());
+    els.featureSearchInput?.addEventListener("input", () => renderFeatures());
+    els.featurePIFilter?.addEventListener("change", () => renderFeatures());
+    els.reconcilePlanningBtn?.addEventListener("click", reconcileLegacyPlanningLinks);
+    els.taskUserStoryInput?.addEventListener("change", onTaskStoryChange);
+    els.taskPIInput?.addEventListener("change", () => onPlanningPIChange(els.taskPIInput, els.taskFeatureInput));
+    els.storyPiInput?.addEventListener("change", () => onPlanningPIChange(els.storyPiInput, els.storyFeatureInput));
+    els.taskFeatureInput?.addEventListener("change", () => {
+      const feature = appState.features.find((item) => item.id === els.taskFeatureInput.value);
+      if (feature) { els.taskPIInput.value = feature.piId; onPlanningPIChange(els.taskPIInput, els.taskFeatureInput); els.taskFeatureInput.value = feature.id; }
+    });
+    els.storyFeatureInput?.addEventListener("change", () => {
+      const feature = appState.features.find((item) => item.id === els.storyFeatureInput.value);
+      if (feature) { els.storyPiInput.value = feature.piId; onPlanningPIChange(els.storyPiInput, els.storyFeatureInput); els.storyFeatureInput.value = feature.id; }
+    });
+  }
 
   async function init() {
     const session = await getAuthenticatedPlannerUser();
@@ -270,15 +765,27 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   function loadData() {
     if (appState.unsubscribeTasks) appState.unsubscribeTasks();
-    appState.unsubscribeTasks = onSnapshot(taskCollection(), (snapshot) => {
+    if (appState.unsubscribeStories) appState.unsubscribeStories();
+    loadPlanningRecords();
+    appState.unsubscribeStories = onSnapshot(userStoryCollection(), (snapshot) => {
+      appState.userStories = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      applyFiltersAndRender();
+    }, (error) => {
+      console.error("Could not load user stories", error);
+      appState.userStories = [];
+      applyFiltersAndRender();
+    });
+    appState.unsubscribeTasks = onSnapshot(taskCollection(), async (snapshot) => {
       const raw = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       appState.allTasks = normalizeRecords(raw).filter((task) => task.archived !== true);
       appState.selectedTaskIds = new Set([...appState.selectedTaskIds].filter((taskId) => appState.allTasks.some((task) => task.id === taskId)));
       appState.hierarchy = groupByHierarchy(appState.allTasks);
       appState.sprintCatalog = buildSprintCatalog(appState.allTasks);
 
-      populateFilters(appState.allTasks);
       populateCalendarMonthOptions();
+      // Populate PI/Sprint/Feature immediately; await assignee options from the
+      // same directory/member source as the task editor before applying filters.
+      await populateFilters(appState.allTasks);
       applyPreferencesToControls();
       setActiveView(appState.activeView, false);
       applyFiltersAndRender();
@@ -297,6 +804,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.sortBy.addEventListener("change", onSortChange);
     els.selectAllTasks.addEventListener("change", toggleAllVisibleTasks);
     els.archiveSelectedTasksBtn.addEventListener("click", archiveSelectedTasks);
+    els.applyBulkStatusBtn.addEventListener("click", updateSelectedTaskStatuses);
     document.querySelectorAll(".list-sort-button").forEach((button) => {
       button.addEventListener("click", () => onListSort(button.dataset.listSort));
     });
@@ -327,9 +835,26 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     });
     els.archiveProjectBtn.addEventListener("click", archiveActiveProject);
     els.membersBtn.addEventListener("click", openMembers);
+    els.dashboardViewBtn?.addEventListener("click", () => setActiveView("dashboard"));
     els.boardViewBtn.addEventListener("click", () => setActiveView("board"));
     els.listViewBtn.addEventListener("click", () => setActiveView("list"));
     els.insightsViewBtn.addEventListener("click", () => setActiveView("insights"));
+    els.knowledgeViewBtn?.addEventListener("click", () => setActiveView("knowledge"));
+    els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
+    els.sidebarStoriesBtn?.addEventListener("click", () => { setActiveView("stories"); if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true); });
+    els.newStoryBtn.addEventListener("click", () => openStoryEditor());
+    bindPlanningEvents();
+    els.storiesGrid.classList.add("stories-grid-list");
+    els.toggleArchivedStoriesBtn.addEventListener("click", () => {
+      appState.showArchivedStories = !appState.showArchivedStories;
+      els.toggleArchivedStoriesBtn.textContent = appState.showArchivedStories ? "Show active" : "Show archived";
+      els.toggleArchivedStoriesBtn.setAttribute("aria-pressed", String(appState.showArchivedStories));
+      renderUserStories(appState.filteredTasks);
+    });
+    els.storyEditorForm.addEventListener("submit", saveUserStory);
+    els.cancelStoryEditor.addEventListener("click", closeStoryEditor);
+    els.closeStoryEditor.addEventListener("click", closeStoryEditor);
+    els.storyEditorModal.addEventListener("click", (event) => { if (event.target === els.storyEditorModal) closeStoryEditor(); });
     els.profileViewBtn.addEventListener("click", () => setActiveView("profile"));
     els.profileForm.addEventListener("submit", saveProfile);
     els.calendarMonth.addEventListener("change", onCalendarMonthChange);
@@ -345,6 +870,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const task = appState.allTasks.find((item) => item.id === appState.viewedTaskId);
       if (task) openTaskEditor(task);
     });
+    els.copyTaskBtn.addEventListener("click", copyViewedTask);
     els.saveStatusBtn.addEventListener("click", saveModalStatus);
     els.deleteTaskBtn.addEventListener("click", deleteViewedTask);
     els.modal.addEventListener("click", (event) => {
@@ -389,11 +915,22 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     return doc(taskCollection(), taskId);
   }
 
+  function userStoryCollection() {
+    return appState.activeProjectId === "default"
+      ? collection(db, "plannerUserStories")
+      : collection(db, "plannerProjects", appState.activeProjectId, "userStories");
+  }
+
+  function userStoryReference(storyId) {
+    return doc(userStoryCollection(), storyId);
+  }
+
   function onProjectChange(event) {
     appState.activeProjectId = event.target.value;
     appState.selectedTaskIds.clear();
     persistPreferences();
     updateMembersControl();
+    loadPlanningRecords();
     loadData();
   }
 
@@ -418,7 +955,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const sprintEndDate = parseDate(cleaned.sprintEndDate || cleaned["Sprint End Date"]);
       const dueDate = endDate || sprintEndDate;
 
-      const pi = getString(cleaned.pi || cleaned.PI) || getString(cleaned.piId || cleaned.PI_ID) || "Unspecified PI";
+      const pi = appState.programIncrements.find((item) => item.id === getString(cleaned.piId || cleaned.PI_ID))?.name
+        || getString(cleaned.pi || cleaned.PI) || getString(cleaned.piId || cleaned.PI_ID) || "Unspecified PI";
       const sprint = getString(cleaned.sprint || cleaned.Sprint) || "Unspecified Sprint";
       const taskTitle = getString(cleaned.task || cleaned.Task) || getString(cleaned.userStory || cleaned["User Story"]) || `Task ${index + 1}`;
 
@@ -430,13 +968,16 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         pi,
         sprint,
         sprintKey: `${pi}::${sprint}`,
-        feature: getString(cleaned.feature || cleaned.Feature) || "Unspecified Feature",
+        feature: appState.features.find((item) => item.id === getString(cleaned.featureId || cleaned.Feature_ID))?.name
+          || getString(cleaned.feature || cleaned.Feature) || "Unspecified Feature",
         featureId: getString(cleaned.featureId || cleaned.Feature_ID) || "-",
         story: getString(cleaned.userStory || cleaned["User Story"]) || "-",
         storyId: getString(cleaned.storyId || cleaned.Story_ID) || "-",
         task: taskTitle,
         assignee: getString(cleaned.assignee || cleaned.Assignee) || "Unassigned",
         description: getString(cleaned.description || cleaned.Description) || "No description",
+        subtasks: Array.isArray(cleaned.subtasks) ? cleaned.subtasks : [],
+        dependencies: Array.isArray(cleaned.dependencies) ? cleaned.dependencies : [],
         app: getString(cleaned.app || cleaned.App) || "-",
         storyPoints: cleaned.storyPoints ?? cleaned["Story Points"] ?? "-",
         sprintStartDate,
@@ -546,11 +1087,34 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     });
   }
 
-  function populateFilters(tasks) {
-    fillSelect(els.piFilter, collectUnique(tasks, "pi"), "All PI");
+  async function populateFilters(tasks) {
+    populatePlanningFilterOptions();
     fillSelect(els.sprintFilter, collectUnique(tasks, "sprint"), "All Sprints");
-    fillSelect(els.featureFilter, collectUnique(tasks, "feature"), "All Features");
-    fillSelect(els.assigneeFilter, collectUnique(tasks, "assignee"), "All Assignees");
+    const selectedAssignee = appState.filters.assignee;
+    try {
+      const memberResult = await fetchAssignableMembers();
+      // Normalize the directory response defensively: older callers/data may return
+      // a keyed object rather than an array. A directory issue must not break filters.
+      const members = Array.isArray(memberResult)
+        ? memberResult
+        : Object.values(memberResult || {}).filter((member) => member && typeof member === "object");
+      const names = [...new Set([
+        "Unassigned",
+        ...members.map((member) => String(member.displayName || member.name || "").trim()).filter(Boolean),
+        ...tasks.map((task) => String(task.assignee || "").trim()).filter(Boolean)
+      ])].sort((a, b) => a.localeCompare(b));
+      fillSelect(els.assigneeFilter, names, "All Assignees");
+      els.assigneeFilter.value = names.includes(selectedAssignee) ? selectedAssignee : "all";
+      appState.filters.assignee = els.assigneeFilter.value;
+    } catch (error) {
+      console.error("Could not load assignee filter options", error);
+      // Fail visibly and safely back to task-backed options rather than leaving
+      // an empty selector or breaking the rest of the board.
+      const taskAssignees = collectUnique(tasks, "assignee").filter(Boolean);
+      fillSelect(els.assigneeFilter, taskAssignees, "All Assignees");
+      els.assigneeFilter.value = taskAssignees.includes(selectedAssignee) ? selectedAssignee : "all";
+      appState.filters.assignee = els.assigneeFilter.value;
+    }
   }
 
   function collectUnique(tasks, key) {
@@ -657,10 +1221,86 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       return matchesPi && matchesSprint && matchesFeature && matchesAssignee && matchesSearch;
     });
 
+    renderDashboard(appState.filteredTasks);
     renderBoard(appState.filteredTasks);
     renderList(appState.filteredTasks);
+    renderUserStories(appState.filteredTasks);
+    populateUserStoryOptions(appState.allTasks);
     updateStats(appState.filteredTasks);
     renderInsights();
+  }
+
+  function renderDashboard(tasks) {
+    if (!els.dashboardTasks) return;
+    const ordered = sortTasks(tasks, appState.sortBy).slice(0, 6);
+    renderDashboardCharts();
+    els.dashboardTasks.innerHTML = "";
+    if (!ordered.length) {
+      els.dashboardTasks.innerHTML = '<div class="dashboard-empty"><strong>No tasks match these filters</strong><span>Adjust the filters in the sidebar or create a task.</span></div>';
+      return;
+    }
+    ordered.forEach((task) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "dashboard-task-row";
+      item.innerHTML = '<span class="dashboard-task-main"><strong>' + escapeHtml(task.task) + '</strong><small>' + escapeHtml(task.feature) + ' · ' + escapeHtml(task.assignee || "Unassigned") + '</small></span><span class="dashboard-task-status status-' + escapeHtml(task.statusKey) + '">' + escapeHtml(task.statusLabel || "To Do") + '</span>';
+      item.addEventListener("click", () => openTaskModal(task));
+      els.dashboardTasks.appendChild(item);
+    });
+  }
+
+  function renderDashboardCharts() {
+    if (typeof window.Chart === "undefined") return;
+    const activeSprint = getActiveSprintMeta();
+    const sprintTasks = activeSprint ? activeSprint.tasks : [];
+
+    if (els.dashboardBurndownChart) {
+      if (appState.charts.dashboardBurndown) appState.charts.dashboardBurndown.destroy();
+      const canvas = els.dashboardBurndownChart;
+      if (!activeSprint || !activeSprint.startDate || !activeSprint.endDate) {
+        if (els.dashboardBurndownSubtitle) els.dashboardBurndownSubtitle.textContent = "No sprint date range available";
+        appState.charts.dashboardBurndown = new window.Chart(canvas, {
+          type: "line", data: { labels: [], datasets: [] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+      } else {
+        const dates = getDateRange(activeSprint.startDate, activeSprint.endDate);
+        const labels = dates.map((date) => `${date.getDate()}/${date.getMonth() + 1}`);
+        const total = sprintTasks.reduce((sum, task) => sum + pointsOf(task), 0);
+        const completed = sprintTasks.filter((task) => task.statusKey === "done").reduce((sum, task) => sum + pointsOf(task), 0);
+        const ideal = labels.map((_, index) => labels.length === 1 ? 0 : Number((total - (total * index) / (labels.length - 1)).toFixed(2)));
+        const remaining = Math.max(total - completed, 0);
+        // No daily history is persisted: show a transparent current snapshot, not fabricated actual history.
+        const currentSnapshot = labels.map(() => remaining);
+        if (els.dashboardBurndownSubtitle) els.dashboardBurndownSubtitle.textContent = `${activeSprint.sprint} · ${formatDate(activeSprint.startDate)} – ${formatDate(activeSprint.endDate)}`;
+        appState.charts.dashboardBurndown = new window.Chart(canvas, {
+          type: "line",
+          data: { labels, datasets: [
+            { label: "Ideal Remaining", data: ideal, borderColor: "#8aa2bf", borderDash: [6, 4], tension: 0.2 },
+            { label: "Current Remaining (snapshot)", data: currentSnapshot, borderColor: "#0f5bd8", backgroundColor: "rgba(15, 91, 216, 0.08)", fill: false, tension: 0 }
+          ]},
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Story Points" } } } }
+        });
+      }
+    }
+
+    if (els.dashboardVelocityChart) {
+      if (appState.charts.dashboardVelocity) appState.charts.dashboardVelocity.destroy();
+      let eligible = [...appState.sprintCatalog];
+      if (appState.filters.pi !== "all") eligible = eligible.filter((sprint) => sprint.pi === appState.filters.pi);
+      const sprints = eligible.slice(-8);
+      const labels = sprints.map((sprint) => `${sprint.pi} · ${sprint.sprint}`);
+      const committed = sprints.map((sprint) => sprint.tasks.reduce((sum, task) => sum + pointsOf(task), 0));
+      const done = sprints.map((sprint) => sprint.tasks.filter((task) => task.statusKey === "done").reduce((sum, task) => sum + pointsOf(task), 0));
+      appState.charts.dashboardVelocity = new window.Chart(els.dashboardVelocityChart, {
+        type: "bar",
+        data: { labels, datasets: [
+          { label: "Committed", data: committed, backgroundColor: "#b8d4fb" },
+          { label: "Completed", data: done, backgroundColor: "#2c78df" }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Story Points" } } }, plugins: { legend: { position: "bottom" } } }
+      });
+    }
   }
 
   function matchesTaskSearch(task, searchValue) {
@@ -679,6 +1319,269 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       .join(" ")
       .toLowerCase();
     return searchable.includes(searchValue);
+  }
+
+  function populateUserStoryOptions(tasks) {
+    if (!els.taskUserStoryInput) return;
+    const selected = els.taskUserStoryInput.value;
+    const stories = new Map();
+    appState.userStories.forEach((story) => {
+      const title = String(story.title || "").trim();
+      if (title) stories.set(story.id, { value: story.id, title });
+    });
+    tasks.forEach((task) => {
+      const title = String(task.raw.userStory || task.story || "").trim();
+      if (!title || title === "-") return;
+      const id = String(task.raw.userStoryId || "").trim();
+      const value = id || `legacy:${title}`;
+      if (!stories.has(value)) stories.set(value, { value, title });
+    });
+    els.taskUserStoryInput.innerHTML = '<option value="">Standalone task — no User Story</option>' +
+      [...stories.values()].sort((a, b) => a.title.localeCompare(b.title))
+        .map((story) => `<option value="${escapeHtml(story.value)}" data-title="${escapeHtml(story.title)}">${escapeHtml(story.title)}</option>`).join("");
+    if (selected && [...els.taskUserStoryInput.options].some((option) => option.value === selected)) {
+      els.taskUserStoryInput.value = selected;
+    }
+  }
+
+  function renderUserStories(tasks) {
+    const groups = new Map();
+    appState.userStories.forEach((record) => {
+      const title = String(record.title || "").trim();
+      if (!title) return;
+      groups.set(`id:${record.id}`, {
+        id: record.id, title, description: String(record.description || ""),
+        acceptanceCriteria: Array.isArray(record.acceptanceCriteria) ? record.acceptanceCriteria : [],
+        lifecycle: record.lifecycle || "Draft", pi: record.pi || "", feature: record.feature || "",
+        startDate: record.startDate || "", endDate: record.endDate || "", archived: record.archived === true, tasks: []
+      });
+    });
+    tasks.forEach((task) => {
+      const title = String(task.raw.userStory || task.story || "").trim();
+      if (!title || title === "-") return;
+      const stableId = String(task.raw.userStoryId || "").trim();
+      const key = stableId ? `id:${stableId}` : `legacy:${title.toLocaleLowerCase()}`;
+      if (!groups.has(key)) groups.set(key, {
+        id: stableId, title, description: "", acceptanceCriteria: [],
+        lifecycle: "Draft", pi: "", feature: "", startDate: "", endDate: "", archived: false, tasks: []
+      });
+      const group = groups.get(key);
+      group.tasks.push(task);
+      if (!group.description) group.description = String(task.raw.userStoryDescription || "").trim();
+      if (!group.pi) group.pi = task.raw.pi || "";
+      if (!group.feature) group.feature = task.raw.feature || "";
+      if (group.lifecycle === "Draft" && task.raw.userStoryStatus) group.lifecycle = task.raw.userStoryStatus;
+    });
+    const allStories = [...groups.values()];
+    const storySearch = appState.filters.search;
+    const stories = allStories.filter((story) => {
+      if (appState.showArchivedStories ? !story.archived : story.archived) return false;
+      if (appState.filters.pi !== "all" && String(story.pi || "") !== appState.filters.pi) return false;
+      if (appState.filters.feature !== "all" && String(story.feature || "") !== appState.filters.feature) return false;
+      if (appState.filters.sprint !== "all" && !story.tasks.some((task) => task.sprint === appState.filters.sprint)) return false;
+      if (appState.filters.assignee !== "all" && !story.tasks.some((task) => task.assignee === appState.filters.assignee)) return false;
+      if (storySearch) {
+        const storyText = [story.title, story.description, ...(story.acceptanceCriteria || [])].join(" ").toLowerCase();
+        if (!storyText.includes(storySearch) && story.tasks.length === 0) return false;
+        if (!storyText.includes(storySearch) && story.tasks.length > 0 && !story.tasks.some((task) => matchesTaskSearch(task, storySearch))) return false;
+      }
+      return true;
+    }).sort((a,b) => a.title.localeCompare(b.title));
+    els.storiesSummary.textContent = `${stories.length} ${appState.showArchivedStories ? "archived" : "active"} stor${stories.length === 1 ? "y" : "ies"} · ${stories.reduce((n,s) => n+s.tasks.length,0)} linked tasks`;
+    if (!stories.length) {
+      els.storiesGrid.innerHTML = '<div class="stories-empty"><strong>No user stories yet</strong><p>Create your first story. You can add tasks whenever you are ready.</p><button class="save-task-btn" type="button" data-create-story>+ Create User Story</button></div>';
+      els.storiesGrid.querySelector("[data-create-story]")?.addEventListener("click", () => openStoryEditor());
+      return;
+    }
+    els.storiesGrid.innerHTML = stories.map((story) => {
+      const counts = { todo: 0, inprogress: 0, done: 0 };
+      story.tasks.forEach((task) => counts[task.statusKey] = (counts[task.statusKey] || 0) + 1);
+      const storyPoints = story.tasks.reduce((total, task) => total + (Number(task.storyPoints) || 0), 0);
+      const criteria = story.acceptanceCriteria.length ? `<p class="story-criteria-count">${story.acceptanceCriteria.length} acceptance criteria</p>` : "";
+      const doneCount = counts.done;
+      const completion = story.tasks.length ? Math.round(doneCount / story.tasks.length * 100) : 0;
+      const detailsOpen = appState.expandedStoryTaskIds.has(story.id);
+      return `<article class="story-card story-row${story.archived ? " is-archived" : ""}${detailsOpen ? " is-expanded" : ""}">
+        <div class="story-row-main">
+          <div class="story-row-title"><span class="story-card-label">${story.archived ? "ARCHIVED" : "USER STORY"}</span><h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p></div>
+          <div class="story-row-status"><span class="story-lifecycle-pill">${escapeHtml(story.lifecycle)}</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
+          <div class="story-row-progress"><div class="story-progress-copy"><span>Task progress</span><strong>${completion}%</strong></div><div class="story-progress-track"><span style="width:${completion}%"></span></div><small>${counts.done} of ${story.tasks.length} done</small></div>
+          <div class="story-row-points"><small>Points</small><strong>${storyPoints}</strong></div>
+          <button type="button" class="story-details-toggle${detailsOpen ? " is-active" : ""}" data-toggle-story-details="${escapeHtml(story.id)}" aria-expanded="${detailsOpen}">${detailsOpen ? "Hide details ↑" : "View details ↓"}</button>
+        </div>
+        <div class="story-row-actions"><button type="button" class="story-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit</button>${story.archived ? "" : `<button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>`}<button type="button" class="story-archive-action" data-archive-story-id="${escapeHtml(story.id)}" data-archive-story-title="${escapeHtml(story.title)}">${story.archived ? "Restore" : "Archive"}</button></div>
+        <div class="story-row-details" ${detailsOpen ? "" : "hidden"}>
+          <div class="story-detail-heading"><div><span class="story-card-label">STORY DETAILS</span><h4>${escapeHtml(story.title)}</h4><p>Review the story definition and track delivery without leaving this list.</p></div><span class="story-detail-completion">${completion}% complete</span></div>
+          <div class="story-detail-layout">
+            <div class="story-detail-column">
+              <section class="story-detail-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">◎</span><div><h5>Overview</h5><p>Lifecycle and delivery summary</p></div></div>
+                <div class="story-detail-stats"><div><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></div><div><small>Total tasks</small><strong>${story.tasks.length}</strong></div><div><small>Completed</small><strong>${counts.done} / ${story.tasks.length}</strong></div><div><small>Story points</small><strong>${storyPoints}</strong></div></div>
+                <div class="story-detail-status-line"><span class="story-status-dot todo"></span>To do <strong>${counts.todo}</strong><span class="story-status-dot progress"></span>In progress <strong>${counts.inprogress}</strong><span class="story-status-dot done"></span>Done <strong>${counts.done}</strong></div>
+              </section>
+              <section class="story-detail-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">✓</span><div><h5>Acceptance criteria</h5><p>Conditions for considering this story complete</p></div><span class="story-detail-count">${story.acceptanceCriteria.length}</span></div>
+                ${story.acceptanceCriteria.length ? `<ul class="story-criteria-list">${story.acceptanceCriteria.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : '<div class="story-detail-empty-box"><strong>No acceptance criteria yet</strong><p>Add clear, testable outcomes when editing this story.</p><button type="button" class="story-inline-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit story</button></div>'}
+              </section>
+            </div>
+            <section class="story-detail-panel story-linked-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">☷</span><div><h5>Linked tasks</h5><p>Tasks contributing to this story's progress</p></div><span class="story-detail-count">${story.tasks.length}</span><button type="button" class="story-add-task story-detail-add" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}" ${story.archived ? "disabled" : ""}>+ Add task</button></div>
+              ${story.tasks.length ? `<div class="story-linked-task-list">${story.tasks.map((task,index) => `<button type="button" class="story-linked-task" data-story-task="${escapeHtml(task.id)}"><span class="story-task-index">${index+1}</span><span class="story-linked-task-name">${escapeHtml(task.task)}<small>${Number(task.storyPoints)||0} points</small></span><span class="story-linked-status status-${escapeHtml(String(task.statusKey||"todo").toLowerCase())}">${escapeHtml(task.statusLabel)}</span><span class="story-linked-assignee" title="Task owner"><span class="story-assignee-avatar">${escapeHtml((task.assignee && task.assignee !== "Unassigned" ? task.assignee : "U").split(/\\s+/).map(part => part[0]).join("").slice(0,2).toUpperCase())}</span><span>${escapeHtml(task.assignee || "Unassigned")}</span></span><span class="story-linked-open" aria-hidden="true">›</span></button>`).join("")}</div>` : '<div class="story-detail-empty-box"><strong>No linked tasks</strong><p>Break this story into tasks to start tracking delivery.</p></div>'}
+            </section>
+          </div>
+        </div></article>`;
+    }).join("");
+    els.storiesGrid.querySelectorAll("[data-toggle-story-details]").forEach(button => button.addEventListener("click", () => {
+      const id = button.dataset.toggleStoryDetails;
+      if (appState.expandedStoryTaskIds.has(id)) appState.expandedStoryTaskIds.delete(id);
+      else appState.expandedStoryTaskIds.add(id);
+      renderUserStories(appState.filteredTasks);
+    }));
+    els.storiesGrid.querySelectorAll("[data-expand-story-tasks]").forEach(button => button.addEventListener("click", () => {
+      const id = button.dataset.expandStoryTasks;
+      if (appState.expandedStoryTaskIds.has(id)) appState.expandedStoryTaskIds.delete(id);
+      else appState.expandedStoryTaskIds.add(id);
+      renderUserStories(appState.filteredTasks);
+    }));
+    els.storiesGrid.querySelectorAll("[data-story-task]").forEach(button => button.addEventListener("click", () => {
+      const task = appState.allTasks.find(item => item.id === button.dataset.storyTask); if (task) openTaskModal(task);
+    }));
+    els.storiesGrid.querySelectorAll("[data-story-title]").forEach(button => button.addEventListener("click", () => {
+      openTaskEditor(); els.taskUserStoryInput.value = button.dataset.storyId || `legacy:${button.dataset.storyTitle || ""}`; onTaskStoryChange();
+      els.taskEditorForm.elements.namedItem("userStoryDescription").value = button.dataset.storyDescription || ""; els.newTaskName.focus();
+    }));
+    els.storiesGrid.querySelectorAll("[data-archive-story-id]").forEach(button => button.addEventListener("click", () => archiveUserStory(button.dataset.archiveStoryId, button.dataset.archiveStoryTitle)));
+    els.storiesGrid.querySelectorAll("[data-edit-story-id]").forEach(button => button.addEventListener("click", () => {
+      const story = appState.userStories.find(item => item.id === button.dataset.editStoryId);
+      if (story) openStoryEditor(story);
+      else {
+        const legacy = stories.find(item => item.id === button.dataset.editStoryId);
+        if (legacy) openStoryEditor({ id: legacy.id, title: legacy.title, description: legacy.description, lifecycle: legacy.lifecycle, pi: legacy.pi, feature: legacy.feature, startDate: legacy.startDate, endDate: legacy.endDate, acceptanceCriteria: legacy.acceptanceCriteria, legacy: true });
+      }
+    }));
+  }
+
+  async function archiveUserStory(storyId, storyTitle) {
+    if (!storyId) {
+      window.alert("This legacy story has no stable ID yet. Edit and save it first, then archive it.");
+      return;
+    }
+    const story = appState.userStories.find(item => item.id === storyId);
+    const isArchived = story?.archived === true;
+    const action = isArchived ? "restore" : "archive";
+    if (!window.confirm(`Are you sure you want to ${action} "${storyTitle}"? Its tasks will remain unchanged.`)) return;
+    try {
+      const now = serverTimestamp();
+      if (story) {
+        await updateDoc(userStoryReference(storyId), { archived: !isArchived, updatedAt: now });
+      } else {
+        const legacyTasks = appState.allTasks.filter(task => String(task.raw.userStoryId || "").trim() === storyId);
+        const first = legacyTasks[0];
+        await setDoc(userStoryReference(storyId), {
+          title: storyTitle,
+          description: String(first?.raw.userStoryDescription || ""),
+          acceptanceCriteria: Array.isArray(first?.raw.acceptanceCriteria) ? first.raw.acceptanceCriteria : [],
+          pi: String(first?.raw.pi || ""), feature: String(first?.raw.feature || ""),
+          startDate: String(first?.raw.startDate || ""), endDate: String(first?.raw.endDate || ""),
+          lifecycle: String(first?.raw.userStoryStatus || "Draft"),
+          createdBy: appState.user.uid, createdAt: now, updatedAt: now, archived: !isArchived
+        });
+      }
+    } catch (error) {
+      console.error("Could not archive User Story", error);
+      window.alert("Could not update this User Story. Check your project permissions and try again.");
+    }
+  }
+
+  function openStoryEditor(story = null) {
+    appState.editingStoryId = story?.id || null;
+    els.storyEditorForm.reset();
+    els.storyEditorTitle.textContent = story ? "Edit User Story" : "Create User Story";
+    els.saveStoryBtn.textContent = story ? "Save Changes" : "Create User Story";
+    els.storyTitleInput.value = story?.title || "";
+    els.storyDescriptionInput.value = story?.description || "";
+    els.storyCriteriaInput.value = Array.isArray(story?.acceptanceCriteria) ? story.acceptanceCriteria.join("\n") : "";
+    refreshPlanningSelectors();
+    const storyPI = appState.programIncrements.find((pi) => pi.id === story?.piId || pi.name === story?.pi);
+    const storyFeature = appState.features.find((feature) => feature.id === story?.featureId || feature.name === story?.feature);
+    els.storyPiInput.value = storyPI?.id || "";
+    onPlanningPIChange(els.storyPiInput, els.storyFeatureInput);
+    els.storyFeatureInput.value = storyFeature?.id || "";
+    els.storyStartDateInput.value = story?.startDate || "";
+    els.storyEndDateInput.value = story?.endDate || "";
+    els.storyEditorError.textContent = "";
+    els.storyEditorModal.classList.add("is-open");
+    els.storyEditorModal.setAttribute("aria-hidden", "false");
+    els.storyTitleInput.focus();
+  }
+
+  function closeStoryEditor() {
+    els.storyEditorModal.classList.remove("is-open");
+    els.storyEditorModal.setAttribute("aria-hidden", "true");
+    appState.editingStoryId = null;
+  }
+
+  async function saveUserStory(event) {
+    event.preventDefault();
+    const title = els.storyTitleInput.value.trim();
+    const description = els.storyDescriptionInput.value.trim();
+    const criteria = els.storyCriteriaInput.value.split("\n").map(value => value.trim()).filter(Boolean);
+    if (!title) { els.storyEditorError.textContent = "Enter a User Story title."; els.storyTitleInput.focus(); return; }
+    if (title.length > 160) { els.storyEditorError.textContent = "Title must be 160 characters or fewer."; return; }
+    if (description.length > 1500) { els.storyEditorError.textContent = "Description must be 1,500 characters or fewer."; return; }
+    if (criteria.length > 50 || criteria.some(value => value.length > 500)) { els.storyEditorError.textContent = "Add up to 50 acceptance criteria, each no longer than 500 characters."; return; }
+    const startDate = els.storyStartDateInput.value;
+    const endDate = els.storyEndDateInput.value;
+    if (startDate && endDate && endDate < startDate) { els.storyEditorError.textContent = "Target date cannot be before the start date."; return; }
+    const selectedFeature = appState.features.find((feature) => feature.id === els.storyFeatureInput.value);
+    if (!selectedFeature) { els.storyEditorError.textContent = "Select a Feature before saving this User Story."; els.storyFeatureInput.focus(); return; }
+    if (els.storyPiInput.value && selectedFeature.piId !== els.storyPiInput.value) { els.storyEditorError.textContent = "The selected Feature belongs to a different PI. Choose a matching PI or Feature."; return; }
+    els.saveStoryBtn.disabled = true;
+    els.saveStoryBtn.textContent = "Saving...";
+    els.storyEditorError.textContent = "";
+    const existingStory = appState.userStories.find(item => item.id === appState.editingStoryId);
+    const previousTitle = existingStory?.title || "";
+    const data = {
+      title, description, acceptanceCriteria: criteria,
+      piId: els.storyPiInput.value,
+      pi: appState.programIncrements.find((pi) => pi.id === els.storyPiInput.value)?.name || "",
+      featureId: els.storyFeatureInput.value,
+      feature: appState.features.find((feature) => feature.id === els.storyFeatureInput.value)?.name || "",
+      startDate, endDate, lifecycle: appState.userStories.find(item => item.id === appState.editingStoryId)?.lifecycle || "Draft",
+      createdBy: existingStory?.createdBy || appState.user.uid, archived: existingStory?.archived === true, updatedAt: serverTimestamp()
+    };
+    try {
+      if (appState.editingStoryId) {
+        const existing = existingStory;
+        if (existing) {
+          await updateDoc(userStoryReference(appState.editingStoryId), data);
+          const linked = appState.allTasks.filter(task => String(task.raw.userStoryId || "").trim() === appState.editingStoryId);
+          for (let start = 0; start < linked.length; start += 450) {
+            const batch = writeBatch(db);
+            linked.slice(start, start + 450).forEach(task => batch.update(taskReference(task.id), { userStory: title, userStoryDescription: description, piId: data.piId, pi: data.pi, featureId: data.featureId, feature: data.feature, updatedAt: serverTimestamp() }));
+            await batch.commit();
+          }
+        }
+        else {
+          // Legacy stories are upgraded into independent records; linked task IDs are preserved.
+          const legacyId = appState.editingStoryId;
+          await setDoc(userStoryReference(legacyId), { ...data, createdAt: serverTimestamp() });
+          const linked = appState.allTasks.filter(task => String(task.raw.userStoryId || "") === legacyId || (!task.raw.userStoryId && String(task.raw.userStory || task.story || "").trim() === previousTitle));
+          for (let start = 0; start < linked.length; start += 450) {
+            const batch = writeBatch(db);
+            linked.slice(start, start + 450).forEach(task => batch.update(taskReference(task.id), { userStoryId: legacyId, userStory: title, userStoryDescription: description, piId: data.piId, pi: data.pi, featureId: data.featureId, feature: data.feature, updatedAt: serverTimestamp() }));
+            await batch.commit();
+          }
+        }
+      } else {
+        data.createdAt = serverTimestamp();
+        await addDoc(userStoryCollection(), data);
+      }
+      closeStoryEditor();
+    } catch (error) {
+      console.error("Could not save User Story", error);
+      els.storyEditorError.textContent = "Could not save the User Story. Check project permissions and try again.";
+    } finally {
+      els.saveStoryBtn.disabled = false;
+      els.saveStoryBtn.textContent = appState.editingStoryId ? "Save Changes" : "Create User Story";
+    }
   }
 
   function renderBoard(tasks) {
@@ -741,9 +1644,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const taskCell = document.createElement("td");
       taskCell.className = "list-task-cell";
       const taskIcon = document.createElement("span");
-      taskIcon.className = "list-task-icon";
+      taskIcon.className = `list-task-marker status-${task.statusKey}`;
       taskIcon.setAttribute("aria-hidden", "true");
-      taskIcon.textContent = "▧";
       const taskText = document.createElement("div");
       const taskName = document.createElement("strong");
       taskName.textContent = task.task;
@@ -797,6 +1699,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const selected = archivable.filter((task) => appState.selectedTaskIds.has(task.id));
     els.archiveSelectedTasksBtn.disabled = selected.length === 0;
     els.archiveSelectedTasksBtn.textContent = selected.length ? `Archive selected (${selected.length})` : "Archive selected";
+    els.applyBulkStatusBtn.disabled = selected.length === 0;
+    els.applyBulkStatusBtn.textContent = selected.length ? `Update status (${selected.length})` : "Update status";
     els.selectAllTasks.checked = archivable.length > 0 && selected.length === archivable.length;
     els.selectAllTasks.indeterminate = selected.length > 0 && selected.length < archivable.length;
     els.selectAllTasks.disabled = archivable.length === 0;
@@ -809,6 +1713,40 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       else appState.selectedTaskIds.delete(task.id);
     });
     renderList(appState.filteredTasks);
+  }
+
+  async function updateSelectedTaskStatuses() {
+    const selected = appState.allTasks.filter((task) => appState.selectedTaskIds.has(task.id) && canArchiveTask(task));
+    if (!selected.length) return;
+
+    const statusByKey = { todo: "To Do", inprogress: "In Progress", done: "Done" };
+    const nextStatus = statusByKey[els.bulkTaskStatus.value];
+    if (!nextStatus) return;
+
+    const unchanged = selected.filter((task) => task.status !== nextStatus);
+    if (!unchanged.length) {
+      window.alert("The selected tasks already have that status.");
+      return;
+    }
+    if (!window.confirm(`Move ${unchanged.length} selected task${unchanged.length === 1 ? "" : "s"} to "${nextStatus}"?`)) return;
+
+    els.applyBulkStatusBtn.disabled = true;
+    els.applyBulkStatusBtn.textContent = "Updating...";
+    try {
+      for (let start = 0; start < unchanged.length; start += 450) {
+        const batch = writeBatch(db);
+        unchanged.slice(start, start + 450).forEach((task) => {
+          batch.update(taskReference(task.id), { status: nextStatus, updatedAt: serverTimestamp() });
+        });
+        await batch.commit();
+      }
+      appState.selectedTaskIds.clear();
+    } catch (error) {
+      console.error("Could not update selected task statuses", error);
+      window.alert("Some selected tasks could not be updated. Please review the board and try again.");
+    } finally {
+      updateBulkArchiveControls();
+    }
   }
 
   async function archiveSelectedTasks() {
@@ -1048,15 +1986,24 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   function renderBurndown(sprintMeta, sprintTasks) {
     if (!els.burndownChart || typeof window.Chart === "undefined") return;
-    if (appState.charts.burndown) appState.charts.burndown.destroy();
+    if (appState.charts.burndown) {
+      appState.charts.burndown.destroy();
+      appState.charts.burndown = null;
+    }
+
+    const chartCard = els.burndownChart.closest(".chart-card");
+    chartCard?.classList.remove("is-empty");
+    chartCard?.querySelector(".chart-empty-state")?.remove();
 
     if (!sprintMeta || !sprintMeta.startDate || !sprintMeta.endDate) {
-      els.burndownSubtitle.textContent = "No sprint date range available";
-      appState.charts.burndown = new window.Chart(els.burndownChart, {
-        type: "line",
-        data: { labels: [], datasets: [] },
-        options: { plugins: { legend: { display: false } } }
-      });
+      els.burndownSubtitle.textContent = "Sprint dates are needed to plot a burndown";
+      if (chartCard) {
+        chartCard.classList.add("is-empty");
+        const emptyState = document.createElement("div");
+        emptyState.className = "chart-empty-state";
+        emptyState.innerHTML = '<span class="chart-empty-icon" aria-hidden="true">↗</span><strong>No burndown data yet</strong><span>Add a sprint start and end date to tasks in this sprint. The chart will appear here.</span>';
+        chartCard.appendChild(emptyState);
+      }
       return;
     }
 
@@ -1068,14 +2015,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const elapsed = getElapsedDaysInSprint(sprintMeta.startDate, sprintMeta.endDate);
     const remainingNow = Math.max(total - completed, 0);
 
-    const actual = labels.map((_, i) => {
-      if (elapsed <= 1) return i === 0 ? total : remainingNow;
-      if (i < elapsed) {
-        const burn = (total - remainingNow) * (i / (elapsed - 1));
-        return Number((total - burn).toFixed(2));
-      }
-      return remainingNow;
-    });
+    // Historical daily snapshots are not stored, so do not fabricate an "actual" burn curve.
+    // Display the current remaining-work snapshot as a flat reference across the sprint.
+    const remainingSnapshot = labels.map(() => remainingNow);
 
     els.burndownSubtitle.textContent = `${sprintMeta.sprint} (${formatDate(sprintMeta.startDate)} - ${formatDate(sprintMeta.endDate)})`;
 
@@ -1085,7 +2027,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         labels,
         datasets: [
           { label: "Ideal Remaining", data: ideal, borderColor: "#8aa2bf", borderDash: [6, 4], tension: 0.2 },
-          { label: "Actual Remaining", data: actual, borderColor: "#0f5bd8", backgroundColor: "rgba(15, 91, 216, 0.14)", fill: true, tension: 0.25 }
+          { label: "Current Remaining (snapshot)", data: remainingSnapshot, borderColor: "#0f5bd8", backgroundColor: "rgba(15, 91, 216, 0.08)", fill: false, tension: 0 }
         ]
       },
       options: {
@@ -1121,8 +2063,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (!els.velocityChart || typeof window.Chart === "undefined") return;
     if (appState.charts.velocity) appState.charts.velocity.destroy();
 
-    const sprints = appState.sprintCatalog.slice(-8);
-    const labels = sprints.map((s) => s.sprint);
+    let eligibleSprints = [...appState.sprintCatalog];
+    if (appState.filters.pi !== "all") eligibleSprints = eligibleSprints.filter((s) => s.pi === appState.filters.pi);
+    const sprints = eligibleSprints.slice(-8);
+    const labels = sprints.map((s) => `${s.pi} · ${s.sprint}`);
     const committed = sprints.map((s) => s.tasks.reduce((sum, t) => sum + pointsOf(t), 0));
     const completed = sprints.map((s) => s.tasks.filter((t) => t.statusKey === "done").reduce((sum, t) => sum + pointsOf(t), 0));
 
@@ -1147,11 +2091,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.sprintLegend.innerHTML = "";
     const monthSprints = getSprintsForSelectedMonth();
     if (monthSprints.length === 0) {
-      const chip = document.createElement("span");
-      chip.className = "sprint-chip";
-      chip.textContent = "No sprint in this month";
-      chip.style.cursor = "default";
-      els.sprintLegend.appendChild(chip);
+      const empty = document.createElement("div");
+      empty.className = "sprint-empty-state";
+      const title = document.createElement("strong");
+      title.textContent = "No sprint scheduled";
+      const detail = document.createElement("span");
+      detail.textContent = "Choose another month or add sprint dates to tasks to populate this calendar.";
+      empty.append(title, detail);
+      els.sprintLegend.appendChild(empty);
       return;
     }
 
@@ -1209,7 +2156,13 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const inMonth = current.getMonth() === month;
 
       const day = document.createElement("div");
-      day.className = `cal-day ${inMonth ? "" : "muted"}`;
+      const today = new Date();
+      const isToday = inMonth
+        && current.getFullYear() === today.getFullYear()
+        && current.getMonth() === today.getMonth()
+        && current.getDate() === today.getDate();
+      day.className = `cal-day ${inMonth ? "" : "muted"}${isToday ? " is-today" : ""}`;
+      if (isToday) day.setAttribute("aria-current", "date");
 
       const num = document.createElement("div");
       num.className = "cal-day-num";
@@ -1253,17 +2206,29 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function setActiveView(view, persist = true) {
-    appState.activeView = ["board", "list", "insights", "profile"].includes(view) ? view : "board";
-    const board = appState.activeView === "board";
-    const list = appState.activeView === "list";
-    const insights = appState.activeView === "insights";
-    const profile = appState.activeView === "profile";
+    appState.activeView = ["dashboard", "board", "list", "stories", "pis", "features", "insights", "knowledge", "profile"].includes(view) ? view : "dashboard";
+    const dashboard = appState.activeView === "dashboard";
+    const board = appState.activeView === "board", list = appState.activeView === "list", stories = appState.activeView === "stories";
+    const pis = appState.activeView === "pis", features = appState.activeView === "features";
+    const insights = appState.activeView === "insights", knowledge = appState.activeView === "knowledge", profile = appState.activeView === "profile";
+    els.dashboardView?.classList.toggle("is-hidden", !dashboard);
+    els.dashboardViewBtn?.classList.toggle("is-active", dashboard);
+    els.portfolioHero?.classList.toggle("is-hidden", !dashboard);
+    els.overviewStats?.classList.toggle("is-hidden", !dashboard);
     els.boardView.classList.toggle("is-hidden", !board);
     els.listView.classList.toggle("is-hidden", !list);
+    els.storiesView.classList.toggle("is-hidden", !stories);
+    els.piManagementView?.classList.toggle("is-hidden", !pis);
+    els.featuresManagementView?.classList.toggle("is-hidden", !features);
+    els.piViewBtn?.classList.toggle("is-active", pis);
+    els.featuresViewBtn?.classList.toggle("is-active", features);
     els.insightsView.classList.toggle("is-hidden", !insights);
+    els.knowledgeView?.classList.toggle("is-hidden", !knowledge);
+    els.knowledgeViewBtn?.classList.toggle("is-active", knowledge);
     els.profileView.classList.toggle("is-hidden", !profile);
     els.boardViewBtn.classList.toggle("is-active", board);
     els.listViewBtn.classList.toggle("is-active", list);
+    els.storiesViewBtn.classList.toggle("is-active", stories);
     els.insightsViewBtn.classList.toggle("is-active", insights);
     els.profileViewBtn.classList.toggle("is-active", profile);
     if (persist) persistPreferences();
@@ -1377,9 +2342,16 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         ${modalRow("End date", formattedDueDate)}
         ${modalRow("App", task.app)}
       </section>
-      <section class="task-detail-description"><h3>Description</h3><p>${escapeHtml(task.description || "No description added.")}</p></section>
+      <section class="task-detail-description"><h3>User story description</h3><p>${escapeHtml(task.raw.userStoryDescription || "No user story description added.")}</p></section>
+      <section class="task-detail-description"><h3>Task description</h3><p>${escapeHtml(task.description || "No description added.")}</p></section>
+      ${renderTaskBreakdown(task)}
+      ${renderAcceptanceCriteria(task)}
+      ${renderStoryLifecycle(task)}
     `;
 
+    bindTaskBreakdownActions(task);
+    bindAcceptanceCriteriaActions(task);
+    bindStoryLifecycleActions(task);
     els.modal.classList.add("is-open");
     els.modal.setAttribute("aria-hidden", "false");
     els.taskStatusSelect.value = task.statusKey;
@@ -1389,8 +2361,187 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.deleteTaskBtn.classList.toggle("is-hidden", isDefault && !isCreator);
   }
 
+  function renderTaskBreakdown(task) {
+    const subtasks = Array.isArray(task.raw.subtasks) ? task.raw.subtasks : [];
+    const dependencies = Array.isArray(task.raw.dependencies) ? task.raw.dependencies : [];
+    const candidates = appState.allTasks.filter((item) => item.id !== task.id && !item.archived);
+    const completed = subtasks.filter((item) => item && item.done).length;
+    return `
+      <section class="task-breakdown">
+        <div class="breakdown-heading"><div><h3>Subtasks & checklist</h3><p>${completed} of ${subtasks.length} complete</p></div></div>
+        <div class="subtask-list">${subtasks.length ? subtasks.map((item, index) => `
+          <label class="subtask-item"><input type="checkbox" data-subtask-index="${index}" ${item.done ? "checked" : ""}><span class="${item.done ? "is-complete" : ""}">${escapeHtml(item.title || "Untitled subtask")}</span><button type="button" data-remove-subtask="${index}" aria-label="Remove subtask">×</button></label>`).join("") : '<p class="breakdown-empty">No subtasks yet. Add a checklist item below.</p>'}</div>
+        <form id="addSubtaskForm" class="breakdown-add-form"><input name="subtaskTitle" maxlength="160" required placeholder="Add a checklist item"><button type="submit">Add</button></form>
+      </section>
+      <section class="task-breakdown">
+        <div class="breakdown-heading"><div><h3>Dependencies</h3><p>Work that must be completed first</p></div></div>
+        <div class="dependency-list">${dependencies.map((id) => {
+          const dependency = appState.allTasks.find((item) => item.id === id);
+          return dependency ? `<div class="dependency-item"><span class="dependency-status ${dependency.statusKey}"></span><span><b>${escapeHtml(dependency.task)}</b><small>${escapeHtml(dependency.statusLabel)}</small></span><button type="button" data-remove-dependency="${escapeHtml(id)}">Remove</button></div>` : "";
+        }).join("") || '<p class="breakdown-empty">No dependencies linked.</p>'}</div>
+        <form id="addDependencyForm" class="breakdown-add-form"><select name="dependencyId" required><option value="">Select a prerequisite task</option>${candidates.filter((item) => !dependencies.includes(item.id)).map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.task)} — ${escapeHtml(item.statusLabel)}</option>`).join("")}</select><button type="submit">Link task</button></form>
+      </section>`;
+  }
+
+  function bindTaskBreakdownActions(task) {
+    const subtaskForm = document.getElementById("addSubtaskForm");
+    subtaskForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const title = String(new FormData(subtaskForm).get("subtaskTitle") || "").trim();
+      if (!title) return;
+      const items = [...(task.raw.subtasks || []), { title, done: false }];
+      await saveTaskBreakdown(task, { subtasks: items });
+    });
+    els.modalBody.querySelectorAll("[data-subtask-index]").forEach((input) => input.addEventListener("change", async () => {
+      const items = [...(task.raw.subtasks || [])];
+      const index = Number(input.dataset.subtaskIndex);
+      if (!items[index]) return;
+      items[index] = { ...items[index], done: input.checked };
+      await saveTaskBreakdown(task, { subtasks: items });
+    }));
+    els.modalBody.querySelectorAll("[data-remove-subtask]").forEach((button) => button.addEventListener("click", async () => {
+      const items = [...(task.raw.subtasks || [])];
+      items.splice(Number(button.dataset.removeSubtask), 1);
+      await saveTaskBreakdown(task, { subtasks: items });
+    }));
+    const dependencyForm = document.getElementById("addDependencyForm");
+    dependencyForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const dependencyId = String(new FormData(dependencyForm).get("dependencyId") || "");
+      const dependencies = [...(task.raw.dependencies || [])];
+      if (!dependencyId || dependencies.includes(dependencyId)) return;
+      if (wouldCreateDependencyCycle(task.id, dependencyId)) {
+        window.alert("This link would create a dependency cycle. Choose a different prerequisite.");
+        return;
+      }
+      await saveTaskBreakdown(task, { dependencies: [...dependencies, dependencyId] });
+    });
+    els.modalBody.querySelectorAll("[data-remove-dependency]").forEach((button) => button.addEventListener("click", async () => {
+      const dependencies = (task.raw.dependencies || []).filter((id) => id !== button.dataset.removeDependency);
+      await saveTaskBreakdown(task, { dependencies });
+    }));
+  }
+
+  function wouldCreateDependencyCycle(taskId, prerequisiteId) {
+    const visited = new Set();
+    const visit = (id) => {
+      if (id === taskId) return true;
+      if (visited.has(id)) return false;
+      visited.add(id);
+      const task = appState.allTasks.find((item) => item.id === id);
+      return (task?.raw.dependencies || []).some(visit);
+    };
+    return visit(prerequisiteId);
+  }
+
+  async function saveTaskBreakdown(task, patch) {
+    try {
+      await updateDoc(taskReference(task.id), { ...patch, updatedAt: serverTimestamp() });
+      task.raw = { ...task.raw, ...patch };
+      openTaskModal(appState.allTasks.find((item) => item.id === task.id) || task);
+    } catch (error) {
+      console.error("Could not update task breakdown", error);
+      window.alert("Could not save this change. Check your project permissions and try again.");
+    }
+  }
+
+  function renderAcceptanceCriteria(task) {
+    const criteria = Array.isArray(task.raw.acceptanceCriteria) ? task.raw.acceptanceCriteria : [];
+    const completed = criteria.filter((item) => item && item.done).length;
+    return `
+      <section class="task-breakdown acceptance-criteria">
+        <div class="breakdown-heading"><div><h3>Acceptance criteria</h3><p>${completed} of ${criteria.length} satisfied</p></div></div>
+        <div class="subtask-list">${criteria.length ? criteria.map((item, index) => `
+          <label class="subtask-item"><input type="checkbox" data-criteria-index="${index}" ${item.done ? "checked" : ""}><span class="${item.done ? "is-complete" : ""}">${escapeHtml(item.title || "Acceptance criterion")}</span><button type="button" data-remove-criteria="${index}" aria-label="Remove acceptance criterion">×</button></label>`).join("") : '<p class="breakdown-empty">Add clear conditions that must be met for this work to be accepted.</p>'}</div>
+        <form id="addCriteriaForm" class="breakdown-add-form"><input name="criteriaTitle" maxlength="240" required placeholder="e.g. User can save the form successfully"><button type="submit">Add criterion</button></form>
+      </section>`;
+  }
+
+  function bindAcceptanceCriteriaActions(task) {
+    const form = document.getElementById("addCriteriaForm");
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const title = String(new FormData(form).get("criteriaTitle") || "").trim();
+      if (!title) return;
+      await saveTaskBreakdown(task, { acceptanceCriteria: [...(task.raw.acceptanceCriteria || []), { title, done: false }] });
+    });
+    els.modalBody.querySelectorAll("[data-criteria-index]").forEach((input) => input.addEventListener("change", async () => {
+      const items = [...(task.raw.acceptanceCriteria || [])];
+      const index = Number(input.dataset.criteriaIndex);
+      if (!items[index]) return;
+      items[index] = { ...items[index], done: input.checked };
+      await saveTaskBreakdown(task, { acceptanceCriteria: items });
+    }));
+    els.modalBody.querySelectorAll("[data-remove-criteria]").forEach((button) => button.addEventListener("click", async () => {
+      const items = [...(task.raw.acceptanceCriteria || [])];
+      items.splice(Number(button.dataset.removeCriteria), 1);
+      await saveTaskBreakdown(task, { acceptanceCriteria: items });
+    }));
+  }
+
+  const STORY_LIFECYCLE_STATES = ["Draft", "Ready", "In Progress", "In Review", "Accepted"];
+
+  function renderStoryLifecycle(task) {
+    const state = STORY_LIFECYCLE_STATES.includes(task.raw.userStoryStatus) ? task.raw.userStoryStatus : "Draft";
+    return `
+      <section class="task-breakdown story-lifecycle">
+        <div class="breakdown-heading"><div><h3>User Story lifecycle</h3><p>Track the delivery state of the story linked to this task.</p></div></div>
+        <label class="story-lifecycle-control" for="userStoryStatusSelect"><span>Story status</span>
+          <select id="userStoryStatusSelect">${STORY_LIFECYCLE_STATES.map((value) => `<option value="${value}" ${value === state ? "selected" : ""}>${value}</option>`).join("")}</select>
+        </label>
+        <p class="story-lifecycle-note">Changing this status updates tasks linked by stable User Story ID; legacy tasks without an ID are matched by title.</p>
+      </section>`;
+  }
+
+  function bindStoryLifecycleActions(task) {
+    const select = document.getElementById("userStoryStatusSelect");
+    select?.addEventListener("change", async () => {
+      const nextState = select.value;
+      if (!STORY_LIFECYCLE_STATES.includes(nextState)) return;
+      select.disabled = true;
+      const storyTitle = String(task.raw.userStory || task.story || "").trim();
+      const storyId = String(task.raw.userStoryId || "");
+      const linkedTasks = storyId
+        ? appState.allTasks.filter((item) => String(item.raw.userStoryId || "") === storyId)
+        : (storyTitle && storyTitle !== "-"
+          ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
+          : [task]);
+      if (linkedTasks.length > 500) {
+        window.alert("This story is linked to more than 500 tasks. Status was not changed; split the update into smaller groups.");
+        select.disabled = false;
+        return;
+      }
+      try {
+        const batch = writeBatch(db);
+        linkedTasks.forEach((item) => {
+          batch.update(taskReference(item.id), {
+            userStoryStatus: nextState,
+            updatedAt: serverTimestamp()
+          });
+        });
+        await batch.commit();
+        linkedTasks.forEach((item) => {
+          item.raw = { ...item.raw, userStoryStatus: nextState };
+        });
+        openTaskModal(appState.allTasks.find((item) => item.id === task.id) || task);
+      } catch (error) {
+        console.error("Could not update linked User Story statuses", error);
+        window.alert("Could not save the User Story status for every linked task. Check project permissions and try again.");
+        select.disabled = false;
+      }
+    });
+  }
+
   function modalRow(label, value) {
     return `<div class="modal-row"><b>${escapeHtml(label)}</b><span>${escapeHtml(value || "—")}</span></div>`;
+  }
+
+  function copyViewedTask() {
+    const task = appState.allTasks.find((item) => item.id === appState.viewedTaskId);
+    if (!task) return;
+    openTaskEditor({ ...task, id: null, raw: { ...task.raw, task: `Copy of ${task.task}` } });
+    document.getElementById("taskEditorTitle").textContent = "Copy Task";
+    els.saveTaskBtn.textContent = "Create Copy";
   }
 
   function closeModal() {
@@ -1402,14 +2553,17 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   function openTaskEditor(task = null) {
     appState.editingTaskId = task?.id || null;
     els.taskEditorForm.reset();
+    delete els.taskUserStoryInput.dataset.storyId;
     if (task) {
+      els.taskUserStoryInput.dataset.storyId = String(task.raw.userStoryId || "");
       const fields = {
         task: task.raw.task || task.task,
-        userStory: task.raw.userStory || "",
-        pi: task.raw.pi || "",
+        userStory: task.raw.userStoryId || (task.raw.userStory ? `legacy:${task.raw.userStory}` : ""),
+        userStoryDescription: task.raw.userStoryDescription || "",
+        pi: task.raw.piId || appState.programIncrements.find((pi) => pi.name === task.raw.pi)?.id || "",
         sprint: task.raw.sprint || "",
-        feature: task.raw.feature || "",
-        assignee: task.raw.assignee || "",
+        feature: task.raw.featureId || appState.features.find((feature) => feature.name === task.raw.feature)?.id || "",
+        assigneeUid: task.raw.assigneeUid || "",
         storyPoints: task.raw.storyPoints ?? 0,
         priority: task.raw.priority || "",
         startDate: task.raw.startDate || "",
@@ -1427,10 +2581,79 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       document.getElementById("taskEditorTitle").textContent = "New Task";
       els.saveTaskBtn.textContent = "Create Task";
     }
+    refreshPlanningSelectors();
+    if (task) {
+      const pi = appState.programIncrements.find((item) => item.id === (task.raw.piId || "") || item.name === task.raw.pi);
+      const feature = appState.features.find((item) => item.id === (task.raw.featureId || "") || item.name === task.raw.feature);
+      els.taskPIInput.value = pi?.id || "";
+      onPlanningPIChange(els.taskPIInput, els.taskFeatureInput);
+      els.taskFeatureInput.value = feature?.id || "";
+      onTaskStoryChange();
+    }
     els.taskEditorError.textContent = "";
+    populateTaskAssignees(task).catch((error) => {
+      console.error("Could not load task assignees", error);
+      els.taskEditorError.textContent = "Could not load assignees. Check project membership permissions.";
+    });
     els.taskEditorModal.classList.add("is-open");
     els.taskEditorModal.setAttribute("aria-hidden", "false");
     els.newTaskName.focus();
+  }
+
+  async function fetchAssignableMembers() {
+    let members = [];
+    if (appState.activeProjectId === "default") {
+      // Default Project uses the same directory from which task assignment choices are built.
+      const snapshot = await getDocs(query(collection(db, "plannerDirectory"), orderBy("displayName")));
+      members = snapshot.docs.map((item) => item.data()).filter((user) => user.uid && user.displayName);
+    } else {
+      const snapshot = await getDocs(collection(db, "plannerProjects", appState.activeProjectId, "members"));
+      members = snapshot.docs.map((item) => item.data()).filter((member) => member.uid && member.displayName);
+    }
+    // Always return a predictable array of assignable identities.
+    return [...new Map((Array.isArray(members) ? members : [])
+      .filter((member) => member && member.uid && member.displayName)
+      .map((member) => [member.uid, member])).values()]
+      .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
+  }
+
+  async function populateTaskAssignees(task = null) {
+    const select = els.taskEditorForm.elements.namedItem("assigneeUid");
+    if (!select) return;
+    const previousUid = task?.raw?.assigneeUid || "";
+    const legacyName = task?.raw?.assignee || "";
+    select.innerHTML = '<option value="">Unassigned</option>';
+    const uniqueMembers = await fetchAssignableMembers();
+    uniqueMembers.forEach((member) => {
+      const option = document.createElement("option");
+      option.value = member.uid;
+      option.textContent = member.uid === appState.user.uid ? `${member.displayName} (you)` : member.displayName;
+      option.dataset.displayName = member.displayName;
+      select.appendChild(option);
+    });
+    // Older tasks stored only a display name. Keep that assignment visible until
+    // a real directory identity is selected, rather than silently unassigning it.
+    if (legacyName && !previousUid) {
+      const matchingMember = uniqueMembers.find((member) => member.displayName === legacyName);
+      if (matchingMember) {
+        select.value = matchingMember.uid;
+      } else {
+        const legacy = document.createElement("option");
+        legacy.value = `__legacy__:${legacyName}`;
+        legacy.textContent = `${legacyName} (legacy assignment — reselect a member to link)`;
+        select.appendChild(legacy);
+        select.value = legacy.value;
+      }
+    }
+    select.value = previousUid;
+    if (previousUid && !uniqueMembers.some((member) => member.uid === previousUid)) {
+      const missing = document.createElement("option");
+      missing.value = previousUid;
+      missing.textContent = `${legacyName || "Former member"} (no longer in this project)`;
+      missing.dataset.displayName = legacyName;
+      select.appendChild(missing);
+      select.value = previousUid;
+    }
   }
 
   function closeTaskEditor() {
@@ -1457,30 +2680,113 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.saveTaskBtn.textContent = appState.editingTaskId ? "Saving..." : "Creating...";
     els.taskEditorError.textContent = "";
     try {
+      const selectedStoryOption = els.taskUserStoryInput?.options[els.taskUserStoryInput.selectedIndex];
+      const storySelection = String(form.get("userStory") || "").trim();
+      const storyTitle = storySelection.startsWith("legacy:")
+        ? storySelection.slice("legacy:".length).trim()
+        : String(selectedStoryOption?.dataset.title || "").trim();
+      const editingTask = appState.editingTaskId
+        ? appState.allTasks.find((item) => item.id === appState.editingTaskId)
+        : null;
+      const selectedStoryId = storySelection && !storySelection.startsWith("legacy:") ? storySelection : "";
+      const matchingStoryTasks = storyTitle && storyTitle !== "-"
+        ? appState.allTasks.filter((item) => {
+            const itemTitle = String(item.raw.userStory || item.story || "").trim();
+            const itemStoryId = String(item.raw.userStoryId || "").trim();
+            if (selectedStoryId) return itemStoryId === selectedStoryId;
+            return itemTitle === storyTitle && !itemStoryId;
+          })
+        : [];
+      const storyId = storyTitle && storyTitle !== "-"
+        ? (selectedStoryId || editingTask?.raw.userStoryId || matchingStoryTasks.find((item) => item.raw.userStoryId)?.raw.userStoryId || doc(userStoryCollection()).id)
+        : "";
+      const linkedStory = appState.userStories.find((story) => story.id === selectedStoryId)
+        || matchingStoryTasks.find((item) => item.raw.userStoryId || String(item.raw.userStory || "").trim() === storyTitle)?.raw;
+      const mappedFeature = appState.features.find((item) => item.id === (linkedStory?.featureId || "") || item.name === linkedStory?.feature)
+        || appState.features.find((item) => item.id === String(form.get("feature") || "").trim());
+      const mappedPI = appState.programIncrements.find((item) => item.id === (linkedStory?.piId || "") || item.name === linkedStory?.pi)
+        || appState.programIncrements.find((item) => item.id === String(form.get("pi") || "").trim());
+      if (storyTitle && !mappedFeature) {
+        els.taskEditorError.textContent = "Map this User Story to a Feature before linking a task to it.";
+        els.taskFeatureInput.focus();
+        return;
+      }
+      const assigneeSelect = els.taskEditorForm.elements.namedItem("assigneeUid");
+      const selectedAssigneeOption = assigneeSelect?.options[assigneeSelect.selectedIndex];
+      const selectedAssigneeValue = String(form.get("assigneeUid") || "").trim();
+      const assigneeUid = selectedAssigneeValue.startsWith("__legacy__:") ? "" : selectedAssigneeValue;
+      const assigneeName = selectedAssigneeValue.startsWith("__legacy__:")
+        ? String(editingTask?.raw.assignee || "").trim()
+        : (assigneeUid ? String(selectedAssigneeOption?.dataset.displayName || selectedAssigneeOption?.textContent || "").replace(/ \(you\)$/, "").trim() : "");
       const taskData = {
         task,
-        userStory: String(form.get("userStory") || "").trim(),
-        pi: String(form.get("pi") || "").trim(),
+        userStory: storyTitle,
+        userStoryId: storyId,
+        userStoryDescription: String(form.get("userStoryDescription") || "").trim(),
+        piId: mappedPI?.id || String(form.get("pi") || "").trim(),
+        pi: mappedPI?.name || appState.programIncrements.find((item) => item.id === String(form.get("pi") || "").trim())?.name || String(editingTask?.raw.pi || ""),
         sprint: String(form.get("sprint") || "").trim(),
-        feature: String(form.get("feature") || "").trim(),
-        assignee: String(form.get("assignee") || "").trim(),
+        featureId: mappedFeature?.id || String(form.get("feature") || "").trim(),
+        feature: mappedFeature?.name || appState.features.find((item) => item.id === String(form.get("feature") || "").trim())?.name || String(editingTask?.raw.feature || ""),
+        assignee: assigneeName,
+        assigneeUid,
         storyPoints,
         priority: String(form.get("priority") || "").trim(),
         startDate: String(form.get("startDate") || ""),
         endDate: String(form.get("endDate") || ""),
         description: String(form.get("description") || "").trim(),
+        subtasks: appState.editingTaskId ? (appState.allTasks.find((item) => item.id === appState.editingTaskId)?.raw.subtasks || []) : [],
+        dependencies: appState.editingTaskId ? (appState.allTasks.find((item) => item.id === appState.editingTaskId)?.raw.dependencies || []) : [],
         updatedAt: serverTimestamp()
       };
+      const shouldCreateStoryRecord = Boolean(storyTitle && storyId && !appState.userStories.some((story) => story.id === storyId));
+      const storyRecordData = {
+        title: storyTitle,
+        description: taskData.userStoryDescription,
+        acceptanceCriteria: [],
+        piId: taskData.piId,
+        pi: taskData.pi,
+        featureId: taskData.featureId,
+        feature: taskData.feature,
+        startDate: taskData.startDate,
+        endDate: taskData.endDate,
+        lifecycle: "Draft",
+        createdBy: appState.user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        archived: false
+      };
       if (appState.editingTaskId) {
-        await updateDoc(taskReference(appState.editingTaskId), taskData);
+        if (storyId && (matchingStoryTasks.some((item) => !item.raw.userStoryId) || shouldCreateStoryRecord)) {
+          const batch = writeBatch(db);
+          matchingStoryTasks.filter((item) => !item.raw.userStoryId && item.id !== appState.editingTaskId).forEach((item) => {
+            batch.update(taskReference(item.id), { userStoryId: storyId, piId: taskData.piId, pi: taskData.pi, featureId: taskData.featureId, feature: taskData.feature, updatedAt: serverTimestamp() });
+          });
+          batch.update(taskReference(appState.editingTaskId), taskData);
+          if (shouldCreateStoryRecord) batch.set(userStoryReference(storyId), storyRecordData);
+          await batch.commit();
+        } else {
+          await updateDoc(taskReference(appState.editingTaskId), taskData);
+        }
       } else {
-        await addDoc(taskCollection(), {
+        const newTaskData = {
           ...taskData,
           status: "To Do",
           archived: false,
           createdBy: appState.user.uid,
           createdAt: serverTimestamp()
-        });
+        };
+        if (storyId && (matchingStoryTasks.some((item) => !item.raw.userStoryId) || shouldCreateStoryRecord)) {
+          const batch = writeBatch(db);
+          matchingStoryTasks.filter((item) => !item.raw.userStoryId).forEach((item) => {
+            batch.update(taskReference(item.id), { userStoryId: storyId, piId: taskData.piId, pi: taskData.pi, featureId: taskData.featureId, feature: taskData.feature, updatedAt: serverTimestamp() });
+          });
+          if (shouldCreateStoryRecord) batch.set(userStoryReference(storyId), storyRecordData);
+          batch.set(doc(taskCollection()), newTaskData);
+          await batch.commit();
+        } else {
+          await addDoc(taskCollection(), newTaskData);
+        }
       }
       closeTaskEditor();
     } catch (error) {
