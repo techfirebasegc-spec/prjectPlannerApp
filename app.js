@@ -2099,8 +2099,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const previousUid = task?.raw?.assigneeUid || "";
     const legacyName = task?.raw?.assignee || "";
     select.innerHTML = '<option value="">Unassigned</option>';
-    const uniqueMembers = await fetchAssignableMembers()
-      .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
+    const uniqueMembers = await fetchAssignableMembers();
     uniqueMembers.forEach((member) => {
       const option = document.createElement("option");
       option.value = member.uid;
