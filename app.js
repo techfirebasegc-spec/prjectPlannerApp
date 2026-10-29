@@ -1497,15 +1497,24 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   function renderBurndown(sprintMeta, sprintTasks) {
     if (!els.burndownChart || typeof window.Chart === "undefined") return;
-    if (appState.charts.burndown) appState.charts.burndown.destroy();
+    if (appState.charts.burndown) {
+      appState.charts.burndown.destroy();
+      appState.charts.burndown = null;
+    }
+
+    const chartCard = els.burndownChart.closest(".chart-card");
+    chartCard?.classList.remove("is-empty");
+    chartCard?.querySelector(".chart-empty-state")?.remove();
 
     if (!sprintMeta || !sprintMeta.startDate || !sprintMeta.endDate) {
-      els.burndownSubtitle.textContent = "No sprint date range available";
-      appState.charts.burndown = new window.Chart(els.burndownChart, {
-        type: "line",
-        data: { labels: [], datasets: [] },
-        options: { plugins: { legend: { display: false } } }
-      });
+      els.burndownSubtitle.textContent = "Sprint dates are needed to plot a burndown";
+      if (chartCard) {
+        chartCard.classList.add("is-empty");
+        const emptyState = document.createElement("div");
+        emptyState.className = "chart-empty-state";
+        emptyState.innerHTML = '<span class="chart-empty-icon" aria-hidden="true">↗</span><strong>No burndown data yet</strong><span>Add a sprint start and end date to tasks in this sprint. The chart will appear here.</span>';
+        chartCard.appendChild(emptyState);
+      }
       return;
     }
 
@@ -1658,7 +1667,13 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const inMonth = current.getMonth() === month;
 
       const day = document.createElement("div");
-      day.className = `cal-day ${inMonth ? "" : "muted"}`;
+      const today = new Date();
+      const isToday = inMonth
+        && current.getFullYear() === today.getFullYear()
+        && current.getMonth() === today.getMonth()
+        && current.getDate() === today.getDate();
+      day.className = `cal-day ${inMonth ? "" : "muted"}${isToday ? " is-today" : ""}`;
+      if (isToday) day.setAttribute("aria-current", "date");
 
       const num = document.createElement("div");
       num.className = "cal-day-num";
