@@ -151,6 +151,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     storyTitleInput: document.getElementById("storyTitleInput"),
     storyDescriptionInput: document.getElementById("storyDescriptionInput"),
     storyCriteriaInput: document.getElementById("storyCriteriaInput"),
+    storyOwnerInput: document.getElementById("storyOwnerInput"),
     storyPiInput: document.getElementById("storyPiInput"),
     storyFeatureInput: document.getElementById("storyFeatureInput"),
     storyStartDateInput: document.getElementById("storyStartDateInput"),
@@ -1519,6 +1520,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.storyEditorTitle.textContent = story ? "Edit User Story" : "Create User Story";
     els.saveStoryBtn.textContent = story ? "Save Changes" : "Create User Story";
     els.storyTitleInput.value = story?.title || "";
+    populateStoryOwners(story).catch((error) => { console.error("Could not load User Story owners", error); });
     els.storyDescriptionInput.value = story?.description || "";
     els.storyCriteriaInput.value = Array.isArray(story?.acceptanceCriteria) ? story.acceptanceCriteria.join("\n") : "";
     refreshPlanningSelectors();
@@ -1563,6 +1565,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const previousTitle = existingStory?.title || "";
     const data = {
       title, description, acceptanceCriteria: criteria,
+      owner: els.storyOwnerInput.selectedOptions[0]?.dataset.displayName || "",
+      ownerUid: els.storyOwnerInput.value,
       piId: els.storyPiInput.value,
       pi: appState.programIncrements.find((pi) => pi.id === els.storyPiInput.value)?.name || "",
       featureId: els.storyFeatureInput.value,
@@ -2657,6 +2661,40 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     } else {
       select.value = previousUid;
     }
+  }
+
+  async function populateStoryOwners(story = null) {
+    const select = els.storyOwnerInput;
+    if (!select) return;
+    const previousUid = story?.ownerUid || "";
+    const legacyName = story?.owner || "";
+    select.innerHTML = '<option value="">Unassigned</option>';
+    const members = await fetchAssignableMembers();
+    members.forEach((member) => {
+      const option = document.createElement("option");
+      option.value = member.uid;
+      option.textContent = member.uid === appState.user.uid ? `${member.displayName} (you)` : member.displayName;
+      option.dataset.displayName = member.displayName;
+      select.appendChild(option);
+    });
+    if (previousUid && !members.some((member) => member.uid === previousUid)) {
+      const option = document.createElement("option");
+      option.value = previousUid;
+      option.textContent = legacyName || "Previously assigned member";
+      option.dataset.displayName = legacyName;
+      select.appendChild(option);
+    } else if (!previousUid && legacyName) {
+      const match = members.find((member) => member.displayName === legacyName);
+      if (match) select.value = match.uid;
+      else {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = `${legacyName} (legacy owner — not mapped)`;
+        option.dataset.displayName = legacyName;
+        option.selected = true;
+        select.appendChild(option);
+      }
+    } else select.value = previousUid;
   }
 
   async function fetchAssignableMembers() {
