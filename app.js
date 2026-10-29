@@ -318,7 +318,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       appState.userStories = [];
       applyFiltersAndRender();
     });
-    appState.unsubscribeTasks = onSnapshot(taskCollection(), (snapshot) => {
+    appState.unsubscribeTasks = onSnapshot(taskCollection(), async (snapshot) => {
       const raw = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       appState.allTasks = normalizeRecords(raw).filter((task) => task.archived !== true);
       appState.selectedTaskIds = new Set([...appState.selectedTaskIds].filter((taskId) => appState.allTasks.some((task) => task.id === taskId)));
@@ -636,8 +636,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       // Match the task editor's actual assignee directory/project-members source,
       // while retaining legacy names already stored on existing tasks.
       const names = [...new Set([
+        "Unassigned",
         ...members.map((member) => String(member.displayName || "").trim()).filter(Boolean),
-        ...tasks.map((task) => String(task.assignee || "").trim()).filter((name) => name && name !== "Unassigned")
+        ...tasks.map((task) => String(task.assignee || "").trim()).filter(Boolean)
       ])].sort((a, b) => a.localeCompare(b));
       fillSelect(els.assigneeFilter, names, "All Assignees");
       els.assigneeFilter.value = names.includes(selectedAssignee) ? selectedAssignee : "all";
