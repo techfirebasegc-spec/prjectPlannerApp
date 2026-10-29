@@ -1420,6 +1420,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const startDate = els.storyStartDateInput.value;
     const endDate = els.storyEndDateInput.value;
     if (startDate && endDate && endDate < startDate) { els.storyEditorError.textContent = "Target date cannot be before the start date."; return; }
+    const selectedFeature = appState.features.find((feature) => feature.id === els.storyFeatureInput.value);
+    if (!selectedFeature) { els.storyEditorError.textContent = "Select a Feature before saving this User Story."; els.storyFeatureInput.focus(); return; }
+    if (els.storyPiInput.value && selectedFeature.piId !== els.storyPiInput.value) { els.storyEditorError.textContent = "The selected Feature belongs to a different PI. Choose a matching PI or Feature."; return; }
     els.saveStoryBtn.disabled = true;
     els.saveStoryBtn.textContent = "Saving...";
     els.storyEditorError.textContent = "";
@@ -1442,7 +1445,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
           const linked = appState.allTasks.filter(task => String(task.raw.userStoryId || "").trim() === appState.editingStoryId);
           for (let start = 0; start < linked.length; start += 450) {
             const batch = writeBatch(db);
-            linked.slice(start, start + 450).forEach(task => batch.update(taskReference(task.id), { userStory: title, userStoryDescription: description, updatedAt: serverTimestamp() }));
+            linked.slice(start, start + 450).forEach(task => batch.update(taskReference(task.id), { userStory: title, userStoryDescription: description, piId: data.piId, pi: data.pi, featureId: data.featureId, feature: data.feature, updatedAt: serverTimestamp() }));
             await batch.commit();
           }
         }
@@ -1453,7 +1456,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
           const linked = appState.allTasks.filter(task => String(task.raw.userStoryId || "") === legacyId || (!task.raw.userStoryId && String(task.raw.userStory || task.story || "").trim() === previousTitle));
           for (let start = 0; start < linked.length; start += 450) {
             const batch = writeBatch(db);
-            linked.slice(start, start + 450).forEach(task => batch.update(taskReference(task.id), { userStoryId: legacyId, userStory: title, userStoryDescription: description, updatedAt: serverTimestamp() }));
+            linked.slice(start, start + 450).forEach(task => batch.update(taskReference(task.id), { userStoryId: legacyId, userStory: title, userStoryDescription: description, piId: data.piId, pi: data.pi, featureId: data.featureId, feature: data.feature, updatedAt: serverTimestamp() }));
             await batch.commit();
           }
         }
@@ -2583,6 +2586,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const storyId = storyTitle && storyTitle !== "-"
         ? (selectedStoryId || editingTask?.raw.userStoryId || matchingStoryTasks.find((item) => item.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id)
         : "";
+      const linkedStory = appState.userStories.find((story) => story.id === selectedStoryId)
+        || matchingStoryTasks.find((item) => item.raw.userStoryId || String(item.raw.userStory || "").trim() === storyTitle)?.raw;
+      const mappedPI = appState.programIncrements.find((item) => item.id === (linkedStory?.piId || "") || item.name === linkedStory?.pi);
+      const mappedFeature = appState.features.find((item) => item.id === (linkedStory?.featureId || "") || item.name === linkedStory?.feature);
       const assigneeSelect = els.taskEditorForm.elements.namedItem("assigneeUid");
       const selectedAssigneeOption = assigneeSelect?.options[assigneeSelect.selectedIndex];
       const selectedAssigneeValue = String(form.get("assigneeUid") || "").trim();
@@ -2595,11 +2602,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         userStory: storyTitle,
         userStoryId: storyId,
         userStoryDescription: String(form.get("userStoryDescription") || "").trim(),
-        piId: String(form.get("pi") || "").trim(),
-        pi: appState.programIncrements.find((item) => item.id === String(form.get("pi") || "").trim())?.name || "",
+        piId: mappedPI?.id || String(form.get("pi") || "").trim(),
+        pi: mappedPI?.name || appState.programIncrements.find((item) => item.id === String(form.get("pi") || "").trim())?.name || String(editingTask?.raw.pi || ""),
         sprint: String(form.get("sprint") || "").trim(),
-        featureId: String(form.get("feature") || "").trim(),
-        feature: appState.features.find((item) => item.id === String(form.get("feature") || "").trim())?.name || "",
+        featureId: mappedFeature?.id || String(form.get("feature") || "").trim(),
+        feature: mappedFeature?.name || appState.features.find((item) => item.id === String(form.get("feature") || "").trim())?.name || String(editingTask?.raw.feature || ""),
         assignee: assigneeName,
         assigneeUid,
         storyPoints,
