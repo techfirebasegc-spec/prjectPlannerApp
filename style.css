@@ -3217,3 +3217,73 @@ input:hover, select:hover, textarea:hover { border-color: #c4d2e6; }
   .stories-grid-list .story-row-actions { grid-row: 2; justify-content: flex-start; flex-wrap: wrap; padding: 0 13px 12px 17px; }
   .stories-grid-list .story-row-details { grid-row: 3; }
 }
+
+
+/* Fix list-row overflow: reserve a real column for the details toggle and keep Add task compact. */
+.stories-grid-list .story-card.story-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  column-gap: 12px;
+  overflow: hidden;
+}
+.stories-grid-list .story-row-main {
+  min-width: 0;
+  width: 100%;
+  grid-template-columns: minmax(130px, 1.15fr) auto minmax(110px, .9fr) 42px minmax(92px, max-content);
+  gap: 10px;
+  padding-left: 17px;
+  padding-right: 0;
+}
+.stories-grid-list .story-details-toggle {
+  display: inline-flex;
+  width: max-content;
+  min-width: 92px;
+  max-width: 100%;
+  justify-content: center;
+  align-items: center;
+  justify-self: end;
+  white-space: nowrap;
+  padding: 7px 9px;
+  position: relative;
+  z-index: 1;
+}
+.stories-grid-list .story-row-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0 12px 0 0;
+  white-space: nowrap;
+}
+.stories-grid-list .story-row-actions .story-add-task {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  max-width: 118px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.stories-grid-list .story-row-actions .story-edit,
+.stories-grid-list .story-row-actions .story-archive-action {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+@media (max-width: 1200px) {
+  .stories-grid-list .story-card.story-row { grid-template-columns: minmax(0, 1fr); }
+  .stories-grid-list .story-row-main {
+    grid-template-columns: minmax(130px, 1.1fr) auto minmax(100px, .8fr) 38px minmax(90px, max-content);
+    padding: 10px 14px 6px 17px;
+  }
+  .stories-grid-list .story-details-toggle { grid-column: auto; grid-row: auto; justify-self: end; }
+  .stories-grid-list .story-row-actions { grid-column: 1; grid-row: 2; padding: 0 14px 10px 17px; }
+}
+@media (max-width: 650px) {
+  .stories-grid-list .story-row-main { grid-template-columns: minmax(0, 1fr) auto; }
+  .stories-grid-list .story-details-toggle { grid-column: 1 / -1; justify-self: start; }
+  .stories-grid-list .story-row-actions { grid-row: 2; flex-wrap: wrap; justify-content: flex-start; }
+  .stories-grid-list .story-row-actions .story-add-task { max-width: none; }
+}
