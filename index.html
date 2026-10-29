@@ -109,6 +109,8 @@
         <button id="listViewBtn" class="view-btn" type="button">List View</button>
         <button id="boardViewBtn" class="view-btn" type="button">Kanban View</button>
         <button id="storiesViewBtn" class="view-btn" type="button">User Stories</button>
+        <button id="piViewBtn" class="view-btn" type="button">Program Increments</button>
+        <button id="featuresViewBtn" class="view-btn" type="button">Features</button>
         <button id="insightsViewBtn" class="view-btn" type="button">Agile Insights</button>
         <button id="knowledgeViewBtn" class="view-btn" type="button">Knowledge Center</button>
         <button id="profileViewBtn" class="view-btn is-hidden" type="button">Profile</button>
@@ -232,6 +234,47 @@
         <div class="stories-toolbar"><div><h2>User Stories</h2><p>Browse stories and the tasks linked to each one.</p></div><button id="newStoryBtn" class="save-task-btn" type="button">+ Create User Story</button></div>
         <div class="stories-list-controls"><div id="storiesSummary" class="stories-summary" aria-live="polite"></div><div class="stories-toolbar-actions"><span class="stories-layout-label" aria-label="Current layout">☷ List view</span><button id="toggleArchivedStoriesBtn" class="story-archive-toggle" type="button" aria-pressed="false">Show archived</button></div></div><div id="storiesGrid" class="stories-grid"></div>
       </section>
+      <section id="piManagementView" class="planning-view is-hidden" aria-label="Program Increment management">
+        <header class="planning-page-header">
+          <div><p class="planning-eyebrow">AGILE PLANNING</p><h2>Program Increments</h2><p>Create and manage project planning horizons. Each PI can contain multiple Features.</p></div>
+          <span id="piCount" class="planning-count">0 PIs</span>
+        </header>
+        <div class="planning-layout">
+          <form id="piForm" class="planning-form">
+            <input id="piRecordId" type="hidden">
+            <h3 id="piFormTitle">Create a Program Increment</h3>
+            <label>PI name<input id="piNameInput" maxlength="100" required placeholder="e.g. PI 2027 Q1"></label>
+            <label>Description<textarea id="piDescriptionInput" maxlength="1200" rows="3" placeholder="Planning objectives and outcomes"></textarea></label>
+            <div class="planning-form-row"><label>Start date<input id="piStartInput" type="date" required></label><label>End date<input id="piEndInput" type="date" required></label></div>
+            <label>Status<select id="piStatusInput"><option value="PLANNED">Planned</option><option value="ACTIVE">Active</option><option value="COMPLETED">Completed</option></select></label>
+            <p id="piFormError" class="task-editor-error" aria-live="polite"></p>
+            <div class="planning-form-actions"><button id="piCancelBtn" class="secondary-action" type="button">Clear</button><button id="piSaveBtn" class="save-task-btn" type="submit">Create PI</button></div>
+          </form>
+          <section class="planning-records-panel"><div class="planning-records-heading"><div><h3>Planning increments</h3><p>Project-scoped, reusable records</p></div><input id="piSearchInput" type="search" placeholder="Search PIs" aria-label="Search Program Increments"></div><div id="piRecords" class="planning-record-list"></div></section>
+        </div>
+      </section>
+
+      <section id="featuresManagementView" class="planning-view is-hidden" aria-label="Feature management">
+        <header class="planning-page-header">
+          <div><p class="planning-eyebrow">DELIVERY SCOPE</p><h2>Features</h2><p>Define product capabilities, assign each Feature to a PI, and connect stories and tasks to the same records.</p></div>
+          <span id="featureCount" class="planning-count">0 Features</span>
+        </header>
+        <div class="planning-layout">
+          <form id="featureForm" class="planning-form">
+            <input id="featureRecordId" type="hidden">
+            <h3 id="featureFormTitle">Create a Feature</h3>
+            <label>Feature name<input id="featureNameInput" maxlength="120" required placeholder="e.g. Secure account recovery"></label>
+            <label>Program Increment<select id="featurePIInput" required><option value="">Select a PI</option></select></label>
+            <label>Description<textarea id="featureDescriptionInput" maxlength="1500" rows="3" placeholder="Capability and expected value"></textarea></label>
+            <div class="planning-form-row"><label>Owner<input id="featureOwnerInput" maxlength="120" placeholder="Feature owner"></label><label>Priority<select id="featurePriorityInput"><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="LOW">Low</option></select></label></div>
+            <label>Status<select id="featureStatusInput"><option value="PLANNED">Planned</option><option value="IN_PROGRESS">In progress</option><option value="COMPLETED">Completed</option></select></label>
+            <p id="featureFormError" class="task-editor-error" aria-live="polite"></p>
+            <div class="planning-form-actions"><button id="featureCancelBtn" class="secondary-action" type="button">Clear</button><button id="featureSaveBtn" class="save-task-btn" type="submit">Create Feature</button></div>
+          </form>
+          <section class="planning-records-panel"><div class="planning-records-heading"><div><h3>Feature catalogue</h3><p>Every Feature belongs to one PI</p></div><input id="featureSearchInput" type="search" placeholder="Search Features" aria-label="Search Features"></div><div class="planning-filter-row"><label for="featurePIFilter">Program Increment</label><select id="featurePIFilter"><option value="all">All PIs</option></select></div><div id="featureRecords" class="planning-record-list"></div></section>
+        </div>
+      </section>
+
       <section id="knowledgeView" class="knowledge-view is-hidden" aria-label="Arcflow Knowledge Center">
         <div class="knowledge-hero">
           <p class="brand-kicker">START HERE</p>
@@ -449,8 +492,8 @@
         <label class="task-form-wide">Acceptance criteria <span class="field-optional">Optional · one per line</span>
           <textarea id="storyCriteriaInput" name="acceptanceCriteria" rows="4" placeholder="User can search available doctors&#10;User can select an available time slot"></textarea>
         </label>
-        <label>PI <span class="field-optional">Optional</span><input id="storyPiInput" name="pi" maxlength="100" autocomplete="off" placeholder="e.g. PI 2026 Q4"></label>
-        <label>Feature <span class="field-optional">Optional</span><input id="storyFeatureInput" name="feature" maxlength="120" autocomplete="off" placeholder="Related feature"></label>
+        <label>Program Increment <span class="field-optional">Optional</span><select id="storyPiInput" name="pi"><option value="">Select a PI</option></select></label>
+        <label>Feature <span class="field-optional">Optional</span><select id="storyFeatureInput" name="feature"><option value="">Select a Feature</option></select></label>
         <label>Start date <input id="storyStartDateInput" name="startDate" type="date"></label>
         <label>Target date <input id="storyEndDateInput" name="endDate" type="date"></label>
       </div>
@@ -482,9 +525,9 @@
               <datalist id="userStoryOptions"></datalist>
             </label>
             <label class="task-form-wide">User story description<textarea name="userStoryDescription" rows="3" maxlength="1500" placeholder="Describe the user need and expected outcome"></textarea></label>
-            <label>PI<input name="pi" maxlength="100" autocomplete="off"></label>
+            <label>Program Increment<select name="pi" id="taskPIInput"><option value="">Select a PI</option></select></label>
             <label>Sprint<input name="sprint" maxlength="100" autocomplete="off"></label>
-            <label>Feature<input name="feature" maxlength="120" autocomplete="off"></label>
+            <label>Feature<select name="feature" id="taskFeatureInput"><option value="">Select a Feature</option></select></label>
             <label>Assignee
               <select name="assigneeUid" id="taskAssigneeInput" aria-describedby="taskAssigneeHelp">
                 <option value="">Unassigned</option>
