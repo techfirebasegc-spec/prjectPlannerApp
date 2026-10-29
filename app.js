@@ -1530,9 +1530,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       <section class="task-detail-description"><h3>User story description</h3><p>${escapeHtml(task.raw.userStoryDescription || "No user story description added.")}</p></section>
       <section class="task-detail-description"><h3>Task description</h3><p>${escapeHtml(task.description || "No description added.")}</p></section>
       ${renderTaskBreakdown(task)}
+      ${renderAcceptanceCriteria(task)}
     `;
 
     bindTaskBreakdownActions(task);
+    bindAcceptanceCriteriaActions(task);
     els.modal.classList.add("is-open");
     els.modal.setAttribute("aria-hidden", "false");
     els.taskStatusSelect.value = task.statusKey;
@@ -1624,6 +1626,40 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       console.error("Could not update task breakdown", error);
       window.alert("Could not save this change. Check your project permissions and try again.");
     }
+  }
+
+  function renderAcceptanceCriteria(task) {
+    const criteria = Array.isArray(task.raw.acceptanceCriteria) ? task.raw.acceptanceCriteria : [];
+    const completed = criteria.filter((item) => item && item.done).length;
+    return `
+      <section class="task-breakdown acceptance-criteria">
+        <div class="breakdown-heading"><div><h3>Acceptance criteria</h3><p>${completed} of ${criteria.length} satisfied</p></div></div>
+        <div class="subtask-list">${criteria.length ? criteria.map((item, index) => `
+          <label class="subtask-item"><input type="checkbox" data-criteria-index="${index}" ${item.done ? "checked" : ""}><span class="${item.done ? "is-complete" : ""}">${escapeHtml(item.title || "Acceptance criterion")}</span><button type="button" data-remove-criteria="${index}" aria-label="Remove acceptance criterion">×</button></label>`).join("") : '<p class="breakdown-empty">Add clear conditions that must be met for this work to be accepted.</p>'}</div>
+        <form id="addCriteriaForm" class="breakdown-add-form"><input name="criteriaTitle" maxlength="240" required placeholder="e.g. User can save the form successfully"><button type="submit">Add criterion</button></form>
+      </section>`;
+  }
+
+  function bindAcceptanceCriteriaActions(task) {
+    const form = document.getElementById("addCriteriaForm");
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const title = String(new FormData(form).get("criteriaTitle") || "").trim();
+      if (!title) return;
+      await saveTaskBreakdown(task, { acceptanceCriteria: [...(task.raw.acceptanceCriteria || []), { title, done: false }] });
+    });
+    els.modalBody.querySelectorAll("[data-criteria-index]").forEach((input) => input.addEventListener("change", async () => {
+      const items = [...(task.raw.acceptanceCriteria || [])];
+      const index = Number(input.dataset.criteriaIndex);
+      if (!items[index]) return;
+      items[index] = { ...items[index], done: input.checked };
+      await saveTaskBreakdown(task, { acceptanceCriteria: items });
+    }));
+    els.modalBody.querySelectorAll("[data-remove-criteria]").forEach((button) => button.addEventListener("click", async () => {
+      const items = [...(task.raw.acceptanceCriteria || [])];
+      items.splice(Number(button.dataset.removeCriteria), 1);
+      await saveTaskBreakdown(task, { acceptanceCriteria: items });
+    }));
   }
 
   function modalRow(label, value) {
