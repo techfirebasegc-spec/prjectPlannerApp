@@ -1236,14 +1236,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const elapsed = getElapsedDaysInSprint(sprintMeta.startDate, sprintMeta.endDate);
     const remainingNow = Math.max(total - completed, 0);
 
-    const actual = labels.map((_, i) => {
-      if (elapsed <= 1) return i === 0 ? total : remainingNow;
-      if (i < elapsed) {
-        const burn = (total - remainingNow) * (i / (elapsed - 1));
-        return Number((total - burn).toFixed(2));
-      }
-      return remainingNow;
-    });
+    // Historical daily snapshots are not stored, so do not fabricate an "actual" burn curve.
+    // Display the current remaining-work snapshot as a flat reference across the sprint.
+    const remainingSnapshot = labels.map(() => remainingNow);
 
     els.burndownSubtitle.textContent = `${sprintMeta.sprint} (${formatDate(sprintMeta.startDate)} - ${formatDate(sprintMeta.endDate)})`;
 
@@ -1253,7 +1248,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         labels,
         datasets: [
           { label: "Ideal Remaining", data: ideal, borderColor: "#8aa2bf", borderDash: [6, 4], tension: 0.2 },
-          { label: "Actual Remaining", data: actual, borderColor: "#0f5bd8", backgroundColor: "rgba(15, 91, 216, 0.14)", fill: true, tension: 0.25 }
+          { label: "Current Remaining (snapshot)", data: remainingSnapshot, borderColor: "#0f5bd8", backgroundColor: "rgba(15, 91, 216, 0.08)", fill: false, tension: 0 }
         ]
       },
       options: {
@@ -1289,8 +1284,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (!els.velocityChart || typeof window.Chart === "undefined") return;
     if (appState.charts.velocity) appState.charts.velocity.destroy();
 
-    const sprints = appState.sprintCatalog.slice(-8);
-    const labels = sprints.map((s) => s.sprint);
+    let eligibleSprints = [...appState.sprintCatalog];
+    if (appState.filters.pi !== "all") eligibleSprints = eligibleSprints.filter((s) => s.pi === appState.filters.pi);
+    const sprints = eligibleSprints.slice(-8);
+    const labels = sprints.map((s) => `${s.pi} · ${s.sprint}`);
     const committed = sprints.map((s) => s.tasks.reduce((sum, t) => sum + pointsOf(t), 0));
     const completed = sprints.map((s) => s.tasks.filter((t) => t.statusKey === "done").reduce((sum, t) => sum + pointsOf(t), 0));
 
