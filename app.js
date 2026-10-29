@@ -2584,12 +2584,20 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
           })
         : [];
       const storyId = storyTitle && storyTitle !== "-"
-        ? (selectedStoryId || editingTask?.raw.userStoryId || matchingStoryTasks.find((item) => item.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id)
+        ? (selectedStoryId || editingTask?.raw.userStoryId || matchingStoryTasks.find((item) => item.raw.userStoryId)?.raw.userStoryId || doc(userStoryCollection()).id)
         : "";
       const linkedStory = appState.userStories.find((story) => story.id === selectedStoryId)
         || matchingStoryTasks.find((item) => item.raw.userStoryId || String(item.raw.userStory || "").trim() === storyTitle)?.raw;
       const mappedPI = appState.programIncrements.find((item) => item.id === (linkedStory?.piId || "") || item.name === linkedStory?.pi);
-      const mappedFeature = appState.features.find((item) => item.id === (linkedStory?.featureId || "") || item.name === linkedStory?.feature);
+      const mappedFeature = appState.features.find((item) => item.id === (linkedStory?.featureId || "") || item.name === linkedStory?.feature)
+        || appState.features.find((item) => item.id === String(form.get("feature") || "").trim());
+      const mappedPI = appState.programIncrements.find((item) => item.id === (linkedStory?.piId || "") || item.name === linkedStory?.pi)
+        || appState.programIncrements.find((item) => item.id === String(form.get("pi") || "").trim());
+      if (storyTitle && !mappedFeature) {
+        els.taskEditorError.textContent = "Map this User Story to a Feature before linking a task to it.";
+        els.taskFeatureInput.focus();
+        return;
+      }
       const assigneeSelect = els.taskEditorForm.elements.namedItem("assigneeUid");
       const selectedAssigneeOption = assigneeSelect?.options[assigneeSelect.selectedIndex];
       const selectedAssigneeValue = String(form.get("assigneeUid") || "").trim();
