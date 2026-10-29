@@ -27,6 +27,21 @@ service cloud.firestore {
         && (!data.keys().hasAll(["userStoryStatus"]) || data.userStoryStatus in ["Draft", "Ready", "In Progress", "In Review", "Accepted"]);
     }
 
+    function validUserStory(data) {
+      return data.keys().hasOnly([
+          "title", "description", "acceptanceCriteria", "pi", "feature",
+          "startDate", "endDate", "lifecycle", "createdBy", "createdAt", "updatedAt"
+        ])
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 160
+        && data.description is string && data.description.size() <= 1500
+        && data.acceptanceCriteria is list && data.acceptanceCriteria.size() <= 50
+        && data.pi is string && data.pi.size() <= 100
+        && data.feature is string && data.feature.size() <= 120
+        && data.startDate is string && data.endDate is string
+        && data.lifecycle in ["Draft", "Ready", "In Progress", "In Review", "Accepted"]
+        && data.createdBy is string;
+    }
+
     function validNewTask(data) {
       return validTask(data)
         && data.keys().hasAll(["archived"])
@@ -79,6 +94,18 @@ service cloud.firestore {
         && request.resource.data.displayName.size() > 0
         && request.resource.data.displayName.size() <= 161;
       allow delete: if false;
+    }
+
+    // Standalone User Stories in the shared Default Project.
+    match /plannerUserStories/{storyId} {
+      allow get, list: if isVerifiedUser();
+      allow create: if isVerifiedUser() && validUserStory(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser() && resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validUserStory(request.resource.data);
+      allow delete: if isVerifiedUser() && resource.data.createdBy == request.auth.uid;
     }
 
     // Existing data remains the shared Default Project and is not migrated or overwritten.
@@ -160,6 +187,18 @@ service cloud.firestore {
         && request.resource.data.role in ["editor", "viewer"];
       allow delete: if isVerifiedUser()
         && (request.auth.uid == uid || isProjectOwner(projectId));
+    }
+
+    match /plannerProjects/{projectId}/userStories/{storyId} {
+      allow get, list: if isVerifiedUser() && isProjectMember(projectId);
+      allow create: if isVerifiedUser() && canEditProject(projectId)
+        && validUserStory(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser() && canEditProject(projectId)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && validUserStory(request.resource.data);
+      allow delete: if isVerifiedUser() && canEditProject(projectId);
     }
 
     match /plannerProjects/{projectId}/tasks/{taskId} {
