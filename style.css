@@ -2877,7 +2877,10 @@ input:hover, select:hover, textarea:hover { border-color: #c4d2e6; }
 .story-row-points strong { color: #243b61; font-size: 14px; }
 .story-details-toggle { padding: 7px 9px; border: 1px solid #e0e8f3; border-radius: 7px; background: #fff; color: #526887; font-size: 10px; white-space: nowrap; }
 .story-details-toggle:hover { border-color: #b8cdf4; background: #f4f7ff; color: #244de0; }
-.story-row-actions { display: flex; align-items: center; gap: 7px; padding: 0 14px 12px 19px; }
+.story-details-toggle.is-active, .story-details-toggle[aria-expanded="true"] { border-color:#a9c2ff; background:#eaf1ff; color:#2455d6; box-shadow:inset 0 0 0 1px rgba(61,105,225,.08); font-weight:700; }
+.story-row-actions { display: flex; align-items: center; justify-content:flex-end; flex-wrap:wrap; gap: 8px; padding: 0 20px 14px 20px; }
+.story-row-main { padding-right:20px; }
+.story-row-actions button { flex:0 0 auto; }
 .story-row-actions button { min-height: 29px; padding: 5px 10px; border-radius: 7px; font-size: 10px; }
 .story-row-actions .story-edit { border: 1px solid #e0e7f1; background: #fff; }
 .story-row-actions .story-add-task { border: 1px solid #d9e5ff; background: #f4f7ff; }
@@ -2964,6 +2967,8 @@ input:hover, select:hover, textarea:hover { border-color: #c4d2e6; }
 .story-linked-status { padding:5px 7px; border-radius:6px; background:#f0f3f8; color:#63718a; font-size:9px; font-weight:700; white-space:nowrap; }
 .story-linked-status.status-done { background:#e6f8f0; color:#19815d; }
 .story-linked-status.status-inprogress { background:#eaf1ff; color:#315fc1; }
+.story-linked-assignee { display:flex; align-items:center; justify-content:flex-start; gap:7px; min-width:0; color:#526581; font-size:10px; white-space:nowrap; }
+.story-assignee-avatar { display:inline-grid; place-items:center; width:25px; height:25px; flex:0 0 25px; border-radius:50%; background:#e9ddff; color:#7040b8; font-size:9px; font-weight:750; }
 .story-linked-open { color:#93a1b6; font-size:18px; }
 @media(max-width:1000px) {
  .stories-grid-list .story-row-main { grid-template-columns:minmax(150px,1.3fr) minmax(95px,.8fr) minmax(120px,1fr) 42px; gap:10px; }
