@@ -453,7 +453,12 @@
             <label>PI<input name="pi" maxlength="100" autocomplete="off"></label>
             <label>Sprint<input name="sprint" maxlength="100" autocomplete="off"></label>
             <label>Feature<input name="feature" maxlength="120" autocomplete="off"></label>
-            <label>Assignee<input name="assignee" maxlength="120" autocomplete="off"></label>
+            <label>Assignee
+              <select name="assigneeUid" id="taskAssigneeInput" aria-describedby="taskAssigneeHelp">
+                <option value="">Unassigned</option>
+              </select>
+              <small id="taskAssigneeHelp" class="field-help">Choose a project member.</small>
+            </label>
             <label>Priority
               <select name="priority">
                 <option value="">No priority</option>
