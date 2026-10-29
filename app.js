@@ -29,7 +29,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     sortBy: "default",
     listSort: { key: "default", direction: "asc" },
     selectedTaskIds: new Set(),
-    activeView: "board",
+    activeView: "dashboard",
     calendarMonth: "",
     wipLimits: { todo: null, inprogress: null, done: null },
     dragTaskId: null,
@@ -125,6 +125,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     saveMemberBtn: document.getElementById("saveMemberBtn"),
     memberError: document.getElementById("memberError"),
     memberList: document.getElementById("memberList"),
+    dashboardViewBtn: document.getElementById("dashboardViewBtn"),
+    dashboardView: document.getElementById("dashboardView"),
+    dashboardTasks: document.getElementById("dashboardTasks"),
+    portfolioHero: document.getElementById("portfolioHero"),
+    overviewStats: document.getElementById("overviewStats"),
     boardViewBtn: document.getElementById("boardViewBtn"),
     listViewBtn: document.getElementById("listViewBtn"),
     insightsViewBtn: document.getElementById("insightsViewBtn"),
@@ -371,6 +376,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     });
     els.archiveProjectBtn.addEventListener("click", archiveActiveProject);
     els.membersBtn.addEventListener("click", openMembers);
+    els.dashboardViewBtn?.addEventListener("click", () => setActiveView("dashboard"));
     els.boardViewBtn.addEventListener("click", () => setActiveView("board"));
     els.listViewBtn.addEventListener("click", () => setActiveView("list"));
     els.insightsViewBtn.addEventListener("click", () => setActiveView("insights"));
@@ -729,12 +735,31 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       return matchesPi && matchesSprint && matchesFeature && matchesAssignee && matchesSearch;
     });
 
+    renderDashboard(appState.filteredTasks);
     renderBoard(appState.filteredTasks);
     renderList(appState.filteredTasks);
     renderUserStories(appState.filteredTasks);
     populateUserStoryOptions(appState.allTasks);
     updateStats(appState.filteredTasks);
     renderInsights();
+  }
+
+  function renderDashboard(tasks) {
+    if (!els.dashboardTasks) return;
+    const ordered = sortTasks(tasks, appState.sortBy).slice(0, 6);
+    els.dashboardTasks.innerHTML = "";
+    if (!ordered.length) {
+      els.dashboardTasks.innerHTML = '<div class="dashboard-empty"><strong>No tasks match these filters</strong><span>Adjust the filters in the sidebar or create a task.</span></div>';
+      return;
+    }
+    ordered.forEach((task) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "dashboard-task-row";
+      item.innerHTML = '<span class="dashboard-task-main"><strong>' + escapeHtml(task.task) + '</strong><small>' + escapeHtml(task.feature) + ' · ' + escapeHtml(task.assignee || "Unassigned") + '</small></span><span class="dashboard-task-status status-' + escapeHtml(task.statusKey) + '">' + escapeHtml(task.statusLabel || "To Do") + '</span>';
+      item.addEventListener("click", () => openTaskModal(task));
+      els.dashboardTasks.appendChild(item);
+    });
   }
 
   function matchesTaskSearch(task, searchValue) {
@@ -1582,9 +1607,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function setActiveView(view, persist = true) {
-    appState.activeView = ["board", "list", "stories", "insights", "knowledge", "profile"].includes(view) ? view : "board";
+    appState.activeView = ["dashboard", "board", "list", "stories", "insights", "knowledge", "profile"].includes(view) ? view : "dashboard";
+    const dashboard = appState.activeView === "dashboard";
     const board = appState.activeView === "board", list = appState.activeView === "list", stories = appState.activeView === "stories";
     const insights = appState.activeView === "insights", knowledge = appState.activeView === "knowledge", profile = appState.activeView === "profile";
+    els.dashboardView?.classList.toggle("is-hidden", !dashboard);
+    els.dashboardViewBtn?.classList.toggle("is-active", dashboard);
+    els.portfolioHero?.classList.toggle("is-hidden", !dashboard);
+    els.overviewStats?.classList.toggle("is-hidden", !dashboard);
     els.boardView.classList.toggle("is-hidden", !board);
     els.listView.classList.toggle("is-hidden", !list);
     els.storiesView.classList.toggle("is-hidden", !stories);
