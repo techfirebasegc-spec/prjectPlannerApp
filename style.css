@@ -4210,3 +4210,27 @@ textarea:focus-visible {
   }
   .app-shell.sidebar-collapsed .sidebar-toggle { position: static; }
 }
+
+
+/* Dashboard view: portfolio metrics plus a concise, actionable task overview. */
+#dashboardView { display: grid; gap: 16px; min-width: 0; }
+#dashboardView.is-hidden { display: none !important; }
+.dashboard-work-panel { min-width: 0; padding: 22px; border: 1px solid var(--ui-border, #d7e0ec); border-radius: 13px; background: #fff; box-shadow: 0 2px 7px rgba(22, 42, 74, .035); }
+.dashboard-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 15px; }
+.dashboard-panel-heading .brand-kicker { margin: 0 0 5px; color: #71839a; font-size: .67rem; letter-spacing: .12em; }
+.dashboard-panel-heading h2 { margin: 0 0 5px; color: #183454; font-size: 1.2rem; letter-spacing: -.025em; }
+.dashboard-panel-heading p:not(.brand-kicker) { margin: 0; color: #718198; font-size: .84rem; }
+.dashboard-preview-count { padding: 6px 10px; border: 1px solid #dce5ee; border-radius: 999px; color: #51677e; background: #f7f9fc; font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.dashboard-task-list { display: grid; gap: 8px; }
+.dashboard-task-row { display: flex; width: 100%; min-width: 0; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; border: 1px solid #e1e8f0; border-radius: 9px; color: #203b59; background: #fff; text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.dashboard-task-row:hover { border-color: #a9c0d2; background: #f8fbfc; }
+.dashboard-task-main { display: grid; gap: 4px; min-width: 0; }
+.dashboard-task-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .88rem; font-weight: 700; }
+.dashboard-task-main small { overflow: hidden; color: #77879a; text-overflow: ellipsis; white-space: nowrap; font-size: .76rem; }
+.dashboard-task-status { flex: 0 0 auto; padding: 5px 9px; border-radius: 999px; background: #f0f4f8; color: #53677c; font-size: .72rem; font-weight: 700; }
+.dashboard-task-status.status-todo { color: #9a6700; background: #fff2d7; }
+.dashboard-task-status.status-inprogress { color: #175cd3; background: #e8f1ff; }
+.dashboard-task-status.status-done { color: #067647; background: #dcfae6; }
+.dashboard-empty { display: grid; gap: 5px; padding: 22px; border: 1px dashed #cbd7e3; border-radius: 10px; color: #344b5c; }
+.dashboard-empty span { color: #718198; font-size: .84rem; }
+@media (max-width: 600px) { .dashboard-work-panel { padding: 15px; } .dashboard-task-row { align-items: flex-start; padding: 11px; } .dashboard-task-status { font-size: .67rem; } }
