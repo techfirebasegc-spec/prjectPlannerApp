@@ -814,7 +814,20 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       if (group.lifecycle === "Draft" && task.raw.userStoryStatus) group.lifecycle = task.raw.userStoryStatus;
     });
     const allStories = [...groups.values()];
-    const stories = allStories.filter(story => appState.showArchivedStories ? story.archived : !story.archived).sort((a,b) => a.title.localeCompare(b.title));
+    const storySearch = appState.filters.search;
+    const stories = allStories.filter((story) => {
+      if (appState.showArchivedStories ? !story.archived : story.archived) return false;
+      if (appState.filters.pi !== "all" && String(story.pi || "") !== appState.filters.pi) return false;
+      if (appState.filters.feature !== "all" && String(story.feature || "") !== appState.filters.feature) return false;
+      if (appState.filters.sprint !== "all" && !story.tasks.some((task) => task.sprint === appState.filters.sprint)) return false;
+      if (appState.filters.assignee !== "all" && !story.tasks.some((task) => task.assignee === appState.filters.assignee)) return false;
+      if (storySearch) {
+        const storyText = [story.title, story.description, ...(story.acceptanceCriteria || [])].join(" ").toLowerCase();
+        if (!storyText.includes(storySearch) && story.tasks.length === 0) return false;
+        if (!storyText.includes(storySearch) && story.tasks.length > 0 && !story.tasks.some((task) => matchesTaskSearch(task, storySearch))) return false;
+      }
+      return true;
+    }).sort((a,b) => a.title.localeCompare(b.title));
     els.storiesSummary.textContent = `${stories.length} ${appState.showArchivedStories ? "archived" : "active"} stor${stories.length === 1 ? "y" : "ies"} · ${stories.reduce((n,s) => n+s.tasks.length,0)} linked tasks`;
     if (!stories.length) {
       els.storiesGrid.innerHTML = '<div class="stories-empty"><strong>No user stories yet</strong><p>Create your first story. You can add tasks whenever you are ready.</p><button class="save-task-btn" type="button" data-create-story>+ Create User Story</button></div>';
