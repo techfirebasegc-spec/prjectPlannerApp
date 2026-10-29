@@ -2685,3 +2685,152 @@ body { background: #f3f6fb; }
   .story-card-actions { gap: 6px; }
   .story-card-actions button { min-height: 35px; }
 }
+
+
+/* Arcflow unified workspace design system — applied across every application view */
+:root {
+  --bg: #f4f7fc;
+  --surface: #ffffff;
+  --surface-soft: #f8faff;
+  --text: #14213d;
+  --text-muted: #687995;
+  --border: #e2e9f4;
+  --primary: #315efb;
+  --primary-hover: #244de0;
+  --radius-card: 12px;
+  --radius-control: 9px;
+  --shadow-card: 0 2px 8px rgba(25, 48, 88, .035);
+}
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--text); }
+button, input, select, textarea { font: inherit; }
+button { transition: background-color .14s ease, border-color .14s ease, box-shadow .14s ease, transform .14s ease; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(49, 94, 251, .24);
+  outline-offset: 2px;
+}
+.sidebar {
+  background: #fbfcff;
+  border-right: 1px solid var(--border);
+}
+.topbar {
+  min-height: 54px;
+  background: rgba(255,255,255,.94);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(25,48,88,.025);
+}
+.view-switch {
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #edf2fa;
+}
+.view-btn {
+  min-height: 36px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #536582;
+  font-weight: 600;
+}
+.view-btn:hover { background: rgba(255,255,255,.75); color: #1e3f80; }
+.view-btn.is-active {
+  border-color: #e1e9f7;
+  background: #fff;
+  color: var(--primary);
+  box-shadow: 0 1px 3px rgba(25,48,88,.07);
+}
+.overview-card, .metric-card, .chart-card, .profile-card, .progress-panel, .stories-toolbar,
+.list-toolbar, .story-card, .knowledge-card, .knowledge-panel, .insights-header {
+  border-color: var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.overview-card { padding: 14px 16px; }
+.overview-card p { margin-bottom: 3px; }
+.overview-card strong { font-size: 1.12rem; }
+.overview-card small { font-size: .72rem; }
+.filter-select, input, select, textarea {
+  border-color: #dbe4f1;
+  border-radius: var(--radius-control);
+}
+.filter-select { min-height: 38px; background-color: #fff; }
+input:hover, select:hover, textarea:hover { border-color: #c4d2e6; }
+.save-task-btn, .primary-btn, .button-primary {
+  border-radius: 9px;
+  box-shadow: 0 2px 5px rgba(49,94,251,.12);
+}
+.save-task-btn:hover, .primary-btn:hover, .button-primary:hover { transform: translateY(-1px); }
+.board { gap: 12px; }
+.column {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: rgba(255,255,255,.58);
+}
+.column-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.task-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(25,48,88,.025);
+}
+.task-card:hover { border-color: #c6d7f5; box-shadow: 0 5px 14px rgba(25,48,88,.07); }
+.list-toolbar { padding: 12px 14px; }
+.task-table-wrap { border: 1px solid var(--border); border-radius: 11px; overflow: auto; }
+.task-table { border-collapse: separate; border-spacing: 0; }
+.task-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f6f8fc;
+  color: #61718c;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .025em;
+}
+.task-table th, .task-table td { border-bottom: 1px solid #edf1f7; }
+.task-table tbody tr:hover { background: #f8faff; }
+.stories-toolbar { padding: 14px 18px; }
+.stories-toolbar h2, .insights-header h2, .profile-header h2 { letter-spacing: -.025em; }
+.stories-list-controls { margin: 10px 0 12px; }
+.story-card { padding: 13px 15px; }
+.story-card h3 { margin-top: 8px; font-size: .93rem; }
+.story-task-link { min-height: 34px; border-radius: 8px; }
+.story-card-actions { margin-top: 9px; }
+.metric-card { padding: 15px; }
+.chart-card { padding: 16px; }
+.insights-header { padding: 16px 18px; }
+.profile-header { margin-bottom: 14px; }
+.profile-card { padding: 14px; }
+.knowledge-view, .insights-view, .profile-view, .list-view, .stories-view { gap: 12px; }
+.modal {
+  background: rgba(15, 28, 52, .48);
+  backdrop-filter: blur(3px);
+}
+.modal-card {
+  border: 1px solid rgba(226,233,244,.95);
+  border-radius: 16px;
+  box-shadow: 0 22px 70px rgba(12, 28, 58, .22);
+}
+.task-detail-header, .task-editor-header {
+  border-bottom-color: var(--border);
+}
+.modal-close {
+  border-radius: 8px;
+  color: #64748b;
+}
+.modal-close:hover { background: #f1f5fb; color: #1e293b; }
+.badge, .status-badge, .story-task-count { font-weight: 650; }
+@media (max-width: 760px) {
+  .view-switch { display: flex; overflow-x: auto; max-width: 100%; }
+  .view-btn { flex: 0 0 auto; white-space: nowrap; }
+  .overview-card { padding: 11px; }
+  .stories-toolbar { gap: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
