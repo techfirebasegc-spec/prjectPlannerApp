@@ -2625,13 +2625,31 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         dependencies: appState.editingTaskId ? (appState.allTasks.find((item) => item.id === appState.editingTaskId)?.raw.dependencies || []) : [],
         updatedAt: serverTimestamp()
       };
+      const shouldCreateStoryRecord = Boolean(storyTitle && storyId && !appState.userStories.some((story) => story.id === storyId));
+      const storyRecordData = {
+        title: storyTitle,
+        description: taskData.userStoryDescription,
+        acceptanceCriteria: [],
+        piId: taskData.piId,
+        pi: taskData.pi,
+        featureId: taskData.featureId,
+        feature: taskData.feature,
+        startDate: taskData.startDate,
+        endDate: taskData.endDate,
+        lifecycle: "Draft",
+        createdBy: appState.user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        archived: false
+      };
       if (appState.editingTaskId) {
-        if (storyId && matchingStoryTasks.some((item) => !item.raw.userStoryId)) {
+        if (storyId && (matchingStoryTasks.some((item) => !item.raw.userStoryId) || shouldCreateStoryRecord)) {
           const batch = writeBatch(db);
           matchingStoryTasks.filter((item) => !item.raw.userStoryId && item.id !== appState.editingTaskId).forEach((item) => {
-            batch.update(taskReference(item.id), { userStoryId: storyId, updatedAt: serverTimestamp() });
+            batch.update(taskReference(item.id), { userStoryId: storyId, piId: taskData.piId, pi: taskData.pi, featureId: taskData.featureId, feature: taskData.feature, updatedAt: serverTimestamp() });
           });
           batch.update(taskReference(appState.editingTaskId), taskData);
+          if (shouldCreateStoryRecord) batch.set(userStoryReference(storyId), storyRecordData);
           await batch.commit();
         } else {
           await updateDoc(taskReference(appState.editingTaskId), taskData);
@@ -2644,11 +2662,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
           createdBy: appState.user.uid,
           createdAt: serverTimestamp()
         };
-        if (storyId && matchingStoryTasks.some((item) => !item.raw.userStoryId)) {
+        if (storyId && (matchingStoryTasks.some((item) => !item.raw.userStoryId) || shouldCreateStoryRecord)) {
           const batch = writeBatch(db);
           matchingStoryTasks.filter((item) => !item.raw.userStoryId).forEach((item) => {
-            batch.update(taskReference(item.id), { userStoryId: storyId, updatedAt: serverTimestamp() });
+            batch.update(taskReference(item.id), { userStoryId: storyId, piId: taskData.piId, pi: taskData.pi, featureId: taskData.featureId, feature: taskData.feature, updatedAt: serverTimestamp() });
           });
+          if (shouldCreateStoryRecord) batch.set(userStoryReference(storyId), storyRecordData);
           batch.set(doc(taskCollection()), newTaskData);
           await batch.commit();
         } else {
