@@ -34,7 +34,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     wipLimits: { todo: null, inprogress: null, done: null },
     dragTaskId: null,
     hierarchy: {},
-    charts: { burndown: null, velocity: null },
+    charts: { burndown: null, velocity: null, dashboardBurndown: null, dashboardVelocity: null },
     user: null,
     unsubscribeTasks: null,
     unsubscribeStories: null,
@@ -128,6 +128,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     dashboardViewBtn: document.getElementById("dashboardViewBtn"),
     dashboardView: document.getElementById("dashboardView"),
     dashboardTasks: document.getElementById("dashboardTasks"),
+    dashboardVelocityChart: document.getElementById("dashboardVelocityChart"),
+    dashboardBurndownChart: document.getElementById("dashboardBurndownChart"),
+    dashboardBurndownSubtitle: document.getElementById("dashboardBurndownSubtitle"),
     portfolioHero: document.getElementById("portfolioHero"),
     overviewStats: document.getElementById("overviewStats"),
     boardViewBtn: document.getElementById("boardViewBtn"),
@@ -769,6 +772,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   function renderDashboard(tasks) {
     if (!els.dashboardTasks) return;
     const ordered = sortTasks(tasks, appState.sortBy).slice(0, 6);
+    renderDashboardCharts();
     els.dashboardTasks.innerHTML = "";
     if (!ordered.length) {
       els.dashboardTasks.innerHTML = '<div class="dashboard-empty"><strong>No tasks match these filters</strong><span>Adjust the filters in the sidebar or create a task.</span></div>';
@@ -782,6 +786,60 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       item.addEventListener("click", () => openTaskModal(task));
       els.dashboardTasks.appendChild(item);
     });
+  }
+
+  function renderDashboardCharts() {
+    if (typeof window.Chart === "undefined") return;
+    const activeSprint = getActiveSprintMeta();
+    const sprintTasks = activeSprint ? activeSprint.tasks : [];
+
+    if (els.dashboardBurndownChart) {
+      if (appState.charts.dashboardBurndown) appState.charts.dashboardBurndown.destroy();
+      const canvas = els.dashboardBurndownChart;
+      if (!activeSprint || !activeSprint.startDate || !activeSprint.endDate) {
+        if (els.dashboardBurndownSubtitle) els.dashboardBurndownSubtitle.textContent = "No sprint date range available";
+        appState.charts.dashboardBurndown = new window.Chart(canvas, {
+          type: "line", data: { labels: [], datasets: [] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+      } else {
+        const dates = getDateRange(activeSprint.startDate, activeSprint.endDate);
+        const labels = dates.map((date) => `${date.getDate()}/${date.getMonth() + 1}`);
+        const total = sprintTasks.reduce((sum, task) => sum + pointsOf(task), 0);
+        const completed = sprintTasks.filter((task) => task.statusKey === "done").reduce((sum, task) => sum + pointsOf(task), 0);
+        const ideal = labels.map((_, index) => labels.length === 1 ? 0 : Number((total - (total * index) / (labels.length - 1)).toFixed(2)));
+        const remaining = Math.max(total - completed, 0);
+        // No daily history is persisted: show a transparent current snapshot, not fabricated actual history.
+        const currentSnapshot = labels.map(() => remaining);
+        if (els.dashboardBurndownSubtitle) els.dashboardBurndownSubtitle.textContent = `${activeSprint.sprint} · ${formatDate(activeSprint.startDate)} – ${formatDate(activeSprint.endDate)}`;
+        appState.charts.dashboardBurndown = new window.Chart(canvas, {
+          type: "line",
+          data: { labels, datasets: [
+            { label: "Ideal Remaining", data: ideal, borderColor: "#8aa2bf", borderDash: [6, 4], tension: 0.2 },
+            { label: "Current Remaining (snapshot)", data: currentSnapshot, borderColor: "#0f5bd8", backgroundColor: "rgba(15, 91, 216, 0.08)", fill: false, tension: 0 }
+          ]},
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Story Points" } } } }
+        });
+      }
+    }
+
+    if (els.dashboardVelocityChart) {
+      if (appState.charts.dashboardVelocity) appState.charts.dashboardVelocity.destroy();
+      let eligible = [...appState.sprintCatalog];
+      if (appState.filters.pi !== "all") eligible = eligible.filter((sprint) => sprint.pi === appState.filters.pi);
+      const sprints = eligible.slice(-8);
+      const labels = sprints.map((sprint) => `${sprint.pi} · ${sprint.sprint}`);
+      const committed = sprints.map((sprint) => sprint.tasks.reduce((sum, task) => sum + pointsOf(task), 0));
+      const done = sprints.map((sprint) => sprint.tasks.filter((task) => task.statusKey === "done").reduce((sum, task) => sum + pointsOf(task), 0));
+      appState.charts.dashboardVelocity = new window.Chart(els.dashboardVelocityChart, {
+        type: "bar",
+        data: { labels, datasets: [
+          { label: "Committed", data: committed, backgroundColor: "#b8d4fb" },
+          { label: "Completed", data: done, backgroundColor: "#2c78df" }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Story Points" } } }, plugins: { legend: { position: "bottom" } } }
+      });
+    }
   }
 
   function matchesTaskSearch(task, searchValue) {
