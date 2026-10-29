@@ -325,8 +325,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       appState.hierarchy = groupByHierarchy(appState.allTasks);
       appState.sprintCatalog = buildSprintCatalog(appState.allTasks);
 
-      populateFilters(appState.allTasks);
       populateCalendarMonthOptions();
+      // Populate PI/Sprint/Feature immediately; await assignee options from the
+      // same directory/member source as the task editor before applying filters.
+      await populateFilters(appState.allTasks);
       applyPreferencesToControls();
       setActiveView(appState.activeView, false);
       applyFiltersAndRender();
@@ -624,11 +626,30 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     });
   }
 
-  function populateFilters(tasks) {
+  async function populateFilters(tasks) {
     fillSelect(els.piFilter, collectUnique(tasks, "pi"), "All PI");
     fillSelect(els.sprintFilter, collectUnique(tasks, "sprint"), "All Sprints");
     fillSelect(els.featureFilter, collectUnique(tasks, "feature"), "All Features");
-    fillSelect(els.assigneeFilter, collectUnique(tasks, "assignee"), "All Assignees");
+    const selectedAssignee = appState.filters.assignee;
+    try {
+      const members = await fetchAssignableMembers();
+      // Match the task editor's actual assignee directory/project-members source,
+      // while retaining legacy names already stored on existing tasks.
+      const names = [...new Set([
+        ...members.map((member) => String(member.displayName || "").trim()).filter(Boolean),
+        ...tasks.map((task) => String(task.assignee || "").trim()).filter((name) => name && name !== "Unassigned")
+      ])].sort((a, b) => a.localeCompare(b));
+      fillSelect(els.assigneeFilter, names, "All Assignees");
+      els.assigneeFilter.value = names.includes(selectedAssignee) ? selectedAssignee : "all";
+      appState.filters.assignee = els.assigneeFilter.value;
+    } catch (error) {
+      console.error("Could not load assignee filter options", error);
+      // Fail visibly and safely back to task-backed options rather than leaving
+      // an empty selector or breaking the rest of the board.
+      fillSelect(els.assigneeFilter, collectUnique(tasks, "assignee"), "All Assignees");
+      els.assigneeFilter.value = collectUnique(tasks, "assignee").includes(selectedAssignee) ? selectedAssignee : "all";
+      appState.filters.assignee = els.assigneeFilter.value;
+    }
   }
 
   function collectUnique(tasks, key) {
@@ -2000,23 +2021,27 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.newTaskName.focus();
   }
 
-  async function populateTaskAssignees(task = null) {
-    const select = els.taskEditorForm.elements.namedItem("assigneeUid");
-    if (!select) return;
-    const previousUid = task?.raw?.assigneeUid || "";
-    const legacyName = task?.raw?.assignee || "";
-    select.innerHTML = '<option value="">Unassigned</option>';
+  async function fetchAssignableMembers() {
     let members = [];
     if (appState.activeProjectId === "default") {
-      // The shared Default Project has no project-members collection, so use the
-      // signed-in-user directory and retain compatibility with existing assignments.
+      // Default Project uses the same directory from which task assignment choices are built.
       const snapshot = await getDocs(query(collection(db, "plannerDirectory"), orderBy("displayName")));
       members = snapshot.docs.map((item) => item.data()).filter((user) => user.uid && user.displayName);
     } else {
       const snapshot = await getDocs(collection(db, "plannerProjects", appState.activeProjectId, "members"));
       members = snapshot.docs.map((item) => item.data()).filter((member) => member.uid && member.displayName);
     }
-    const uniqueMembers = [...new Map(members.map((member) => [member.uid, member])).values()]
+    return [...new Map(members.map((member) => [member.uid, member])).values()]
+      .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
+  }
+
+  async function populateTaskAssignees(task = null) {
+    const select = els.taskEditorForm.elements.namedItem("assigneeUid");
+    if (!select) return;
+    const previousUid = task?.raw?.assigneeUid || "";
+    const legacyName = task?.raw?.assignee || "";
+    select.innerHTML = '<option value="">Unassigned</option>';
+    const uniqueMembers = await fetchAssignableMembers()
       .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
     uniqueMembers.forEach((member) => {
       const option = document.createElement("option");
