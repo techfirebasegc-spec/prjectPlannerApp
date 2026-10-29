@@ -17,6 +17,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   const appState = {
     allTasks: [],
     userStories: [],
+    memberDirectory: [],
     filteredTasks: [],
     sprintCatalog: [],
     filters: {
@@ -775,7 +776,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     loadPlanningRecords();
     appState.unsubscribeStories = onSnapshot(userStoryCollection(), (snapshot) => {
       appState.userStories = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      applyFiltersAndRender();
+      fetchAssignableMembers().then(() => applyFiltersAndRender()).catch((error) => { console.error("Could not resolve User Story owners", error); applyFiltersAndRender(); });
     }, (error) => {
       console.error("Could not load user stories", error);
       appState.userStories = [];
@@ -1439,7 +1440,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
           <div class="story-detail-layout">
             <div class="story-detail-column">
               <section class="story-detail-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">◎</span><div><h5>Overview</h5><p>Lifecycle and delivery summary</p></div></div>
-                <div class="story-detail-stats"><div><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></div><div><small>Owner</small><strong>${escapeHtml(story.owner || "Unassigned")}</strong></div><div><small>Total tasks</small><strong>${story.tasks.length}</strong></div><div><small>Completed</small><strong>${counts.done} / ${story.tasks.length}</strong></div><div><small>Story points</small><strong>${storyPoints}</strong></div></div>
+                <div class="story-detail-stats"><div><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></div><div><small>Owner</small><strong>${escapeHtml(story.owner || appState.memberDirectory.find((member) => member.uid === story.ownerUid)?.displayName || (story.ownerUid ? "Assigned member" : "Unassigned"))}</strong></div><div><small>Total tasks</small><strong>${story.tasks.length}</strong></div><div><small>Completed</small><strong>${counts.done} / ${story.tasks.length}</strong></div><div><small>Story points</small><strong>${storyPoints}</strong></div></div>
                 <div class="story-detail-status-line"><span class="story-status-dot todo"></span>To do <strong>${counts.todo}</strong><span class="story-status-dot progress"></span>In progress <strong>${counts.inprogress}</strong><span class="story-status-dot done"></span>Done <strong>${counts.done}</strong></div>
               </section>
               <section class="story-detail-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">✓</span><div><h5>Acceptance criteria</h5><p>Conditions for considering this story complete</p></div><span class="story-detail-count">${story.acceptanceCriteria.length}</span></div>
@@ -2708,10 +2709,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       members = snapshot.docs.map((item) => item.data()).filter((member) => member.uid && member.displayName);
     }
     // Always return a predictable array of assignable identities.
-    return [...new Map((Array.isArray(members) ? members : [])
+    const uniqueMembers = [...new Map((Array.isArray(members) ? members : [])
       .filter((member) => member && member.uid && member.displayName)
       .map((member) => [member.uid, member])).values()]
       .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
+    appState.memberDirectory = uniqueMembers;
+    return uniqueMembers;
   }
 
   async function populateTaskAssignees(task = null) {
