@@ -451,111 +451,144 @@ body {
   background: #eaf4ff;
 }
 
+/* Agile Insights: compact the monthly planner so metrics and charts are visible sooner. */
+.insights-view {
+  gap: 12px;
+}
+
+.sprint-legend {
+  min-height: 0;
+}
+
 .sprint-calendar {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .cal-day,
 .cal-head {
   border: 1px solid #d6e0ee;
-  border-radius: 10px;
-  min-height: 64px;
-  padding: 8px;
+  border-radius: 9px;
+  min-height: 48px;
+  padding: 6px 7px;
   background: #fff;
 }
 
 .cal-head {
-  min-height: auto;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #f4f8fd;
   text-align: center;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
   font-weight: 700;
   color: #3f5b7d;
 }
 
+.cal-day {
+  min-width: 0;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+
+.cal-day:not(.muted):hover {
+  border-color: #9dbbe0;
+  background: #fbfdff;
+}
+
 .cal-day.muted {
-  opacity: 0.35;
+  opacity: .32;
+  background: #f8fafd;
 }
 
 .cal-day-num {
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: .78rem;
+  font-weight: 750;
   color: #24476d;
 }
 
 .cal-sprints {
-  margin-top: 6px;
+  margin-top: 4px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .cal-pill {
-  border-radius: 999px;
-  background: #dfeeff;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 5px;
+  background: #e5efff;
   color: #154a86;
-  font-size: 0.68rem;
-  padding: 3px 6px;
-  line-height: 1.1;
+  font-size: .65rem;
+  padding: 3px 5px;
+  line-height: 1.15;
 }
 
 .agile-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
 .metric-card {
-  background: #fff;
-  border: 1px solid #d7e1ee;
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  padding: 10px 12px;
+  min-width: 0;
+  padding: 12px 14px;
 }
 
 .metric-card p {
-  margin: 0;
-  font-size: 0.8rem;
-  color: #5f7390;
+  font-size: .76rem;
+  letter-spacing: .01em;
 }
 
 .metric-card strong {
-  display: block;
-  margin-top: 6px;
-  font-size: 1.15rem;
+  margin-top: 4px;
+  font-size: 1.35rem;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
 }
 
 .chart-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  align-items: stretch;
 }
 
 .chart-card {
-  background: #fff;
-  border: 1px solid #d7e1ee;
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-  padding: 12px;
+  min-width: 0;
+  padding: 14px 16px 12px;
 }
 
-.chart-card h3 {
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.chart-card p {
-  margin: 4px 0 10px;
-  color: #617794;
-  font-size: 0.8rem;
+.chart-card header {
+  min-height: 42px;
 }
 
 .chart-card canvas {
   display: block;
   width: 100% !important;
-  height: 220px !important;
+  height: 190px !important;
+}
+
+/* Give the empty-sprint state a clear, intentional treatment. */
+.sprint-empty-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px dashed #c9d8eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #5c7391;
+  background: #f8fbff;
+  font-size: .82rem;
+}
+
+.sprint-empty-state strong {
+  color: #24476d;
+  font-weight: 700;
 }
 
 .column {
@@ -4496,4 +4529,19 @@ textarea:focus-visible {
   .list-toolbar { align-items: flex-start; flex-direction: column; padding: 16px; }
   .list-toolbar-actions { width: 100%; flex-wrap: wrap; }
   .list-title-context { font-size: .8rem; }
+}
+
+@media (max-width: 1100px) {
+  .chart-grid { grid-template-columns: 1fr; }
+  .chart-card canvas { height: 210px !important; }
+}
+
+@media (max-width: 760px) {
+  .sprint-calendar { gap: 4px; }
+  .cal-day, .cal-head { padding: 5px; border-radius: 7px; }
+  .cal-day { min-height: 44px; }
+  .cal-head { font-size: .68rem; }
+  .cal-pill { font-size: .58rem; padding: 2px 4px; }
+  .agile-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .chart-card { padding: 12px; }
 }
