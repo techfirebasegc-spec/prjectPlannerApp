@@ -2135,3 +2135,176 @@ body { background: #f3f6fb; }
 .knowledge-status-flow{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);align-items:stretch;gap:10px;margin:14px 0}.knowledge-status-flow>div{padding:13px;border:1px solid #dce5f2;border-radius:12px;background:#fbfcff}.knowledge-status-flow>div p{margin-bottom:0;font-size:13px}.knowledge-status-flow>span{align-self:center;color:#6c85c5;font-weight:800}
 .knowledge-checklist{padding-left:22px}.knowledge-checklist li{margin:8px 0}.knowledge-example{padding:17px;border:1px solid #dce5f2;border-radius:13px;background:#fbfcff}.knowledge-example p{margin:7px 0}
 @media(max-width:720px){.knowledge-view{padding:0}.knowledge-toc{position:static}.knowledge-section{grid-template-columns:1fr;gap:8px}.knowledge-term-grid{grid-template-columns:1fr}.knowledge-status-flow{grid-template-columns:1fr}.knowledge-status-flow>span{transform:rotate(90deg);justify-self:center}.knowledge-hero{padding:23px 19px}}
+
+
+/* User Stories view polish: calmer hierarchy, compact cards, cleaner task rows */
+.stories-view {
+  gap: 18px;
+}
+.stories-toolbar {
+  padding: 22px 24px;
+  border-color: #e3e9f2;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(25, 42, 70, .025);
+}
+.stories-toolbar h2 {
+  color: #172b4d;
+  font-size: 1.28rem;
+  letter-spacing: -.025em;
+}
+.stories-toolbar p {
+  font-size: .88rem;
+  line-height: 1.5;
+}
+.stories-toolbar .save-task-btn {
+  min-height: 42px;
+  padding: 11px 18px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+.stories-summary {
+  margin: -2px 0 -5px;
+  font-size: .8rem;
+  font-weight: 600;
+  color: #73819a;
+}
+.stories-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.story-card {
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  border: 1px solid #e3eaf3;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgba(25, 42, 70, .025);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.story-card:hover {
+  border-color: #cbd9ed;
+  box-shadow: 0 8px 22px rgba(25, 42, 70, .06);
+  transform: translateY(-1px);
+}
+.story-card-label {
+  color: #74839b;
+  font-size: .68rem;
+  letter-spacing: .07em;
+}
+.story-task-count {
+  padding: 5px 9px;
+  background: #f0f5ff;
+  color: #315da8;
+  font-size: .72rem;
+}
+.story-card h3 {
+  margin: 14px 0 5px;
+  color: #172b4d;
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -.02em;
+  line-height: 1.35;
+}
+.story-description {
+  min-height: 34px;
+  color: #71809a;
+  font-size: .82rem;
+  line-height: 1.55;
+}
+.story-status-summary {
+  gap: 6px;
+  margin: 12px 0 14px;
+}
+.story-status-summary span {
+  padding: 5px 8px;
+  border: 1px solid #edf1f6;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #66758d;
+  font-size: .7rem;
+  font-weight: 650;
+}
+.story-metrics {
+  gap: 8px;
+  margin: 12px 0;
+}
+.story-metrics > span {
+  gap: 5px;
+  padding: 10px 11px;
+  border-color: #e8edf4;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+.story-metrics small {
+  color: #7b879b;
+  font-size: .66rem;
+  font-weight: 650;
+  letter-spacing: .025em;
+  text-transform: none;
+}
+.story-metrics strong {
+  color: #243956;
+  font-size: 1rem;
+  font-weight: 750;
+}
+.story-task-list {
+  gap: 7px;
+}
+.story-task-link {
+  min-height: 38px;
+  padding: 9px 10px;
+  border-color: #e8edf4;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color .15s ease, background .15s ease;
+}
+.story-task-link:hover {
+  border-color: #b9cdf0;
+  background: #f8faff;
+}
+.story-task-link span {
+  color: #344765;
+  font-size: .78rem;
+  font-weight: 550;
+}
+.story-task-link small {
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: #f2f5f9;
+  color: #71809a;
+  font-size: .67rem;
+}
+.story-card-actions {
+  gap: 8px;
+  margin-top: 14px;
+}
+.story-edit,
+.story-add-task {
+  min-height: 38px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.story-edit {
+  border-color: #dce4ef;
+  color: #435674;
+}
+.story-add-task {
+  border-style: solid;
+  border-color: #dce7f7;
+  background: #f7faff;
+  color: #2858a5;
+}
+.story-add-task:hover {
+  border-color: #b5caf0;
+  background: #eef4ff;
+}
+@media (max-width: 1180px) {
+  .stories-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .stories-grid { grid-template-columns: minmax(0, 1fr); }
+  .stories-toolbar { padding: 18px; }
+  .story-card { padding: 16px; }
+}
