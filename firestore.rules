@@ -30,7 +30,7 @@ service cloud.firestore {
     function validUserStory(data) {
       return data.keys().hasOnly([
           "title", "description", "acceptanceCriteria", "pi", "feature",
-          "startDate", "endDate", "lifecycle", "createdBy", "createdAt", "updatedAt"
+          "startDate", "endDate", "lifecycle", "createdBy", "createdAt", "updatedAt", "archived"
         ])
         && data.title is string && data.title.size() > 0 && data.title.size() <= 160
         && data.description is string && data.description.size() <= 1500
@@ -39,7 +39,8 @@ service cloud.firestore {
         && data.feature is string && data.feature.size() <= 120
         && data.startDate is string && data.endDate is string
         && data.lifecycle in ["Draft", "Ready", "In Progress", "In Review", "Accepted"]
-        && data.createdBy is string;
+        && data.createdBy is string
+        && (!data.keys().hasAll(["archived"]) || data.archived is bool);
     }
 
     function validNewTask(data) {
