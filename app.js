@@ -136,6 +136,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     listSummary: document.getElementById("listSummary"),
     selectAllTasks: document.getElementById("selectAllTasks"),
     archiveSelectedTasksBtn: document.getElementById("archiveSelectedTasksBtn"),
+    bulkTaskStatus: document.getElementById("bulkTaskStatus"),
+    applyBulkStatusBtn: document.getElementById("applyBulkStatusBtn"),
     insightsView: document.getElementById("insightsView"),
     profileView: document.getElementById("profileView"),
     profileFirstName: document.getElementById("profileFirstName"),
@@ -305,6 +307,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.sortBy.addEventListener("change", onSortChange);
     els.selectAllTasks.addEventListener("change", toggleAllVisibleTasks);
     els.archiveSelectedTasksBtn.addEventListener("click", archiveSelectedTasks);
+    els.applyBulkStatusBtn.addEventListener("click", updateSelectedTaskStatuses);
     document.querySelectorAll(".list-sort-button").forEach((button) => {
       button.addEventListener("click", () => onListSort(button.dataset.listSort));
     });
@@ -904,6 +907,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const selected = archivable.filter((task) => appState.selectedTaskIds.has(task.id));
     els.archiveSelectedTasksBtn.disabled = selected.length === 0;
     els.archiveSelectedTasksBtn.textContent = selected.length ? `Archive selected (${selected.length})` : "Archive selected";
+    els.applyBulkStatusBtn.disabled = selected.length === 0;
+    els.applyBulkStatusBtn.textContent = selected.length ? `Update status (${selected.length})` : "Update status";
     els.selectAllTasks.checked = archivable.length > 0 && selected.length === archivable.length;
     els.selectAllTasks.indeterminate = selected.length > 0 && selected.length < archivable.length;
     els.selectAllTasks.disabled = archivable.length === 0;
@@ -916,6 +921,40 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       else appState.selectedTaskIds.delete(task.id);
     });
     renderList(appState.filteredTasks);
+  }
+
+  async function updateSelectedTaskStatuses() {
+    const selected = appState.allTasks.filter((task) => appState.selectedTaskIds.has(task.id) && canArchiveTask(task));
+    if (!selected.length) return;
+
+    const statusByKey = { todo: "To Do", inprogress: "In Progress", done: "Done" };
+    const nextStatus = statusByKey[els.bulkTaskStatus.value];
+    if (!nextStatus) return;
+
+    const unchanged = selected.filter((task) => task.status !== nextStatus);
+    if (!unchanged.length) {
+      window.alert("The selected tasks already have that status.");
+      return;
+    }
+    if (!window.confirm(`Move ${unchanged.length} selected task${unchanged.length === 1 ? "" : "s"} to "${nextStatus}"?`)) return;
+
+    els.applyBulkStatusBtn.disabled = true;
+    els.applyBulkStatusBtn.textContent = "Updating...";
+    try {
+      for (let start = 0; start < unchanged.length; start += 450) {
+        const batch = writeBatch(db);
+        unchanged.slice(start, start + 450).forEach((task) => {
+          batch.update(taskReference(task.id), { status: nextStatus, updatedAt: serverTimestamp() });
+        });
+        await batch.commit();
+      }
+      appState.selectedTaskIds.clear();
+    } catch (error) {
+      console.error("Could not update selected task statuses", error);
+      window.alert("Some selected tasks could not be updated. Please review the board and try again.");
+    } finally {
+      updateBulkArchiveControls();
+    }
   }
 
   async function archiveSelectedTasks() {
