@@ -560,9 +560,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const relatedTasks = appState.allTasks.filter((task) =>
         (story.id && String(task.raw.userStoryId || "") === story.id)
         || (!task.raw.userStoryId && String(task.raw.userStory || "").trim().toLocaleLowerCase() === String(story.title || "").trim().toLocaleLowerCase()));
-      const feature = appState.features.find((item) => item.id === story.featureId) || uniqueFeatureByName(story.feature)
-        || (new Set(relatedTasks.map((task) => uniqueFeatureByName(task.raw.feature)?.id).filter(Boolean)).size === 1
-          ? uniqueFeatureByName(relatedTasks.map((task) => task.raw.feature).find((name) => uniqueFeatureByName(name))) : null);
+      const taskFeatureCandidates = relatedTasks.map((task) => uniqueFeatureByName(task.raw.feature)).filter(Boolean);
+      const taskFeatureIds = new Set(taskFeatureCandidates.map((feature) => feature.id));
+      const inferredTaskFeature = taskFeatureIds.size === 1 ? taskFeatureCandidates[0] : null;
+      const feature = appState.features.find((item) => item.id === story.featureId) || uniqueFeatureByName(story.feature) || inferredTaskFeature;
       if (!feature) { skipped++; continue; }
       storyFeatureMap.set(story.id, feature);
       const patch = {};
