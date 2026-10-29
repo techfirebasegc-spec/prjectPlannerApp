@@ -40,6 +40,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     unsubscribeStories: null,
     editingStoryId: null,
     showArchivedStories: false,
+    storyViewMode: "cards",
+    expandedStoryTaskIds: new Set(),
     unsubscribeProjects: null,
     unsubscribeOwnedProjects: null,
     unsubscribeUserProjectPointers: null,
@@ -148,6 +150,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     storiesView: document.getElementById("storiesView"),
     storiesGrid: document.getElementById("storiesGrid"),
     toggleArchivedStoriesBtn: document.getElementById("toggleArchivedStoriesBtn"),
+    storyViewModeCardsBtn: document.getElementById("storyViewModeCardsBtn"),
+    storyViewModeListBtn: document.getElementById("storyViewModeListBtn"),
     storiesSummary: document.getElementById("storiesSummary"),
     userStoryOptions: document.getElementById("userStoryOptions"),
     taskUserStoryInput: document.getElementById("taskUserStoryInput"),
@@ -376,6 +380,17 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
     els.sidebarStoriesBtn?.addEventListener("click", () => { setActiveView("stories"); if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true); });
     els.newStoryBtn.addEventListener("click", () => openStoryEditor());
+    const setStoryViewMode = (mode) => {
+      appState.storyViewMode = mode;
+      els.storiesGrid.classList.toggle("stories-grid-list", mode === "list");
+      els.storyViewModeCardsBtn.classList.toggle("is-active", mode === "cards");
+      els.storyViewModeListBtn.classList.toggle("is-active", mode === "list");
+      els.storyViewModeCardsBtn.setAttribute("aria-pressed", String(mode === "cards"));
+      els.storyViewModeListBtn.setAttribute("aria-pressed", String(mode === "list"));
+      renderUserStories(appState.filteredTasks);
+    };
+    els.storyViewModeCardsBtn.addEventListener("click", () => setStoryViewMode("cards"));
+    els.storyViewModeListBtn.addEventListener("click", () => setStoryViewMode("list"));
     els.toggleArchivedStoriesBtn.addEventListener("click", () => {
       appState.showArchivedStories = !appState.showArchivedStories;
       els.toggleArchivedStoriesBtn.textContent = appState.showArchivedStories ? "Show active" : "Show archived";
@@ -802,13 +817,19 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         <h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p>${criteria}
         <div class="story-status-summary"><span>${counts.todo} To do</span><span>${counts.inprogress} In progress</span><span>${counts.done} Done</span></div>
         <div class="story-metrics"><span><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></span><span><small>Total task points</small><strong>${storyPoints}</strong></span></div>
-        ${story.tasks.length ? `<div class="story-task-list">${story.tasks.slice(0,2).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${story.tasks.length>2?`<p class="story-more">+${story.tasks.length-2} more tasks</p>`:""}</div>` : '<div class="story-no-tasks"><span aria-hidden="true">＋</span><div><strong>No tasks yet</strong><p>Add tasks when you are ready to break down this story.</p></div></div>'}
+        ${story.tasks.length ? `<div class="story-task-list">${(appState.storyViewMode === "list" || appState.expandedStoryTaskIds.has(story.id) ? story.tasks : story.tasks.slice(0,2)).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${appState.storyViewMode === "cards" && story.tasks.length>2 ? `<button type="button" class="story-expand-tasks" data-expand-story-tasks="${escapeHtml(story.id)}">${appState.expandedStoryTaskIds.has(story.id) ? "Show fewer tasks" : `Show all ${story.tasks.length} tasks`}</button>` : ""}</div>` : '<div class="story-no-tasks"><span aria-hidden="true">＋</span><div><strong>No tasks yet</strong><p>Add tasks when you are ready to break down this story.</p></div></div>'}
         <div class="story-card-actions">
           <button type="button" class="story-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit</button>
           ${story.archived ? "" : `<button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>`}
           <button type="button" class="story-archive-action" data-archive-story-id="${escapeHtml(story.id)}" data-archive-story-title="${escapeHtml(story.title)}">${story.archived ? "Restore" : "Archive"}</button>
         </div></article>`;
     }).join("");
+    els.storiesGrid.querySelectorAll("[data-expand-story-tasks]").forEach(button => button.addEventListener("click", () => {
+      const id = button.dataset.expandStoryTasks;
+      if (appState.expandedStoryTaskIds.has(id)) appState.expandedStoryTaskIds.delete(id);
+      else appState.expandedStoryTaskIds.add(id);
+      renderUserStories(appState.filteredTasks);
+    }));
     els.storiesGrid.querySelectorAll("[data-story-task]").forEach(button => button.addEventListener("click", () => {
       const task = appState.allTasks.find(item => item.id === button.dataset.storyTask); if (task) openTaskModal(task);
     }));
