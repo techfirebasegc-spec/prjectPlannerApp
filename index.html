@@ -19,7 +19,7 @@
       <nav class="sidebar-shortcuts" aria-label="Collapsed sidebar">
         <button type="button" data-sidebar-expand title="Show filters" aria-label="Show filters">⌕</button>
         <button type="button" data-sidebar-expand title="Show board controls" aria-label="Show board controls">☷</button>
-        <button type="button" id="sidebarStoriesBtn" class="sidebar-story-shortcut" title="Open User Stories" aria-label="Open User Stories">User Stories</button>
+        <button type="button" id="sidebarStoriesBtn" class="sidebar-story-shortcut" title="Open User Stories" aria-label="Open User Stories">Stories</button>
       </nav>
       <div class="brand-block">
         <p class="brand-kicker">Portfolio View</p>
@@ -34,20 +34,23 @@
           <option value="all">All PI</option>
         </select>
 
-        <label for="sprintFilter">Sprint</label>
-        <select id="sprintFilter" class="filter-select">
-          <option value="all">All Sprints</option>
-        </select>
-
-        <label for="featureFilter">Feature</label>
-        <select id="featureFilter" class="filter-select">
-          <option value="all">All Features</option>
-        </select>
-
-        <label for="assigneeFilter">Assignee</label>
-        <select id="assigneeFilter" class="filter-select">
-          <option value="all">All Assignees</option>
-        </select>
+        <details class="advanced-filter-details">
+          <summary>More filters <span>＋</span></summary>
+          <div class="advanced-filter-fields">
+            <label for="sprintFilter">Sprint</label>
+            <select id="sprintFilter" class="filter-select">
+              <option value="all">All Sprints</option>
+            </select>
+            <label for="featureFilter">Feature</label>
+            <select id="featureFilter" class="filter-select">
+              <option value="all">All Features</option>
+            </select>
+            <label for="assigneeFilter">Assignee</label>
+            <select id="assigneeFilter" class="filter-select">
+              <option value="all">All Assignees</option>
+            </select>
+          </div>
+        </details>
       </section>
 
       <section class="controls-panel">
@@ -105,14 +108,14 @@
       </header>
 
       <section class="view-switch" aria-label="View switcher">
-        <button id="dashboardViewBtn" class="view-btn is-active" type="button">Dashboard</button>
-        <button id="listViewBtn" class="view-btn" type="button">List View</button>
-        <button id="boardViewBtn" class="view-btn" type="button">Kanban View</button>
+        <button id="dashboardViewBtn" class="view-btn is-active" type="button">Overview</button>
+        <button id="listViewBtn" class="view-btn" type="button">Work Items</button>
+        <button id="boardViewBtn" class="view-btn" type="button">Board</button>
         <button id="storiesViewBtn" class="view-btn" type="button">User Stories</button>
-        <button id="piViewBtn" class="view-btn" type="button">Program Increments</button>
+        <button id="piViewBtn" class="view-btn" type="button">PIs</button>
         <button id="featuresViewBtn" class="view-btn" type="button">Features</button>
-        <button id="insightsViewBtn" class="view-btn" type="button">Agile Insights</button>
-        <button id="knowledgeViewBtn" class="view-btn" type="button">Knowledge Center</button>
+        <button id="insightsViewBtn" class="view-btn" type="button">Reports</button>
+        <button id="knowledgeViewBtn" class="view-btn" type="button">Knowledge</button>
         <button id="profileViewBtn" class="view-btn is-hidden" type="button">Profile</button>
       </section>
 
