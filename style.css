@@ -4686,3 +4686,12 @@ textarea:focus-visible {
 .task-advanced-grid label { min-width:0; }
 .task-advanced-grid .task-form-wide { grid-column:1/-1; }
 @media(max-width:560px) { .task-advanced-grid { grid-template-columns:1fr; } .task-advanced-grid .task-form-wide { grid-column:auto; } }
+
+
+/* Filter reset icon button */
+.filter-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+.filter-panel-heading h2 { margin:0; }
+.reset-filters-btn { display:inline-grid; place-items:center; width:32px; height:32px; flex:0 0 32px; border:1px solid #dce5ef; border-radius:9px; background:#fff; color:#60758e; cursor:pointer; transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease; }
+.reset-filters-btn:hover { color:#245ea8; border-color:#b9cde5; background:#f1f6fc; }
+.reset-filters-btn:active { transform:rotate(-20deg) scale(.96); }
+.reset-filters-btn:focus-visible { outline:2px solid #4c84c5; outline-offset:2px; }
