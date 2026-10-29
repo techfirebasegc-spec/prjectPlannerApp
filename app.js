@@ -1674,7 +1674,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         <label class="story-lifecycle-control" for="userStoryStatusSelect"><span>Story status</span>
           <select id="userStoryStatusSelect">${STORY_LIFECYCLE_STATES.map((value) => `<option value="${value}" ${value === state ? "selected" : ""}>${value}</option>`).join("")}</select>
         </label>
-        <p class="story-lifecycle-note">If multiple tasks belong to the same story, keep this status consistent across those tasks.</p>
+        <p class="story-lifecycle-note">Changing this status updates every task in this project with the same User Story title.</p>
       </section>`;
   }
 
