@@ -3993,3 +3993,34 @@ textarea:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   button, a { transition: none !important; }
 }
+
+
+/* Final toolbar color correction: keep project selector and New Task button aligned
+   with the dark navy toolbar instead of using a contrasting teal block. */
+.topbar .topbar-actions .project-select {
+  color: #f8fafc;
+  background-color: #23466f;
+  border-color: #527094;
+  box-shadow: none;
+}
+.topbar .topbar-actions .project-select:hover,
+.topbar .topbar-actions .project-select:focus {
+  background-color: #2b527e;
+  border-color: #7f9bbd;
+}
+.topbar .topbar-actions .new-task-btn {
+  color: #fff;
+  background: #315b8c;
+  border-color: #5279a7;
+  box-shadow: none;
+}
+.topbar .topbar-actions .new-task-btn:hover {
+  color: #fff;
+  background: #3b6b9f;
+  border-color: #7597bf;
+}
+.topbar .topbar-actions .new-task-btn:focus-visible,
+.topbar .topbar-actions .project-select:focus-visible {
+  outline: 3px solid rgba(203, 222, 245, .55);
+  outline-offset: 2px;
+}
