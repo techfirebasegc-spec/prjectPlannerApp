@@ -781,7 +781,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const affectedTasks = appState.allTasks.filter((task) =>
       String(task.raw.userStory || task.story || "").trim() === currentTitle
     );
-    const storyId = affectedTasks.find((task) => task.raw.userStoryId)?.raw.userStoryId || crypto.randomUUID();
+    const storyId = affectedTasks.find((task) => task.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id;
     try {
       for (let start = 0; start < affectedTasks.length; start += 450) {
         const batch = writeBatch(db);
@@ -1829,7 +1829,16 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         updatedAt: serverTimestamp()
       };
       if (appState.editingTaskId) {
-        await updateDoc(taskReference(appState.editingTaskId), taskData);
+        if (storyId && matchingStoryTasks.some((item) => !item.raw.userStoryId)) {
+          const batch = writeBatch(db);
+          matchingStoryTasks.filter((item) => !item.raw.userStoryId && item.id !== appState.editingTaskId).forEach((item) => {
+            batch.update(taskReference(item.id), { userStoryId: storyId, updatedAt: serverTimestamp() });
+          });
+          batch.update(taskReference(appState.editingTaskId), taskData);
+          await batch.commit();
+        } else {
+          await updateDoc(taskReference(appState.editingTaskId), taskData);
+        }
       } else {
         const newTaskData = {
           ...taskData,
