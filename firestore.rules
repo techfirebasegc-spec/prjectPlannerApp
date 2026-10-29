@@ -7,7 +7,7 @@ service cloud.firestore {
 
     function validTask(data) {
       return data.keys().hasOnly([
-          "task", "userStory", "userStoryDescription", "pi", "sprint", "feature", "assignee",
+          "task", "userStory", "userStoryId", "userStoryDescription", "pi", "sprint", "feature", "assignee",
           "storyPoints", "priority", "startDate", "endDate", "description",
           "status", "archived", "createdBy", "createdAt", "updatedAt", "subtasks", "dependencies", "acceptanceCriteria", "userStoryStatus"
         ])
