@@ -580,8 +580,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     }
     for (const task of appState.allTasks) {
       const title = String(task.raw.userStory || task.story || "").trim();
+      const titleMatches = title ? appState.userStories.filter((item) => item.title?.trim().toLocaleLowerCase() === title.toLocaleLowerCase()) : [];
       const story = appState.userStories.find((item) => item.id === task.raw.userStoryId)
-        || appState.userStories.find((item) => title && item.title?.trim().toLocaleLowerCase() === title.toLocaleLowerCase());
+        || (titleMatches.length === 1 ? titleMatches[0] : null);
+      if (!task.raw.userStoryId && titleMatches.length > 1) skipped++;
       const feature = (story && storyFeatureMap.get(story.id))
         || appState.features.find((item) => item.id === task.raw.featureId)
         || uniqueFeatureByName(task.raw.feature);
