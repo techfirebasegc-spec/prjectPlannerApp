@@ -2308,3 +2308,50 @@ body { background: #f3f6fb; }
   .stories-toolbar { padding: 18px; }
   .story-card { padding: 16px; }
 }
+
+
+/* Final layout fixes: prevent collapsed navigation labels from wrapping and
+   keep task-editor actions proportional on narrow screens. */
+@media (min-width: 1101px) {
+  .app-shell.sidebar-collapsed .sidebar-story-shortcut {
+    width: 42px;
+    min-width: 42px;
+    min-height: 42px;
+    padding: 0;
+    justify-content: center;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 0;
+    gap: 0;
+  }
+  .app-shell.sidebar-collapsed .sidebar-story-shortcut::before {
+    content: "▤";
+    font-size: 18px;
+    line-height: 1;
+  }
+}
+@media (max-width: 760px) {
+  #taskModal .modal-card {
+    width: min(560px, calc(100vw - 20px));
+    max-width: calc(100vw - 20px);
+    padding: 18px 16px;
+  }
+  #taskModal .task-editor-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 14px 0 0;
+    align-items: stretch;
+  }
+  #taskModal .task-editor-actions button,
+  #taskModal .task-editor-actions .save-task-btn,
+  #taskModal .task-editor-actions .secondary-action {
+    width: 100%;
+    min-width: 0;
+    min-height: 46px;
+    height: auto;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: .95rem;
+  }
+}
