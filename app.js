@@ -538,6 +538,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     loadPreferences();
     bindEvents();
     if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true);
+    bindPlanningEvents();
     loadProjects();
   }
 
@@ -637,6 +638,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   function loadData() {
     if (appState.unsubscribeTasks) appState.unsubscribeTasks();
     if (appState.unsubscribeStories) appState.unsubscribeStories();
+    loadPlanningRecords();
     appState.unsubscribeStories = onSnapshot(userStoryCollection(), (snapshot) => {
       appState.userStories = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       applyFiltersAndRender();
@@ -713,6 +715,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
     els.sidebarStoriesBtn?.addEventListener("click", () => { setActiveView("stories"); if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true); });
     els.newStoryBtn.addEventListener("click", () => openStoryEditor());
+    bindPlanningEvents();
     els.storiesGrid.classList.add("stories-grid-list");
     els.toggleArchivedStoriesBtn.addEventListener("click", () => {
       appState.showArchivedStories = !appState.showArchivedStories;
@@ -799,6 +802,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     appState.selectedTaskIds.clear();
     persistPreferences();
     updateMembersControl();
+    loadPlanningRecords();
     loadData();
   }
 
@@ -2041,9 +2045,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function setActiveView(view, persist = true) {
-    appState.activeView = ["dashboard", "board", "list", "stories", "insights", "knowledge", "profile"].includes(view) ? view : "dashboard";
+    appState.activeView = ["dashboard", "board", "list", "stories", "pis", "features", "insights", "knowledge", "profile"].includes(view) ? view : "dashboard";
     const dashboard = appState.activeView === "dashboard";
     const board = appState.activeView === "board", list = appState.activeView === "list", stories = appState.activeView === "stories";
+    const pis = appState.activeView === "pis", features = appState.activeView === "features";
     const insights = appState.activeView === "insights", knowledge = appState.activeView === "knowledge", profile = appState.activeView === "profile";
     els.dashboardView?.classList.toggle("is-hidden", !dashboard);
     els.dashboardViewBtn?.classList.toggle("is-active", dashboard);
@@ -2052,6 +2057,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.boardView.classList.toggle("is-hidden", !board);
     els.listView.classList.toggle("is-hidden", !list);
     els.storiesView.classList.toggle("is-hidden", !stories);
+    els.piManagementView?.classList.toggle("is-hidden", !pis);
+    els.featuresManagementView?.classList.toggle("is-hidden", !features);
+    els.piViewBtn?.classList.toggle("is-active", pis);
+    els.featuresViewBtn?.classList.toggle("is-active", features);
     els.insightsView.classList.toggle("is-hidden", !insights);
     els.knowledgeView?.classList.toggle("is-hidden", !knowledge);
     els.knowledgeViewBtn?.classList.toggle("is-active", knowledge);
