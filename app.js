@@ -65,6 +65,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     sprintFilter: document.getElementById("sprintFilter"),
     featureFilter: document.getElementById("featureFilter"),
     assigneeFilter: document.getElementById("assigneeFilter"),
+    resetFiltersBtn: document.getElementById("resetFiltersBtn"),
     sortBy: document.getElementById("sortBy"),
     todoLimit: document.getElementById("todoLimit"),
     inprogressLimit: document.getElementById("inprogressLimit"),
@@ -796,6 +797,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function bindEvents() {
+    els.resetFiltersBtn?.addEventListener("click", resetFilters);
     els.piFilter.addEventListener("change", onFilterChange);
     els.sprintFilter.addEventListener("change", onFilterChange);
     els.featureFilter.addEventListener("change", onFilterChange);
@@ -1160,6 +1162,23 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     });
 
     appState.calendarMonth = appState.calendarMonth || sorted[sorted.length - 1][0];
+  }
+
+  function resetFilters() {
+    appState.filters.pi = "all";
+    appState.filters.sprint = "all";
+    appState.filters.feature = "all";
+    appState.filters.assignee = "all";
+    appState.filters.search = "";
+    if (els.piFilter) els.piFilter.value = "all";
+    if (els.sprintFilter) els.sprintFilter.value = "all";
+    if (els.featureFilter) els.featureFilter.value = "all";
+    if (els.assigneeFilter) els.assigneeFilter.value = "all";
+    if (els.searchInput) els.searchInput.value = "";
+    const advancedFilters = document.querySelector(".advanced-filter-details");
+    if (advancedFilters) advancedFilters.open = false;
+    persistPreferences();
+    applyFiltersAndRender();
   }
 
   function onFilterChange() {
