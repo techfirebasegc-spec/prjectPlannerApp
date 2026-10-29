@@ -111,7 +111,8 @@ service cloud.firestore {
         && request.resource.data.description is string && request.resource.data.startDate is string && request.resource.data.endDate is string
         && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"]
         && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isVerifiedUser() && resource.data.createdBy == request.auth.uid
+      allow update: if isVerifiedUser()
+        && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "description", "startDate", "endDate", "status", "archived", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
         && request.resource.data.description is string && request.resource.data.startDate is string && request.resource.data.endDate is string
@@ -129,7 +130,8 @@ service cloud.firestore {
         && request.resource.data.owner is string && request.resource.data.priority in ["HIGH", "MEDIUM", "LOW"]
         && request.resource.data.status in ["PLANNED", "IN_PROGRESS", "COMPLETED"]
         && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isVerifiedUser() && resource.data.createdBy == request.auth.uid
+      allow update: if isVerifiedUser()
+        && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
         && request.resource.data.piId is string && exists(/databases/$(database)/documents/plannerProgramIncrements/$(request.resource.data.piId))
