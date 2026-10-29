@@ -745,7 +745,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function populateUserStoryOptions(tasks) {
-    const stories = [...new Set(tasks.map((task) => String(task.raw.userStory || task.story || "").trim()).filter((s) => s && s !== "-"))].sort((a,b) => a.localeCompare(b));
+    const stories = [...new Set([...appState.userStories.map(story => String(story.title || "").trim()), ...tasks.map((task) => String(task.raw.userStory || task.story || "").trim())].filter((s) => s && s !== "-"))].sort((a,b) => a.localeCompare(b));
     els.userStoryOptions.innerHTML = stories.map((s) => `<option value="${escapeHtml(s)}"></option>`).join("");
   }
 
@@ -855,21 +855,31 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.saveStoryBtn.disabled = true;
     els.saveStoryBtn.textContent = "Saving...";
     els.storyEditorError.textContent = "";
+    const existingStory = appState.userStories.find(item => item.id === appState.editingStoryId);
+    const previousTitle = existingStory?.title || "";
     const data = {
       title, description, acceptanceCriteria: criteria,
       pi: els.storyPiInput.value.trim(), feature: els.storyFeatureInput.value.trim(),
       startDate, endDate, lifecycle: appState.userStories.find(item => item.id === appState.editingStoryId)?.lifecycle || "Draft",
-      createdBy: appState.user.uid, updatedAt: serverTimestamp()
+      createdBy: existingStory?.createdBy || appState.user.uid, updatedAt: serverTimestamp()
     };
     try {
       if (appState.editingStoryId) {
-        const existing = appState.userStories.find(item => item.id === appState.editingStoryId);
-        if (existing) await updateDoc(userStoryReference(appState.editingStoryId), data);
+        const existing = existingStory;
+        if (existing) {
+          await updateDoc(userStoryReference(appState.editingStoryId), data);
+          const linked = appState.allTasks.filter(task => String(task.raw.userStoryId || "").trim() === appState.editingStoryId);
+          for (let start = 0; start < linked.length; start += 450) {
+            const batch = writeBatch(db);
+            linked.slice(start, start + 450).forEach(task => batch.update(taskReference(task.id), { userStory: title, userStoryDescription: description, updatedAt: serverTimestamp() }));
+            await batch.commit();
+          }
+        }
         else {
           // Legacy stories are upgraded into independent records; linked task IDs are preserved.
           const legacyId = appState.editingStoryId;
           await setDoc(userStoryReference(legacyId), { ...data, createdAt: serverTimestamp() });
-          const linked = appState.allTasks.filter(task => String(task.raw.userStoryId || "") === legacyId || (!task.raw.userStoryId && String(task.raw.userStory || task.story || "").trim() === title));
+          const linked = appState.allTasks.filter(task => String(task.raw.userStoryId || "") === legacyId || (!task.raw.userStoryId && String(task.raw.userStory || task.story || "").trim() === previousTitle));
           for (let start = 0; start < linked.length; start += 450) {
             const batch = writeBatch(db);
             linked.slice(start, start + 450).forEach(task => batch.update(taskReference(task.id), { userStoryId: legacyId, userStory: title, userStoryDescription: description, updatedAt: serverTimestamp() }));
