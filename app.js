@@ -792,7 +792,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const affectedTasks = currentStoryId
       ? appState.allTasks.filter((task) => String(task.raw.userStoryId || "").trim() === currentStoryId)
       : appState.allTasks.filter((task) =>
-          String(task.raw.userStory || task.story || "").trim() === currentTitle
+          !String(task.raw.userStoryId || "").trim()
+          && String(task.raw.userStory || task.story || "").trim() === currentTitle
         );
     const storyId = currentStoryId || affectedTasks.find((task) => task.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id;
     try {
