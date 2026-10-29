@@ -75,6 +75,13 @@ Sprints are timeboxes and are not necessarily permanent parents of tasks.
 - Only authorized users can write records; project-scoped access follows project membership/role.
 - Test create/read/update/delete permissions, refresh persistence, and sign-in behavior against the intended Firebase project.
 
+### Additional User Story archive and card-density requirements
+- Users can archive a story without deleting its tasks.
+- Archived stories are hidden from the active story list and accessible through a Show archived filter.
+- Users can restore an archived story.
+- Archiving/restoring is persisted and protected by the same project authorization as story edits.
+- Story cards show at most two task previews by default and display a count for remaining tasks; adding many tasks must not make cards grow without bound.
+
 ## Phase 1 acceptance tests
 1. Create a story with a title and no task; it appears with zero tasks.
 2. Reload the page; the story persists.
@@ -86,6 +93,9 @@ Sprints are timeboxes and are not necessarily permanent parents of tasks.
 8. Verify a non-member cannot read or write project-scoped story data and a viewer cannot write.
 9. Validate form fields and display understandable errors.
 10. Production build passes and browser console has no uncaught errors during the tested flow.
+11. Archive a story; it disappears from active stories but its tasks remain unchanged.
+12. Show archived stories, restore one, and verify it returns to the active list after refresh.
+13. Link at least 10 tasks to one story; the card shows no more than two task previews and a remaining-task count.
 
 ## Definition of done
 A phase is complete only when code is committed, a production build passes, relevant automated/integration tests are run, and results are reported accurately. A code presence check alone is not a live integration test. Do not claim Firestore or browser verification without running it.
