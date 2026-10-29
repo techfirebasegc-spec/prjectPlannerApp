@@ -788,6 +788,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         affectedTasks.slice(start, start + 450).forEach((task) => {
           batch.update(taskReference(task.id), {
             userStory: title,
+            userStoryId: storyId,
             userStoryDescription: description,
             updatedAt: serverTimestamp()
           });
