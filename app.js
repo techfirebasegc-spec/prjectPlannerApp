@@ -260,8 +260,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       appState.programIncrements = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
         .sort((a, b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
       refreshPlanningSelectors();
+      populatePlanningFilterOptions();
       renderProgramIncrements();
       renderFeatures();
+      applyFiltersAndRender();
     }, (error) => {
       console.error("Could not load Program Increments", error);
       appState.programIncrements = [];
@@ -272,8 +274,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       appState.features = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
         .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
       refreshPlanningSelectors();
+      populatePlanningFilterOptions();
       renderFeatures();
       renderProgramIncrements();
+      applyFiltersAndRender();
     }, (error) => {
       console.error("Could not load Features", error);
       appState.features = [];
@@ -318,6 +322,19 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (els.storyFeatureInput) els.storyFeatureInput.disabled = !storyFeatureOptions.length;
     if (els.featureSaveBtn) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
     if (els.piSaveBtn) els.piSaveBtn.disabled = !planningCanEdit();
+  }
+
+  function populatePlanningFilterOptions() {
+    const selectedPI = appState.filters.pi || els.piFilter?.value || "all";
+    const selectedFeature = appState.filters.feature || els.featureFilter?.value || "all";
+    const piNames = [...new Set([...appState.programIncrements.map((item) => String(item.name || "").trim()), ...collectUnique(appState.allTasks, "pi")].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const featureNames = [...new Set([...appState.features.map((item) => String(item.name || "").trim()), ...collectUnique(appState.allTasks, "feature")].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    fillSelect(els.piFilter, piNames, "All PI");
+    fillSelect(els.featureFilter, featureNames, "All Features");
+    els.piFilter.value = piNames.includes(selectedPI) ? selectedPI : "all";
+    els.featureFilter.value = featureNames.includes(selectedFeature) ? selectedFeature : "all";
+    appState.filters.pi = els.piFilter.value;
+    appState.filters.feature = els.featureFilter.value;
   }
 
   function formatPlanningDate(value) {
@@ -987,9 +1004,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   async function populateFilters(tasks) {
-    fillSelect(els.piFilter, collectUnique(tasks, "pi"), "All PI");
+    populatePlanningFilterOptions();
     fillSelect(els.sprintFilter, collectUnique(tasks, "sprint"), "All Sprints");
-    fillSelect(els.featureFilter, collectUnique(tasks, "feature"), "All Features");
     const selectedAssignee = appState.filters.assignee;
     try {
       const members = await fetchAssignableMembers();
