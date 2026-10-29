@@ -104,7 +104,8 @@
         </div>
       </header>
 
-      <section class="portfolio-hero" aria-label="Planner overview">
+      <section id="dashboardView" aria-label="Dashboard overview">
+      <section id="portfolioHero" class="portfolio-hero" aria-label="Planner overview">
         <div>
           <p class="brand-kicker">Portfolio View</p>
           <h2>Arcflow</h2>
@@ -113,14 +114,22 @@
         <div class="hero-quote"><strong>“Progress, one task at a time.”</strong><span>Delivering value, together</span></div>
       </section>
 
-      <section class="overview-stats" aria-label="Task summary">
+      <section id="overviewStats" class="overview-stats" aria-label="Task summary">
         <article class="overview-card total"><span class="overview-icon">▤</span><div><p>Total Tasks</p><strong id="totalTasks">0</strong><small>Across your portfolio</small></div></article>
         <article class="overview-card complete"><span class="overview-icon">✓</span><div><p>Completed</p><strong id="completedPercent">0%</strong><small>Completion rate</small></div></article>
         <article class="overview-card active"><span class="overview-icon">◌</span><div><p>In Progress</p><strong id="inProgressCount">0</strong><small>Active tasks</small></div></article>
         <article class="overview-card todo"><span class="overview-icon">◷</span><div><p>To Do</p><strong id="todoStat">0</strong><small>Tasks yet to start</small></div></article>
       </section>
 
+      <section class="dashboard-work-panel" aria-label="Dashboard task overview">
+        <div class="dashboard-panel-heading"><div><p class="brand-kicker">WORK OVERVIEW</p><h2>Tasks to focus on</h2><p>Based on your current filters and sort order</p></div><span class="dashboard-preview-count">Top 6</span></div>
+        <div id="dashboardTasks" class="dashboard-task-list"></div>
+      </section>
+
+      </section>
+
       <section class="view-switch" aria-label="View switcher">
+        <button id="dashboardViewBtn" class="view-btn is-active" type="button">Dashboard</button>
         <button id="listViewBtn" class="view-btn" type="button">List View</button>
         <button id="boardViewBtn" class="view-btn is-active" type="button">Kanban View</button>
         <button id="storiesViewBtn" class="view-btn" type="button">User Stories</button>
