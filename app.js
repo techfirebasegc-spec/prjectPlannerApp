@@ -453,6 +453,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         task: taskTitle,
         assignee: getString(cleaned.assignee || cleaned.Assignee) || "Unassigned",
         description: getString(cleaned.description || cleaned.Description) || "No description",
+        subtasks: Array.isArray(cleaned.subtasks) ? cleaned.subtasks : [],
+        dependencies: Array.isArray(cleaned.dependencies) ? cleaned.dependencies : [],
         app: getString(cleaned.app || cleaned.App) || "-",
         storyPoints: cleaned.storyPoints ?? cleaned["Story Points"] ?? "-",
         sprintStartDate,
@@ -1527,8 +1529,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       </section>
       <section class="task-detail-description"><h3>User story description</h3><p>${escapeHtml(task.raw.userStoryDescription || "No user story description added.")}</p></section>
       <section class="task-detail-description"><h3>Task description</h3><p>${escapeHtml(task.description || "No description added.")}</p></section>
+      ${renderTaskBreakdown(task)}
     `;
 
+    bindTaskBreakdownActions(task);
     els.modal.classList.add("is-open");
     els.modal.setAttribute("aria-hidden", "false");
     els.taskStatusSelect.value = task.statusKey;
@@ -1536,6 +1540,90 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const isCreator = task.raw.createdBy === appState.user.uid;
     els.editTaskBtn.classList.toggle("is-hidden", isDefault && !isCreator);
     els.deleteTaskBtn.classList.toggle("is-hidden", isDefault && !isCreator);
+  }
+
+  function renderTaskBreakdown(task) {
+    const subtasks = Array.isArray(task.raw.subtasks) ? task.raw.subtasks : [];
+    const dependencies = Array.isArray(task.raw.dependencies) ? task.raw.dependencies : [];
+    const candidates = appState.allTasks.filter((item) => item.id !== task.id && !item.archived);
+    const completed = subtasks.filter((item) => item && item.done).length;
+    return `
+      <section class="task-breakdown">
+        <div class="breakdown-heading"><div><h3>Subtasks & checklist</h3><p>${completed} of ${subtasks.length} complete</p></div></div>
+        <div class="subtask-list">${subtasks.length ? subtasks.map((item, index) => `
+          <label class="subtask-item"><input type="checkbox" data-subtask-index="${index}" ${item.done ? "checked" : ""}><span class="${item.done ? "is-complete" : ""}">${escapeHtml(item.title || "Untitled subtask")}</span><button type="button" data-remove-subtask="${index}" aria-label="Remove subtask">×</button></label>`).join("") : '<p class="breakdown-empty">No subtasks yet. Add a checklist item below.</p>'}</div>
+        <form id="addSubtaskForm" class="breakdown-add-form"><input name="subtaskTitle" maxlength="160" required placeholder="Add a checklist item"><button type="submit">Add</button></form>
+      </section>
+      <section class="task-breakdown">
+        <div class="breakdown-heading"><div><h3>Dependencies</h3><p>Work that must be completed first</p></div></div>
+        <div class="dependency-list">${dependencies.map((id) => {
+          const dependency = appState.allTasks.find((item) => item.id === id);
+          return dependency ? `<div class="dependency-item"><span class="dependency-status ${dependency.statusKey}"></span><span><b>${escapeHtml(dependency.task)}</b><small>${escapeHtml(dependency.statusLabel)}</small></span><button type="button" data-remove-dependency="${escapeHtml(id)}">Remove</button></div>` : "";
+        }).join("") || '<p class="breakdown-empty">No dependencies linked.</p>'}</div>
+        <form id="addDependencyForm" class="breakdown-add-form"><select name="dependencyId" required><option value="">Select a prerequisite task</option>${candidates.filter((item) => !dependencies.includes(item.id)).map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.task)} — ${escapeHtml(item.statusLabel)}</option>`).join("")}</select><button type="submit">Link task</button></form>
+      </section>`;
+  }
+
+  function bindTaskBreakdownActions(task) {
+    const subtaskForm = document.getElementById("addSubtaskForm");
+    subtaskForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const title = String(new FormData(subtaskForm).get("subtaskTitle") || "").trim();
+      if (!title) return;
+      const items = [...(task.raw.subtasks || []), { title, done: false }];
+      await saveTaskBreakdown(task, { subtasks: items });
+    });
+    els.modalBody.querySelectorAll("[data-subtask-index]").forEach((input) => input.addEventListener("change", async () => {
+      const items = [...(task.raw.subtasks || [])];
+      const index = Number(input.dataset.subtaskIndex);
+      if (!items[index]) return;
+      items[index] = { ...items[index], done: input.checked };
+      await saveTaskBreakdown(task, { subtasks: items });
+    }));
+    els.modalBody.querySelectorAll("[data-remove-subtask]").forEach((button) => button.addEventListener("click", async () => {
+      const items = [...(task.raw.subtasks || [])];
+      items.splice(Number(button.dataset.removeSubtask), 1);
+      await saveTaskBreakdown(task, { subtasks: items });
+    }));
+    const dependencyForm = document.getElementById("addDependencyForm");
+    dependencyForm?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const dependencyId = String(new FormData(dependencyForm).get("dependencyId") || "");
+      const dependencies = [...(task.raw.dependencies || [])];
+      if (!dependencyId || dependencies.includes(dependencyId)) return;
+      if (wouldCreateDependencyCycle(task.id, dependencyId)) {
+        window.alert("This link would create a dependency cycle. Choose a different prerequisite.");
+        return;
+      }
+      await saveTaskBreakdown(task, { dependencies: [...dependencies, dependencyId] });
+    });
+    els.modalBody.querySelectorAll("[data-remove-dependency]").forEach((button) => button.addEventListener("click", async () => {
+      const dependencies = (task.raw.dependencies || []).filter((id) => id !== button.dataset.removeDependency);
+      await saveTaskBreakdown(task, { dependencies });
+    }));
+  }
+
+  function wouldCreateDependencyCycle(taskId, prerequisiteId) {
+    const visited = new Set();
+    const visit = (id) => {
+      if (id === taskId) return true;
+      if (visited.has(id)) return false;
+      visited.add(id);
+      const task = appState.allTasks.find((item) => item.id === id);
+      return (task?.raw.dependencies || []).some(visit);
+    };
+    return visit(prerequisiteId);
+  }
+
+  async function saveTaskBreakdown(task, patch) {
+    try {
+      await updateDoc(taskReference(task.id), { ...patch, updatedAt: serverTimestamp() });
+      task.raw = { ...task.raw, ...patch };
+      openTaskModal(appState.allTasks.find((item) => item.id === task.id) || task);
+    } catch (error) {
+      console.error("Could not update task breakdown", error);
+      window.alert("Could not save this change. Check your project permissions and try again.");
+    }
   }
 
   function modalRow(label, value) {
@@ -1628,6 +1716,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         startDate: String(form.get("startDate") || ""),
         endDate: String(form.get("endDate") || ""),
         description: String(form.get("description") || "").trim(),
+        subtasks: appState.editingTaskId ? (appState.allTasks.find((item) => item.id === appState.editingTaskId)?.raw.subtasks || []) : [],
+        dependencies: appState.editingTaskId ? (appState.allTasks.find((item) => item.id === appState.editingTaskId)?.raw.dependencies || []) : [],
         updatedAt: serverTimestamp()
       };
       if (appState.editingTaskId) {
