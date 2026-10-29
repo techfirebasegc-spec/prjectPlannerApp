@@ -4658,3 +4658,18 @@ textarea:focus-visible {
 .planning-records-tools .secondary-action { white-space:nowrap; padding:9px 10px; font-size:.7rem; }
 .planning-records-tools input { max-width:180px; }
 @media(max-width:640px) { .planning-records-tools { align-items:stretch; flex-direction:column; width:100%; } .planning-records-tools input { max-width:none; } }
+
+
+/* Simplified navigation and progressive disclosure for advanced filters. */
+.view-switch { gap: 7px; padding: 8px 0 14px; }
+.view-switch .view-btn { padding: 9px 12px; font-size: .78rem; white-space: nowrap; }
+.filter-panel > h2 { margin-bottom: 14px; }
+.advanced-filter-details { margin-top: 13px; border-top: 1px solid #e4eaf1; padding-top: 11px; }
+.advanced-filter-details summary { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:5px 1px; color:#637890; font-size:.76rem; font-weight:750; cursor:pointer; list-style:none; }
+.advanced-filter-details summary::-webkit-details-marker { display:none; }
+.advanced-filter-details summary span { color:#4777b7; font-size:1rem; }
+.advanced-filter-details[open] summary span { transform:rotate(45deg); }
+.advanced-filter-fields { display:grid; gap:7px; padding-top:10px; }
+.advanced-filter-fields label { margin-top:3px; }
+.advanced-filter-fields .filter-select { margin-bottom:3px; }
+@media(max-width:760px) { .view-switch { overflow-x:auto; flex-wrap:nowrap; scrollbar-width:thin; } .view-switch .view-btn { flex:0 0 auto; } }
