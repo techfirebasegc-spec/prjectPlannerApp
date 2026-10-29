@@ -3138,3 +3138,15 @@ input:hover, select:hover, textarea:hover { border-color: #c4d2e6; }
   #taskModal .task-editor-actions { display: grid; grid-template-columns: 1fr 1fr; }
   #taskModal .task-editor-actions button { width: 100%; }
 }
+
+
+/* Consistent task-document icon used throughout task views and dialogs. */
+.task-editor-icon svg,
+.list-task-icon svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+.task-editor-icon svg { width: 25px; height: 25px; }
+.list-task-icon { color: #315eea; }
