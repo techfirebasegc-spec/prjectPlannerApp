@@ -2012,3 +2012,40 @@ body { background: #f3f6fb; }
   .task-detail-modal > .task-editor-actions #saveStatusBtn { grid-column: 1; }
   .task-detail-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+
+/* Keep User Stories discoverable from the compact/mobile sidebar. */
+.sidebar-story-shortcut {
+  display: none;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid #dce5f2;
+  border-radius: 9px;
+  background: #fff;
+  color: #244fc5;
+  text-align: left;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sidebar-story-shortcut:hover,
+.sidebar-story-shortcut:focus-visible { background: #eef4ff; border-color: #b9cdfb; }
+@media (max-width: 1100px) {
+  .sidebar-story-shortcut { display: inline-flex; align-items: center; }
+  .app-shell.sidebar-collapsed > .sidebar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .app-shell.sidebar-collapsed > .sidebar .sidebar-story-shortcut {
+    display: inline-flex;
+    width: auto;
+    min-width: 110px;
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+}
