@@ -2952,7 +2952,7 @@ input:hover, select:hover, textarea:hover { border-color: #c4d2e6; }
 .story-detail-empty-box strong { color:#465b79; font-size:11px; }
 .story-detail-empty-box p { margin:5px 0 0; color:#8491a6; font-size:10px; line-height:1.5; }
 .story-inline-edit { margin-top:10px; padding:6px 9px; border:1px solid #d8e4f7; border-radius:7px; background:#fff; color:#315fc1; font-size:10px; }
-.story-detail-add { margin-left:auto; padding:7px 9px !important; font-size:10px !important; }
+.story-detail-add { width:auto; flex:0 0 auto; white-space:nowrap; margin-left:auto; padding:7px 9px !important; font-size:10px !important; }
 .story-detail-add:disabled { opacity:.45; cursor:not-allowed; }
 .story-linked-panel { display:flex; flex-direction:column; }
 .story-linked-task-list { display:grid; gap:7px; }
