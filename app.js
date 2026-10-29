@@ -310,9 +310,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     setSelectOptions(els.taskPIInput, appState.programIncrements, "Select a PI", selectedTaskPI);
     setSelectOptions(els.storyPiInput, appState.programIncrements, "Optional — select a PI", selectedStoryPI);
     setSelectOptions(els.featurePIInput, appState.programIncrements, "Select a PI", selectedFeaturePI);
-    setSelectOptions(els.featurePIFilter, appState.programIncrements, "All PIs", els.featurePIFilter?.value || "all");
-    if (els.featurePIFilter && ![...els.featurePIFilter.options].some((option) => option.value === "all")) {
-      els.featurePIFilter.insertBefore(new Option("All PIs", "all"), els.featurePIFilter.firstChild);
+    if (els.featurePIFilter) {
+      const previousPI = els.featurePIFilter.value || "all";
+      els.featurePIFilter.replaceChildren(new Option("All PIs", "all"));
+      appState.programIncrements.forEach((pi) => els.featurePIFilter.add(new Option(pi.name, pi.id)));
+      els.featurePIFilter.value = previousPI === "all" || appState.programIncrements.some((pi) => pi.id === previousPI) ? previousPI : "all";
     }
     const featureOptions = appState.features.filter((feature) => !selectedTaskPI || feature.piId === selectedTaskPI);
     const storyFeatureOptions = appState.features.filter((feature) => !selectedStoryPI || feature.piId === selectedStoryPI);
