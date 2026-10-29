@@ -1593,11 +1593,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.sprintLegend.innerHTML = "";
     const monthSprints = getSprintsForSelectedMonth();
     if (monthSprints.length === 0) {
-      const chip = document.createElement("span");
-      chip.className = "sprint-chip";
-      chip.textContent = "No sprint in this month";
-      chip.style.cursor = "default";
-      els.sprintLegend.appendChild(chip);
+      const empty = document.createElement("div");
+      empty.className = "sprint-empty-state";
+      const title = document.createElement("strong");
+      title.textContent = "No sprint scheduled";
+      const detail = document.createElement("span");
+      detail.textContent = "Choose another month or add sprint dates to tasks to populate this calendar.";
+      empty.append(title, detail);
+      els.sprintLegend.appendChild(empty);
       return;
     }
 
