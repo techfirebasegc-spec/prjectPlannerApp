@@ -237,10 +237,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
 
   function planningCollection(kind) {
-    const name = kind === "pi" ? "plannerProgramIncrements" : "plannerFeatures";
+    const defaultName = kind === "pi" ? "plannerProgramIncrements" : "plannerFeatures";
+    const projectName = kind === "pi" ? "programIncrements" : "features";
     return appState.activeProjectId === "default"
-      ? collection(db, name)
-      : collection(db, "plannerProjects", appState.activeProjectId, name);
+      ? collection(db, defaultName)
+      : collection(db, "plannerProjects", appState.activeProjectId, projectName);
   }
 
   function planningReference(kind, id) {
@@ -260,9 +261,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         getDocs(planningCollection("pi")),
         getDocs(planningCollection("feature"))
       ]);
-      appState.programIncrements = pis.docs.map((item) => ({ id: item.id, ...item.data() }))
+      appState.programIncrements = pis.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
         .sort((a, b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
-      appState.features = features.docs.map((item) => ({ id: item.id, ...item.data() }))
+      appState.features = features.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
         .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
       refreshPlanningSelectors();
       renderProgramIncrements();
@@ -518,6 +519,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.featurePIFilter?.addEventListener("change", () => renderFeatures());
     els.taskPIInput?.addEventListener("change", () => onPlanningPIChange(els.taskPIInput, els.taskFeatureInput));
     els.storyPiInput?.addEventListener("change", () => onPlanningPIChange(els.storyPiInput, els.storyFeatureInput));
+    els.taskFeatureInput?.addEventListener("change", () => {
+      const feature = appState.features.find((item) => item.id === els.taskFeatureInput.value);
+      if (feature) { els.taskPIInput.value = feature.piId; onPlanningPIChange(els.taskPIInput, els.taskFeatureInput); els.taskFeatureInput.value = feature.id; }
+    });
+    els.storyFeatureInput?.addEventListener("change", () => {
+      const feature = appState.features.find((item) => item.id === els.storyFeatureInput.value);
+      if (feature) { els.storyPiInput.value = feature.piId; onPlanningPIChange(els.storyPiInput, els.storyFeatureInput); els.storyFeatureInput.value = feature.id; }
+    });
   }
 
   async function init() {
