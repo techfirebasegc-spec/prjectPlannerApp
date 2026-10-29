@@ -123,6 +123,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     listViewBtn: document.getElementById("listViewBtn"),
     insightsViewBtn: document.getElementById("insightsViewBtn"),
     storiesViewBtn: document.getElementById("storiesViewBtn"),
+    sidebarStoriesBtn: document.getElementById("sidebarStoriesBtn"),
     newStoryBtn: document.getElementById("newStoryBtn"),
     storiesView: document.getElementById("storiesView"),
     storiesGrid: document.getElementById("storiesGrid"),
@@ -342,6 +343,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.listViewBtn.addEventListener("click", () => setActiveView("list"));
     els.insightsViewBtn.addEventListener("click", () => setActiveView("insights"));
     els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
+    els.sidebarStoriesBtn?.addEventListener("click", () => { setActiveView("stories"); if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true); });
     els.newStoryBtn.addEventListener("click", () => { openTaskEditor(); els.taskUserStoryInput.focus(); });
     els.profileViewBtn.addEventListener("click", () => setActiveView("profile"));
     els.profileForm.addEventListener("submit", saveProfile);
