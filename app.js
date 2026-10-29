@@ -231,6 +231,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     featureCount: document.getElementById("featureCount"),
     featureSearchInput: document.getElementById("featureSearchInput"),
     featurePIFilter: document.getElementById("featurePIFilter"),
+    reconcilePlanningBtn: document.getElementById("reconcilePlanningBtn"),
     taskPIInput: document.getElementById("taskPIInput"),
     taskFeatureInput: document.getElementById("taskFeatureInput")
   };
@@ -532,6 +533,71 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     }
   }
 
+  async function reconcileLegacyPlanningLinks() {
+    if (!planningCanEdit()) {
+      window.alert("You have read-only access to this project. Ask a project owner or editor to map existing records.");
+      return;
+    }
+    if (!appState.features.length) {
+      window.alert("Create PI and Feature records first. Existing text values can only be mapped when there is a unique matching Feature.");
+      return;
+    }
+    const button = els.reconcilePlanningBtn;
+    if (button) { button.disabled = true; button.textContent = "Mapping…"; }
+    let storiesMapped = 0, tasksMapped = 0, skipped = 0, failed = 0;
+    const featureGroups = new Map();
+    appState.features.forEach((feature) => {
+      const key = String(feature.name || "").trim().toLocaleLowerCase();
+      if (!featureGroups.has(key)) featureGroups.set(key, []);
+      featureGroups.get(key).push(feature);
+    });
+    const uniqueFeatureByName = (name) => {
+      const matches = featureGroups.get(String(name || "").trim().toLocaleLowerCase()) || [];
+      return matches.length === 1 ? matches[0] : null;
+    };
+    const storyFeatureMap = new Map();
+    for (const story of appState.userStories) {
+      const relatedTasks = appState.allTasks.filter((task) =>
+        (story.id && String(task.raw.userStoryId || "") === story.id)
+        || (!task.raw.userStoryId && String(task.raw.userStory || "").trim().toLocaleLowerCase() === String(story.title || "").trim().toLocaleLowerCase()));
+      const feature = appState.features.find((item) => item.id === story.featureId) || uniqueFeatureByName(story.feature)
+        || (new Set(relatedTasks.map((task) => uniqueFeatureByName(task.raw.feature)?.id).filter(Boolean)).size === 1
+          ? uniqueFeatureByName(relatedTasks.map((task) => task.raw.feature).find((name) => uniqueFeatureByName(name))) : null);
+      if (!feature) { skipped++; continue; }
+      storyFeatureMap.set(story.id, feature);
+      const patch = {};
+      if (story.featureId !== feature.id) patch.featureId = feature.id;
+      if (story.feature !== feature.name) patch.feature = feature.name;
+      if (story.piId !== feature.piId) patch.piId = feature.piId;
+      if (story.pi !== feature.pi) patch.pi = feature.pi;
+      if (Object.keys(patch).length) {
+        try { await updateDoc(userStoryReference(story.id), { ...patch, updatedAt: serverTimestamp() }); storiesMapped++; }
+        catch (error) { failed++; console.warn("Could not map User Story", story.id, error); }
+      }
+    }
+    for (const task of appState.allTasks) {
+      const title = String(task.raw.userStory || task.story || "").trim();
+      const story = appState.userStories.find((item) => item.id === task.raw.userStoryId)
+        || appState.userStories.find((item) => title && item.title?.trim().toLocaleLowerCase() === title.toLocaleLowerCase());
+      const feature = (story && storyFeatureMap.get(story.id))
+        || appState.features.find((item) => item.id === task.raw.featureId)
+        || uniqueFeatureByName(task.raw.feature);
+      if (!feature) { if (title && title !== "-") skipped++; continue; }
+      const patch = {};
+      if (task.raw.featureId !== feature.id) patch.featureId = feature.id;
+      if (task.raw.feature !== feature.name) patch.feature = feature.name;
+      if (task.raw.piId !== feature.piId) patch.piId = feature.piId;
+      if (task.raw.pi !== feature.pi) patch.pi = feature.pi;
+      if (story && task.raw.userStoryId !== story.id) patch.userStoryId = story.id;
+      if (Object.keys(patch).length) {
+        try { await updateDoc(taskReference(task.id), { ...patch, updatedAt: serverTimestamp() }); tasksMapped++; }
+        catch (error) { failed++; console.warn("Could not map Task", task.id, error); }
+      }
+    }
+    if (button) { button.disabled = !planningCanEdit(); button.textContent = "Map existing records"; }
+    window.alert(`Mapping complete. User Stories updated: ${storiesMapped}. Tasks updated: ${tasksMapped}. Unmatched or ambiguous records: ${skipped}. Updates denied or failed: ${failed}. No records were deleted.`);
+  }
+
   function onTaskStoryChange() {
     const value = String(els.taskUserStoryInput?.value || "");
     if (!value) return;
@@ -563,6 +629,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.piSearchInput?.addEventListener("input", () => renderProgramIncrements());
     els.featureSearchInput?.addEventListener("input", () => renderFeatures());
     els.featurePIFilter?.addEventListener("change", () => renderFeatures());
+    els.reconcilePlanningBtn?.addEventListener("click", reconcileLegacyPlanningLinks);
     els.taskUserStoryInput?.addEventListener("change", onTaskStoryChange);
     els.taskPIInput?.addEventListener("change", () => onPlanningPIChange(els.taskPIInput, els.taskFeatureInput));
     els.storyPiInput?.addEventListener("change", () => onPlanningPIChange(els.storyPiInput, els.storyFeatureInput));
