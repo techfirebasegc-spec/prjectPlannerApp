@@ -1984,12 +1984,17 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     });
     // Older tasks stored only a display name. Keep that assignment visible until
     // a real directory identity is selected, rather than silently unassigning it.
-    if (legacyName && !previousUid && !uniqueMembers.some((member) => member.displayName === legacyName)) {
-      const legacy = document.createElement("option");
-      legacy.value = "";
-      legacy.textContent = `${legacyName} (legacy assignment — reselect a member to link)`;
-      legacy.disabled = true;
-      select.appendChild(legacy);
+    if (legacyName && !previousUid) {
+      const matchingMember = uniqueMembers.find((member) => member.displayName === legacyName);
+      if (matchingMember) {
+        select.value = matchingMember.uid;
+      } else {
+        const legacy = document.createElement("option");
+        legacy.value = `__legacy__:${legacyName}`;
+        legacy.textContent = `${legacyName} (legacy assignment — reselect a member to link)`;
+        select.appendChild(legacy);
+        select.value = legacy.value;
+      }
     }
     select.value = previousUid;
     if (previousUid && !uniqueMembers.some((member) => member.uid === previousUid)) {
@@ -2044,8 +2049,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         : "";
       const assigneeSelect = els.taskEditorForm.elements.namedItem("assigneeUid");
       const selectedAssigneeOption = assigneeSelect?.options[assigneeSelect.selectedIndex];
-      const assigneeUid = String(form.get("assigneeUid") || "").trim();
-      const assigneeName = assigneeUid ? String(selectedAssigneeOption?.dataset.displayName || selectedAssigneeOption?.textContent || "").trim() : "";
+      const selectedAssigneeValue = String(form.get("assigneeUid") || "").trim();
+      const assigneeUid = selectedAssigneeValue.startsWith("__legacy__:") ? "" : selectedAssigneeValue;
+      const assigneeName = selectedAssigneeValue.startsWith("__legacy__:")
+        ? String(editingTask?.raw.assignee || "").trim()
+        : (assigneeUid ? String(selectedAssigneeOption?.dataset.displayName || selectedAssigneeOption?.textContent || "").replace(/ \(you\)$/, "").trim() : "");
       const taskData = {
         task,
         userStory: storyTitle,
