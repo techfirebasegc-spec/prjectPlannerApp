@@ -500,6 +500,20 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     }
   }
 
+  function onTaskStoryChange() {
+    const value = String(els.taskUserStoryInput?.value || "");
+    if (!value) return;
+    const title = value.startsWith("legacy:") ? value.slice("legacy:".length) : "";
+    const story = appState.userStories.find((item) => item.id === value)
+      || appState.allTasks.map((task) => task.raw).find((raw) => String(raw.userStoryId || "") === value || (!raw.userStoryId && String(raw.userStory || "").trim() === title));
+    if (!story) return;
+    const pi = appState.programIncrements.find((item) => item.id === story.piId || item.name === story.pi);
+    const feature = appState.features.find((item) => item.id === story.featureId || item.name === story.feature);
+    if (pi) els.taskPIInput.value = pi.id;
+    onPlanningPIChange(els.taskPIInput, els.taskFeatureInput);
+    if (feature) els.taskFeatureInput.value = feature.id;
+  }
+
   function onPlanningPIChange(select, featureSelect) {
     if (!select || !featureSelect) return;
     const current = featureSelect.value;
@@ -517,6 +531,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.piSearchInput?.addEventListener("input", () => renderProgramIncrements());
     els.featureSearchInput?.addEventListener("input", () => renderFeatures());
     els.featurePIFilter?.addEventListener("change", () => renderFeatures());
+    els.taskUserStoryInput?.addEventListener("change", onTaskStoryChange);
     els.taskPIInput?.addEventListener("change", () => onPlanningPIChange(els.taskPIInput, els.taskFeatureInput));
     els.storyPiInput?.addEventListener("change", () => onPlanningPIChange(els.storyPiInput, els.storyFeatureInput));
     els.taskFeatureInput?.addEventListener("change", () => {
@@ -1197,8 +1212,26 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function populateUserStoryOptions(tasks) {
-    const stories = [...new Set([...appState.userStories.map(story => String(story.title || "").trim()), ...tasks.map((task) => String(task.raw.userStory || task.story || "").trim())].filter((s) => s && s !== "-"))].sort((a,b) => a.localeCompare(b));
-    els.userStoryOptions.innerHTML = stories.map((s) => `<option value="${escapeHtml(s)}"></option>`).join("");
+    if (!els.taskUserStoryInput) return;
+    const selected = els.taskUserStoryInput.value;
+    const stories = new Map();
+    appState.userStories.forEach((story) => {
+      const title = String(story.title || "").trim();
+      if (title) stories.set(story.id, { value: story.id, title });
+    });
+    tasks.forEach((task) => {
+      const title = String(task.raw.userStory || task.story || "").trim();
+      if (!title || title === "-") return;
+      const id = String(task.raw.userStoryId || "").trim();
+      const value = id || `legacy:${title}`;
+      if (!stories.has(value)) stories.set(value, { value, title });
+    });
+    els.taskUserStoryInput.innerHTML = '<option value="">Standalone task — no User Story</option>' +
+      [...stories.values()].sort((a, b) => a.title.localeCompare(b.title))
+        .map((story) => `<option value="${escapeHtml(story.value)}" data-title="${escapeHtml(story.title)}">${escapeHtml(story.title)}</option>`).join("");
+    if (selected && [...els.taskUserStoryInput.options].some((option) => option.value === selected)) {
+      els.taskUserStoryInput.value = selected;
+    }
   }
 
   function renderUserStories(tasks) {
@@ -1301,7 +1334,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const task = appState.allTasks.find(item => item.id === button.dataset.storyTask); if (task) openTaskModal(task);
     }));
     els.storiesGrid.querySelectorAll("[data-story-title]").forEach(button => button.addEventListener("click", () => {
-      openTaskEditor(); els.taskUserStoryInput.value = button.dataset.storyTitle || ""; els.taskUserStoryInput.dataset.storyId = button.dataset.storyId || "";
+      openTaskEditor(); els.taskUserStoryInput.value = button.dataset.storyId || `legacy:${button.dataset.storyTitle || ""}`; onTaskStoryChange();
       els.taskEditorForm.elements.namedItem("userStoryDescription").value = button.dataset.storyDescription || ""; els.newTaskName.focus();
     }));
     els.storiesGrid.querySelectorAll("[data-archive-story-id]").forEach(button => button.addEventListener("click", () => archiveUserStory(button.dataset.archiveStoryId, button.dataset.archiveStoryTitle)));
@@ -2412,7 +2445,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       els.taskUserStoryInput.dataset.storyId = String(task.raw.userStoryId || "");
       const fields = {
         task: task.raw.task || task.task,
-        userStory: task.raw.userStory || "",
+        userStory: task.raw.userStoryId || (task.raw.userStory ? `legacy:${task.raw.userStory}` : ""),
         userStoryDescription: task.raw.userStoryDescription || "",
         pi: task.raw.piId || appState.programIncrements.find((pi) => pi.name === task.raw.pi)?.id || "",
         sprint: task.raw.sprint || "",
@@ -2530,11 +2563,15 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.saveTaskBtn.textContent = appState.editingTaskId ? "Saving..." : "Creating...";
     els.taskEditorError.textContent = "";
     try {
-      const storyTitle = String(form.get("userStory") || "").trim();
+      const selectedStoryOption = els.taskUserStoryInput?.options[els.taskUserStoryInput.selectedIndex];
+      const storySelection = String(form.get("userStory") || "").trim();
+      const storyTitle = storySelection.startsWith("legacy:")
+        ? storySelection.slice("legacy:".length).trim()
+        : String(selectedStoryOption?.dataset.title || "").trim();
       const editingTask = appState.editingTaskId
         ? appState.allTasks.find((item) => item.id === appState.editingTaskId)
         : null;
-      const selectedStoryId = String(els.taskUserStoryInput.dataset.storyId || "").trim();
+      const selectedStoryId = storySelection && !storySelection.startsWith("legacy:") ? storySelection : "";
       const matchingStoryTasks = storyTitle && storyTitle !== "-"
         ? appState.allTasks.filter((item) => {
             const itemTitle = String(item.raw.userStory || item.story || "").trim();
