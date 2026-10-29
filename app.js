@@ -40,7 +40,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     unsubscribeStories: null,
     editingStoryId: null,
     showArchivedStories: false,
-    storyViewMode: "cards",
+    storyViewMode: "list",
     expandedStoryTaskIds: new Set(),
     unsubscribeProjects: null,
     unsubscribeOwnedProjects: null,
@@ -150,8 +150,6 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     storiesView: document.getElementById("storiesView"),
     storiesGrid: document.getElementById("storiesGrid"),
     toggleArchivedStoriesBtn: document.getElementById("toggleArchivedStoriesBtn"),
-    storyViewModeCardsBtn: document.getElementById("storyViewModeCardsBtn"),
-    storyViewModeListBtn: document.getElementById("storyViewModeListBtn"),
     storiesSummary: document.getElementById("storiesSummary"),
     userStoryOptions: document.getElementById("userStoryOptions"),
     taskUserStoryInput: document.getElementById("taskUserStoryInput"),
@@ -380,17 +378,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
     els.sidebarStoriesBtn?.addEventListener("click", () => { setActiveView("stories"); if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true); });
     els.newStoryBtn.addEventListener("click", () => openStoryEditor());
-    const setStoryViewMode = (mode) => {
-      appState.storyViewMode = mode;
-      els.storiesGrid.classList.toggle("stories-grid-list", mode === "list");
-      els.storyViewModeCardsBtn.classList.toggle("is-active", mode === "cards");
-      els.storyViewModeListBtn.classList.toggle("is-active", mode === "list");
-      els.storyViewModeCardsBtn.setAttribute("aria-pressed", String(mode === "cards"));
-      els.storyViewModeListBtn.setAttribute("aria-pressed", String(mode === "list"));
-      renderUserStories(appState.filteredTasks);
-    };
-    els.storyViewModeCardsBtn.addEventListener("click", () => setStoryViewMode("cards"));
-    els.storyViewModeListBtn.addEventListener("click", () => setStoryViewMode("list"));
+    els.storiesGrid.classList.add("stories-grid-list");
     els.toggleArchivedStoriesBtn.addEventListener("click", () => {
       appState.showArchivedStories = !appState.showArchivedStories;
       els.toggleArchivedStoriesBtn.textContent = appState.showArchivedStories ? "Show active" : "Show archived";
@@ -826,9 +814,21 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         </div>
         <div class="story-row-actions"><button type="button" class="story-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit</button>${story.archived ? "" : `<button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>`}<button type="button" class="story-archive-action" data-archive-story-id="${escapeHtml(story.id)}" data-archive-story-title="${escapeHtml(story.title)}">${story.archived ? "Restore" : "Archive"}</button></div>
         <div class="story-row-details" ${detailsOpen ? "" : "hidden"}>
-          <div class="story-detail-summary"><div><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></div><div><small>Task status</small><strong>${counts.todo} To do · ${counts.inprogress} In progress · ${counts.done} Done</strong></div><div><small>Total task points</small><strong>${storyPoints}</strong></div></div>
-          <section class="story-detail-section"><h4>Acceptance criteria</h4>${story.acceptanceCriteria.length ? `<ul>${story.acceptanceCriteria.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : '<p class="story-detail-empty">No acceptance criteria added.</p>'}</section>
-          <section class="story-detail-section"><h4>Linked tasks <span>${story.tasks.length}</span></h4>${story.tasks.length ? `<div class="story-task-list">${story.tasks.map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}</div>` : '<div class="story-no-tasks"><strong>No tasks yet</strong><p>Add tasks when you are ready to break down this story.</p></div>'}</section>
+          <div class="story-detail-heading"><div><span class="story-card-label">STORY DETAILS</span><h4>${escapeHtml(story.title)}</h4><p>Review the story definition and track delivery without leaving this list.</p></div><span class="story-detail-completion">${completion}% complete</span></div>
+          <div class="story-detail-layout">
+            <div class="story-detail-column">
+              <section class="story-detail-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">◎</span><div><h5>Overview</h5><p>Lifecycle and delivery summary</p></div></div>
+                <div class="story-detail-stats"><div><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></div><div><small>Total tasks</small><strong>${story.tasks.length}</strong></div><div><small>Completed</small><strong>${counts.done} / ${story.tasks.length}</strong></div><div><small>Story points</small><strong>${storyPoints}</strong></div></div>
+                <div class="story-detail-status-line"><span class="story-status-dot todo"></span>To do <strong>${counts.todo}</strong><span class="story-status-dot progress"></span>In progress <strong>${counts.inprogress}</strong><span class="story-status-dot done"></span>Done <strong>${counts.done}</strong></div>
+              </section>
+              <section class="story-detail-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">✓</span><div><h5>Acceptance criteria</h5><p>Conditions for considering this story complete</p></div><span class="story-detail-count">${story.acceptanceCriteria.length}</span></div>
+                ${story.acceptanceCriteria.length ? `<ul class="story-criteria-list">${story.acceptanceCriteria.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : '<div class="story-detail-empty-box"><strong>No acceptance criteria yet</strong><p>Add clear, testable outcomes when editing this story.</p><button type="button" class="story-inline-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit story</button></div>'}
+              </section>
+            </div>
+            <section class="story-detail-panel story-linked-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">☷</span><div><h5>Linked tasks</h5><p>Tasks contributing to this story's progress</p></div><span class="story-detail-count">${story.tasks.length}</span><button type="button" class="story-add-task story-detail-add" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}" ${story.archived ? "disabled" : ""}>+ Add task</button></div>
+              ${story.tasks.length ? `<div class="story-linked-task-list">${story.tasks.map((task,index) => `<button type="button" class="story-linked-task" data-story-task="${escapeHtml(task.id)}"><span class="story-task-index">${index+1}</span><span class="story-linked-task-name">${escapeHtml(task.task)}<small>${Number(task.storyPoints)||0} points</small></span><span class="story-linked-status status-${escapeHtml(String(task.statusKey||"todo").toLowerCase())}">${escapeHtml(task.statusLabel)}</span><span class="story-linked-open" aria-hidden="true">›</span></button>`).join("")}</div>` : '<div class="story-detail-empty-box"><strong>No linked tasks</strong><p>Break this story into tasks to start tracking delivery.</p></div>'}
+            </section>
+          </div>
         </div></article>`;
     }).join("");
     els.storiesGrid.querySelectorAll("[data-toggle-story-details]").forEach(button => button.addEventListener("click", () => {
