@@ -4024,3 +4024,189 @@ textarea:focus-visible {
   outline: 3px solid rgba(203, 222, 245, .55);
   outline-offset: 2px;
 }
+
+
+/* Arcflow workspace navigation redesign — enterprise sidebar, quiet controls,
+   stronger hierarchy, and a single cohesive navy/slate visual language. */
+:root {
+  --nav-bg: #142b46;
+  --nav-bg-deep: #10233b;
+  --nav-surface: #1b3858;
+  --nav-border: rgba(201, 219, 239, .14);
+  --nav-text: #eaf1f8;
+  --nav-muted: #a9bbcf;
+  --nav-accent: #8bc5bd;
+}
+.app-shell {
+  grid-template-columns: 264px minmax(0, 1fr);
+}
+.sidebar {
+  z-index: 5;
+  min-width: 0;
+  gap: 18px;
+  padding: 24px 16px 20px;
+  color: var(--nav-text);
+  background: linear-gradient(180deg, var(--nav-bg) 0%, var(--nav-bg-deep) 100%);
+  border-right: 1px solid #203b59;
+  box-shadow: 5px 0 22px rgba(15, 35, 58, .06);
+}
+.sidebar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 3px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(180deg, #80b9b2 0%, rgba(128, 185, 178, 0) 45%);
+  opacity: .65;
+}
+.brand-block {
+  padding: 8px 8px 20px;
+  border-bottom: 1px solid var(--nav-border);
+}
+.brand-kicker {
+  color: #8bc5bd;
+  font-size: .68rem;
+  letter-spacing: .13em;
+}
+.brand-block h1 {
+  margin-top: 7px;
+  color: #fff;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -.045em;
+}
+.brand-subtitle {
+  margin-top: 5px;
+  color: var(--nav-muted);
+  font-size: .82rem;
+}
+.sidebar-toggle {
+  top: 18px;
+  right: 12px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  color: #d8e5f2;
+  background: rgba(255,255,255,.06);
+  border: 1px solid var(--nav-border);
+  border-radius: 9px;
+}
+.sidebar-toggle:hover {
+  color: #fff;
+  background: rgba(255,255,255,.13);
+  border-color: rgba(203,225,244,.35);
+}
+.filter-panel,
+.controls-panel {
+  gap: 9px;
+  padding: 14px 12px 15px;
+  background: rgba(255,255,255,.035);
+  border: 1px solid var(--nav-border);
+  border-radius: 13px;
+  box-shadow: none;
+}
+.filter-panel h2,
+.controls-panel h2 {
+  margin: 0 0 4px;
+  color: #f5f8fc;
+  font-size: .78rem;
+  font-weight: 750;
+  letter-spacing: .045em;
+}
+.filter-panel label,
+.controls-panel label {
+  color: var(--nav-muted);
+  font-size: .76rem;
+  font-weight: 600;
+}
+.filter-select,
+.wip-input {
+  min-height: 39px;
+  width: 100%;
+  padding: 9px 11px;
+  color: #edf4fb;
+  background-color: #203c5b;
+  border: 1px solid #365371;
+  border-radius: 9px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+  font-size: .82rem;
+}
+.filter-select:hover,
+.wip-input:hover {
+  border-color: #63829f;
+  background-color: #254564;
+}
+.filter-select:focus,
+.wip-input:focus {
+  border-color: #8bc5bd;
+  box-shadow: 0 0 0 3px rgba(139,197,189,.15);
+}
+.filter-select option {
+  color: #edf4fb;
+  background: #203c5b;
+}
+.control-subhead {
+  padding-top: 11px;
+  margin-top: 5px;
+  color: #d8e5f2;
+  border-top: 1px solid var(--nav-border);
+  font-size: .7rem;
+  letter-spacing: .1em;
+}
+.wip-grid { gap: 7px; }
+.sidebar-shortcuts button {
+  color: #eaf1f8;
+  background: #203c5b;
+  border-color: #365371;
+}
+.sidebar-shortcuts button:hover {
+  color: #fff;
+  background: #2a4b6d;
+  border-color: #7895b2;
+}
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+.sidebar-collapsed .sidebar {
+  padding: 14px 10px;
+  background: var(--nav-bg-deep);
+}
+.sidebar-collapsed .sidebar-toggle {
+  color: #eaf1f8;
+  background: #203c5b;
+  border-color: #365371;
+}
+.sidebar-collapsed .sidebar-shortcuts { gap: 10px; }
+.sidebar-collapsed .sidebar-shortcuts button {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+}
+.workspace { min-width: 0; }
+@media (max-width: 900px) {
+  .app-shell { grid-template-columns: 232px minmax(0, 1fr); }
+  .sidebar { padding-left: 12px; padding-right: 12px; }
+}
+@media (max-width: 680px) {
+  .app-shell { grid-template-columns: minmax(0, 1fr); }
+  .sidebar {
+    position: relative;
+    width: 100%;
+    padding: 14px 14px 16px;
+    gap: 12px;
+  }
+  .sidebar::after { display: none; }
+  .sidebar-toggle { top: 12px; right: 12px; }
+  .brand-block { padding: 4px 46px 14px 4px; }
+  .filter-panel,
+  .controls-panel { padding: 12px; }
+  .app-shell.sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .app-shell.sidebar-collapsed .sidebar {
+    flex-direction: row;
+    justify-content: flex-start;
+    min-height: 62px;
+  }
+  .app-shell.sidebar-collapsed .sidebar-toggle { position: static; }
+}
