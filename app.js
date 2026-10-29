@@ -1756,7 +1756,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   function openTaskEditor(task = null) {
     appState.editingTaskId = task?.id || null;
     els.taskEditorForm.reset();
+    delete els.taskUserStoryInput.dataset.storyId;
     if (task) {
+      els.taskUserStoryInput.dataset.storyId = String(task.raw.userStoryId || "");
       const fields = {
         task: task.raw.task || task.task,
         userStory: task.raw.userStory || "",
@@ -1816,11 +1818,17 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const editingTask = appState.editingTaskId
         ? appState.allTasks.find((item) => item.id === appState.editingTaskId)
         : null;
+      const selectedStoryId = String(els.taskUserStoryInput.dataset.storyId || "").trim();
       const matchingStoryTasks = storyTitle && storyTitle !== "-"
-        ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
+        ? appState.allTasks.filter((item) => {
+            const itemTitle = String(item.raw.userStory || item.story || "").trim();
+            const itemStoryId = String(item.raw.userStoryId || "").trim();
+            if (selectedStoryId) return itemStoryId === selectedStoryId;
+            return itemTitle === storyTitle && !itemStoryId;
+          })
         : [];
       const storyId = storyTitle && storyTitle !== "-"
-        ? (editingTask?.raw.userStoryId || matchingStoryTasks.find((item) => item.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id)
+        ? (selectedStoryId || editingTask?.raw.userStoryId || matchingStoryTasks.find((item) => item.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id)
         : "";
       const taskData = {
         task,
