@@ -4234,3 +4234,21 @@ textarea:focus-visible {
 .dashboard-empty { display: grid; gap: 5px; padding: 22px; border: 1px dashed #cbd7e3; border-radius: 10px; color: #344b5c; }
 .dashboard-empty span { color: #718198; font-size: .84rem; }
 @media (max-width: 600px) { .dashboard-work-panel { padding: 15px; } .dashboard-task-row { align-items: flex-start; padding: 11px; } .dashboard-task-status { font-size: .67rem; } }
+
+
+/* Compact dashboard focus list with delivery charts beside and below it. */
+.dashboard-main-grid { display: grid; grid-template-columns: minmax(300px, 1.02fr) minmax(360px, 1fr); align-items: stretch; gap: 16px; min-width: 0; }
+.dashboard-focus-panel, .dashboard-chart-panel, .dashboard-burndown-panel { min-width: 0; padding: 18px; }
+.dashboard-focus-panel .dashboard-panel-heading { margin-bottom: 10px; }
+.dashboard-focus-panel .dashboard-task-list { gap: 6px; }
+.dashboard-focus-panel .dashboard-task-row { min-height: 54px; padding: 9px 11px; gap: 10px; }
+.dashboard-focus-panel .dashboard-task-main { gap: 3px; }
+.dashboard-focus-panel .dashboard-task-main strong { font-size: .82rem; }
+.dashboard-focus-panel .dashboard-task-main small { font-size: .71rem; }
+.dashboard-focus-panel .dashboard-task-status { padding: 4px 8px; font-size: .67rem; }
+.dashboard-chart-canvas { position: relative; width: 100%; height: 230px; min-width: 0; }
+.dashboard-burndown-canvas { height: 200px; }
+.dashboard-chart-note { margin: 9px 0 0; color: #7b899b; font-size: .73rem; line-height: 1.45; }
+.dashboard-burndown-panel .dashboard-panel-heading { margin-bottom: 8px; }
+@media (max-width: 1050px) { .dashboard-main-grid { grid-template-columns: minmax(0, 1fr); } .dashboard-chart-canvas { height: 210px; } }
+@media (max-width: 600px) { .dashboard-focus-panel, .dashboard-chart-panel, .dashboard-burndown-panel { padding: 14px; } .dashboard-focus-panel .dashboard-task-row { padding: 9px; } .dashboard-burndown-canvas { height: 180px; } }
