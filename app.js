@@ -474,6 +474,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.featureSaveBtn.textContent = "Create Feature";
     els.featureFormError.textContent = "";
     refreshPlanningSelectors();
+    populateFeatureOwners().catch((error) => { console.error("Could not load Feature owners", error); });
   }
 
   function editFeature(id) {
@@ -483,7 +484,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.featureNameInput.value = feature.name || "";
     els.featurePIInput.value = feature.piId || "";
     els.featureDescriptionInput.value = feature.description || "";
-    els.featureOwnerInput.value = feature.owner || "";
+    populateFeatureOwners(feature).catch((error) => { console.error("Could not load Feature owners", error); });
     els.featurePriorityInput.value = feature.priority || "MEDIUM";
     els.featureStatusInput.value = feature.status || "PLANNED";
     els.featureFormTitle.textContent = "Edit Feature";
@@ -503,7 +504,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (!pi) { els.featureFormError.textContent = "Select a valid Program Increment first."; return; }
     if (appState.features.some((feature) => feature.name.toLowerCase() === name.toLowerCase() && feature.id !== id)) { els.featureFormError.textContent = "A Feature with this name already exists in this project."; return; }
     const previous = appState.features.find((feature) => feature.id === id);
-    const data = { name, piId, pi: pi.name, description: els.featureDescriptionInput.value.trim(), owner: els.featureOwnerInput.value.trim(), priority: els.featurePriorityInput.value, status: els.featureStatusInput.value, archived: false, createdBy: previous?.createdBy || appState.user.uid, updatedAt: serverTimestamp() };
+    const ownerUid = els.featureOwnerInput.value;
+    const selectedOwner = els.featureOwnerInput.selectedOptions[0];
+    const owner = selectedOwner?.dataset.displayName || "";
+    const data = { name, piId, pi: pi.name, description: els.featureDescriptionInput.value.trim(), owner, ownerUid, priority: els.featurePriorityInput.value, status: els.featureStatusInput.value, archived: false, createdBy: previous?.createdBy || appState.user.uid, updatedAt: serverTimestamp() };
     els.featureSaveBtn.disabled = true;
     try {
       if (id) await updateDoc(planningReference("feature", id), data);
@@ -2617,6 +2621,42 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.taskEditorModal.classList.add("is-open");
     els.taskEditorModal.setAttribute("aria-hidden", "false");
     els.newTaskName.focus();
+  }
+
+  async function populateFeatureOwners(feature = null) {
+    const select = els.featureOwnerInput;
+    if (!select) return;
+    const previousUid = feature?.ownerUid || "";
+    const legacyName = feature?.owner || "";
+    select.innerHTML = '<option value="">Unassigned</option>';
+    const members = await fetchAssignableMembers();
+    members.forEach((member) => {
+      const option = document.createElement("option");
+      option.value = member.uid;
+      option.textContent = member.uid === appState.user.uid ? `${member.displayName} (you)` : member.displayName;
+      option.dataset.displayName = member.displayName;
+      select.appendChild(option);
+    });
+    if (previousUid && !members.some((member) => member.uid === previousUid)) {
+      const option = document.createElement("option");
+      option.value = previousUid;
+      option.textContent = legacyName || "Previously assigned member";
+      option.dataset.displayName = legacyName;
+      select.appendChild(option);
+    } else if (!previousUid && legacyName) {
+      const matchingMember = members.find((member) => member.displayName === legacyName);
+      if (matchingMember) select.value = matchingMember.uid;
+      else {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = `${legacyName} (legacy owner — not mapped)`;
+        option.dataset.displayName = legacyName;
+        option.selected = true;
+        select.appendChild(option);
+      }
+    } else {
+      select.value = previousUid;
+    }
   }
 
   async function fetchAssignableMembers() {
