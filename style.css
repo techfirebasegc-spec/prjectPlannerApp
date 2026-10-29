@@ -1947,3 +1947,68 @@ body { background: #f3f6fb; }
   .app-shell.sidebar-collapsed > .sidebar { padding: 8px 10px; }
   .app-shell > .workspace { padding: 10px; }
 }
+
+
+/* Mobile task-details dialog: compact action buttons instead of full-screen-height controls. */
+@media (max-width: 760px) {
+  .task-detail-modal {
+    width: calc(100vw - 16px);
+    max-width: 560px;
+    max-height: calc(100dvh - 20px);
+    margin: 10px auto;
+    border-radius: 16px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .task-detail-header {
+    padding: 17px 52px 15px 16px;
+    gap: 10px;
+  }
+  .task-detail-header h2 { font-size: 1.08rem; line-height: 1.35; overflow-wrap: anywhere; }
+  .task-detail-header p { font-size: .78rem; }
+  .task-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .modal-body, .task-detail-side { padding: 12px; border-radius: 11px; }
+  .task-detail-side { order: -1; }
+  .task-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .modal-row { padding: 8px; }
+  .modal-row b { font-size: .66rem; }
+  .modal-row span { font-size: .8rem; }
+  .task-detail-description p { min-height: 0; font-size: .82rem; }
+  .task-detail-modal > .task-editor-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 14px 16px;
+    margin: 0;
+    border-top: 1px solid #e7edf5;
+  }
+  .task-detail-modal > .task-editor-actions > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    height: auto;
+    padding: 11px 10px;
+    margin: 0;
+    border-radius: 9px;
+    font-size: .88rem;
+    line-height: 1.25;
+    white-space: normal;
+  }
+  .task-detail-modal > .task-editor-actions #saveStatusBtn { grid-column: 1 / -1; order: 0; }
+  .task-detail-modal > .task-editor-actions #editTaskBtn { order: 1; }
+  .task-detail-modal > .task-editor-actions #copyTaskBtn { order: 2; }
+  .task-detail-modal > .task-editor-actions #deleteTaskBtn { order: 3; }
+}
+@media (max-width: 380px) {
+  .task-detail-modal > .task-editor-actions { grid-template-columns: minmax(0, 1fr); }
+  .task-detail-modal > .task-editor-actions #saveStatusBtn { grid-column: 1; }
+  .task-detail-grid { grid-template-columns: minmax(0, 1fr); }
+}
