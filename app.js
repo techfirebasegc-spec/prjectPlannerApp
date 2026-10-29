@@ -725,9 +725,13 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.storiesGrid.innerHTML = stories.map((story) => {
       const counts = { todo: 0, inprogress: 0, done: 0 };
       story.tasks.forEach((task) => counts[task.statusKey] = (counts[task.statusKey] || 0) + 1);
+      const storyPoints = story.tasks.reduce((total, task) => total + (Number(task.storyPoints) || 0), 0);
+      const lifecycleStates = ["Draft", "Ready", "In Progress", "In Review", "Accepted"];
+      const lifecycle = story.tasks.find((task) => lifecycleStates.includes(task.raw.userStoryStatus))?.raw.userStoryStatus || "Draft";
       return `<article class="story-card"><div class="story-card-top"><span class="story-card-label">USER STORY</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
         <h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No user story description added yet.")}</p>
         <div class="story-status-summary"><span>${counts.todo} To do</span><span>${counts.inprogress} In progress</span><span>${counts.done} Done</span></div>
+        <div class="story-metrics"><span><small>Lifecycle</small><strong>${escapeHtml(lifecycle)}</strong></span><span><small>Total task points</small><strong>${storyPoints}</strong></span></div>
         <div class="story-task-list">${story.tasks.slice(0,4).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${story.tasks.length>4?`<p class="story-more">+${story.tasks.length-4} more tasks</p>`:""}</div>
         <div class="story-card-actions">
           <button type="button" class="story-edit" data-edit-story="${escapeHtml(story.title)}" data-story-description="${escapeHtml(story.description)}">Edit story</button>
