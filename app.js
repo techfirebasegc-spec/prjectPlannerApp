@@ -122,6 +122,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     boardViewBtn: document.getElementById("boardViewBtn"),
     listViewBtn: document.getElementById("listViewBtn"),
     insightsViewBtn: document.getElementById("insightsViewBtn"),
+    knowledgeViewBtn: document.getElementById("knowledgeViewBtn"),
+    knowledgeView: document.getElementById("knowledgeView"),
     storiesViewBtn: document.getElementById("storiesViewBtn"),
     sidebarStoriesBtn: document.getElementById("sidebarStoriesBtn"),
     newStoryBtn: document.getElementById("newStoryBtn"),
@@ -342,6 +344,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.boardViewBtn.addEventListener("click", () => setActiveView("board"));
     els.listViewBtn.addEventListener("click", () => setActiveView("list"));
     els.insightsViewBtn.addEventListener("click", () => setActiveView("insights"));
+    els.knowledgeViewBtn?.addEventListener("click", () => setActiveView("knowledge"));
     els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
     els.sidebarStoriesBtn?.addEventListener("click", () => { setActiveView("stories"); if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true); });
     els.newStoryBtn.addEventListener("click", () => { openTaskEditor(); els.taskUserStoryInput.focus(); });
@@ -1409,13 +1412,15 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function setActiveView(view, persist = true) {
-    appState.activeView = ["board", "list", "stories", "insights", "profile"].includes(view) ? view : "board";
+    appState.activeView = ["board", "list", "stories", "insights", "knowledge", "profile"].includes(view) ? view : "board";
     const board = appState.activeView === "board", list = appState.activeView === "list", stories = appState.activeView === "stories";
-    const insights = appState.activeView === "insights", profile = appState.activeView === "profile";
+    const insights = appState.activeView === "insights", knowledge = appState.activeView === "knowledge", profile = appState.activeView === "profile";
     els.boardView.classList.toggle("is-hidden", !board);
     els.listView.classList.toggle("is-hidden", !list);
     els.storiesView.classList.toggle("is-hidden", !stories);
     els.insightsView.classList.toggle("is-hidden", !insights);
+    els.knowledgeView?.classList.toggle("is-hidden", !knowledge);
+    els.knowledgeViewBtn?.classList.toggle("is-active", knowledge);
     els.profileView.classList.toggle("is-hidden", !profile);
     els.boardViewBtn.classList.toggle("is-active", board);
     els.listViewBtn.classList.toggle("is-active", list);
