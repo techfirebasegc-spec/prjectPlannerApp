@@ -1531,10 +1531,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       <section class="task-detail-description"><h3>Task description</h3><p>${escapeHtml(task.description || "No description added.")}</p></section>
       ${renderTaskBreakdown(task)}
       ${renderAcceptanceCriteria(task)}
+      ${renderStoryLifecycle(task)}
     `;
 
     bindTaskBreakdownActions(task);
     bindAcceptanceCriteriaActions(task);
+    bindStoryLifecycleActions(task);
     els.modal.classList.add("is-open");
     els.modal.setAttribute("aria-hidden", "false");
     els.taskStatusSelect.value = task.statusKey;
@@ -1660,6 +1662,38 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       items.splice(Number(button.dataset.removeCriteria), 1);
       await saveTaskBreakdown(task, { acceptanceCriteria: items });
     }));
+  }
+
+  const STORY_LIFECYCLE_STATES = ["Draft", "Ready", "In Progress", "In Review", "Accepted"];
+
+  function renderStoryLifecycle(task) {
+    const state = STORY_LIFECYCLE_STATES.includes(task.raw.userStoryStatus) ? task.raw.userStoryStatus : "Draft";
+    return `
+      <section class="task-breakdown story-lifecycle">
+        <div class="breakdown-heading"><div><h3>User Story lifecycle</h3><p>Track the delivery state of the story linked to this task.</p></div></div>
+        <label class="story-lifecycle-control" for="userStoryStatusSelect"><span>Story status</span>
+          <select id="userStoryStatusSelect">${STORY_LIFECYCLE_STATES.map((value) => `<option value="${value}" ${value === state ? "selected" : ""}>${value}</option>`).join("")}</select>
+        </label>
+        <p class="story-lifecycle-note">If multiple tasks belong to the same story, keep this status consistent across those tasks.</p>
+      </section>`;
+  }
+
+  function bindStoryLifecycleActions(task) {
+    const select = document.getElementById("userStoryStatusSelect");
+    select?.addEventListener("change", async () => {
+      const nextState = select.value;
+      if (!STORY_LIFECYCLE_STATES.includes(nextState)) return;
+      select.disabled = true;
+      try {
+        await updateDoc(taskReference(task.id), { userStoryStatus: nextState, updatedAt: serverTimestamp() });
+        task.raw = { ...task.raw, userStoryStatus: nextState };
+        openTaskModal(appState.allTasks.find((item) => item.id === task.id) || task);
+      } catch (error) {
+        console.error("Could not update user story status", error);
+        window.alert("Could not save the User Story status. Check project permissions and try again.");
+        select.disabled = false;
+      }
+    });
   }
 
   function modalRow(label, value) {
