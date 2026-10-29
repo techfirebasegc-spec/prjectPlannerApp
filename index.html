@@ -528,10 +528,6 @@
               <select name="userStory" id="taskUserStoryInput"><option value="">Standalone task — no User Story</option></select>
               <small class="field-help">Select a saved User Story to link this task to its Feature and PI.</small>
             </label>
-            <label class="task-form-wide">User story description<textarea name="userStoryDescription" rows="3" maxlength="1500" placeholder="Describe the user need and expected outcome"></textarea></label>
-            <label>Program Increment<select name="pi" id="taskPIInput"><option value="">Select a PI</option></select></label>
-            <label>Sprint<input name="sprint" maxlength="100" autocomplete="off"></label>
-            <label>Feature<select name="feature" id="taskFeatureInput"><option value="">Select a Feature</option></select></label>
             <label>Assignee
               <select name="assigneeUid" id="taskAssigneeInput" aria-describedby="taskAssigneeHelp">
                 <option value="">Unassigned</option>
@@ -546,9 +542,18 @@
                 <option value="Low">Low</option>
               </select>
             </label>
-            <label>Story points<input name="storyPoints" type="number" min="0" step="0.5" value="0"></label>
-            <label>Start date<input name="startDate" type="date"></label>
-            <label>End date<input name="endDate" type="date"></label>
+            <details class="task-advanced-details task-form-wide">
+              <summary>Planning & scheduling <span>Optional details</span></summary>
+              <div class="task-advanced-grid">
+                <label>Program Increment<select name="pi" id="taskPIInput"><option value="">Select a PI</option></select></label>
+                <label>Feature<select name="feature" id="taskFeatureInput"><option value="">Select a Feature</option></select></label>
+                <label>Sprint<input name="sprint" maxlength="100" autocomplete="off"></label>
+                <label>Story points<input name="storyPoints" type="number" min="0" step="0.5" value="0"></label>
+                <label>Start date<input name="startDate" type="date"></label>
+                <label>End date<input name="endDate" type="date"></label>
+                <label class="task-form-wide">User story description<textarea name="userStoryDescription" rows="3" maxlength="1500" placeholder="Describe the user need and expected outcome"></textarea></label>
+              </div>
+            </details>
           </div>
         </section>
         <section class="task-editor-notes" aria-label="Task description">
