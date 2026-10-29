@@ -2540,3 +2540,27 @@ body { background: #f3f6fb; }
 .story-task-link{padding:7px 9px}
 .story-more{padding:2px 3px}
 @media(max-width:760px){.stories-list-controls{align-items:stretch}.story-archive-toggle{width:100%}.story-card-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.story-card-actions .story-add-task{grid-column:1/-1;grid-row:1}.story-card-actions .story-edit,.story-card-actions .story-archive-action{min-height:38px}}
+
+
+/* User Story card/list view controls and expandable task previews */
+.stories-toolbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.story-view-toggle{display:inline-flex;align-items:center;padding:3px;border:1px solid #d7e1ef;border-radius:10px;background:#f3f6fb;gap:2px}
+.story-view-toggle button{border:0;border-radius:7px;padding:8px 12px;background:transparent;color:#657792;font:inherit;font-size:.78rem;font-weight:700;cursor:pointer}
+.story-view-toggle button.is-active{background:#fff;color:#2859bf;box-shadow:0 1px 4px rgba(26,50,90,.13)}
+.story-expand-tasks{align-self:flex-start;border:0;background:transparent;padding:7px 3px;color:#315fc4;font:inherit;font-size:.78rem;font-weight:750;cursor:pointer;text-align:left}
+.story-expand-tasks:hover{text-decoration:underline}
+.stories-grid-list{display:flex;flex-direction:column;gap:12px}
+.stories-grid-list .story-card{width:100%;display:grid;grid-template-columns:minmax(190px,1.15fr) minmax(180px,1fr) minmax(220px,1.4fr) auto;gap:10px 20px;align-items:start;padding:18px 20px}
+.stories-grid-list .story-card-top{grid-column:1;grid-row:1;align-self:center}
+.stories-grid-list .story-card h3{grid-column:1;grid-row:2;margin:0}
+.stories-grid-list .story-description{grid-column:1;grid-row:3;margin:0}
+.stories-grid-list .story-criteria-count{grid-column:1;grid-row:4;margin:0}
+.stories-grid-list .story-status-summary{grid-column:2;grid-row:1}
+.stories-grid-list .story-metrics{grid-column:2;grid-row:2 / span 2}
+.stories-grid-list .story-task-list,.stories-grid-list .story-no-tasks{grid-column:3;grid-row:1 / span 4;margin:0;max-height:190px;overflow:auto}
+.stories-grid-list .story-card-actions{grid-column:4;grid-row:1 / span 4;display:flex;flex-direction:column;min-width:100px;gap:7px}
+.stories-grid-list .story-card-actions button{width:100%;min-height:36px}
+.stories-grid-list .story-task-list{display:flex;flex-direction:column}
+.stories-grid-list .story-task-link{width:100%}
+@media(max-width:900px){.stories-grid-list .story-card{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}.stories-grid-list .story-card-top,.stories-grid-list .story-card h3,.stories-grid-list .story-description,.stories-grid-list .story-criteria-count,.stories-grid-list .story-status-summary,.stories-grid-list .story-metrics,.stories-grid-list .story-task-list,.stories-grid-list .story-no-tasks,.stories-grid-list .story-card-actions{grid-column:auto;grid-row:auto}.stories-grid-list .story-task-list,.stories-grid-list .story-no-tasks{max-height:240px}.stories-grid-list .story-card-actions{flex-direction:row;flex-wrap:wrap}.stories-grid-list .story-card-actions button{width:auto;flex:1}}
+@media(max-width:600px){.stories-toolbar-actions{width:100%;justify-content:space-between}.story-view-toggle{flex:1}.story-view-toggle button{flex:1;padding:9px 7px}.stories-grid-list .story-card{grid-template-columns:minmax(0,1fr);padding:15px}.stories-grid-list .story-card-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.stories-grid-list .story-card-actions button{width:100%}}
