@@ -3867,3 +3867,129 @@ body {
   #membersModal .members-editor > #membersTitle { padding: 18px 48px 4px 16px; }
   #membersModal .members-editor > .task-editor-subtitle { padding: 4px 48px 16px 16px; }
 }
+
+
+/* Unified Arcflow action system — restrained deep teal, slate neutrals, clear danger state. */
+:root {
+  --primary: #176b65;
+  --primary-hover: #125650;
+  --brand: #176b65;
+  --brand-soft: #e7f3f1;
+  --focus-ring: rgba(23, 107, 101, .22);
+  --action-border: #cbd7df;
+  --action-text: #344b5c;
+  --action-hover: #f0f5f6;
+  --danger: #b54747;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.new-task-btn,
+.save-task-btn,
+.primary-btn,
+.button-primary,
+.bulk-status-apply,
+#saveStatusBtn,
+#saveProjectBtn,
+#saveStoryBtn,
+#saveMemberBtn,
+#saveProfileBtn {
+  color: #fff;
+  background: #176b65;
+  border: 1px solid #176b65;
+  box-shadow: 0 2px 4px rgba(18, 86, 80, .12);
+}
+.new-task-btn:hover,
+.save-task-btn:hover,
+.primary-btn:hover,
+.button-primary:hover,
+.bulk-status-apply:hover,
+#saveStatusBtn:hover,
+#saveProjectBtn:hover,
+#saveStoryBtn:hover,
+#saveMemberBtn:hover,
+#saveProfileBtn:hover {
+  color: #fff;
+  background: #125650;
+  border-color: #125650;
+  box-shadow: 0 4px 10px rgba(18, 86, 80, .18);
+}
+.secondary-action,
+.logout-btn,
+.story-card-actions button,
+.story-row-actions button,
+.view-btn,
+.story-view-toggle button,
+.list-sort-button,
+.bulk-status-select,
+.list-archive-btn:not(.danger-action) {
+  --button-neutral-border: #cbd7df;
+}
+.secondary-action,
+.logout-btn {
+  color: #344b5c;
+  border-color: #cbd7df;
+  background: #fff;
+}
+.secondary-action:hover,
+.logout-btn:hover {
+  color: #203e4d;
+  border-color: #aebfc9;
+  background: #f0f5f6;
+}
+.danger-action,
+.list-archive-btn {
+  color: #a53c3c;
+  border: 1px solid #e0b7b7;
+  background: #fffafa;
+}
+.danger-action:hover,
+.list-archive-btn:hover:not(:disabled) {
+  color: #8f2f2f;
+  border-color: #d69b9b;
+  background: #fff0f0;
+}
+.view-switch,
+.story-view-toggle {
+  background: #edf3f4;
+  border-color: #d7e2e4;
+}
+.view-btn.is-active,
+.story-view-toggle button.is-active {
+  color: #176b65;
+  border-color: #cfe3df;
+  background: #fff;
+}
+.topbar .topbar-actions .secondary-action {
+  color: #eaf3f3;
+  border-color: rgba(216, 236, 234, .28);
+  background: rgba(255, 255, 255, .06);
+}
+.topbar .topbar-actions .secondary-action:hover {
+  color: #fff;
+  border-color: rgba(225, 242, 240, .55);
+  background: rgba(255, 255, 255, .12);
+}
+.topbar .topbar-actions .new-task-btn {
+  color: #fff;
+  border-color: #2b8079;
+  background: #176b65;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .12);
+}
+.topbar .topbar-actions .new-task-btn:hover {
+  color: #fff;
+  border-color: #125650;
+  background: #125650;
+}
+.topbar .project-select {
+  border-color: rgba(216, 236, 234, .28);
+  background-color: #244f56;
+}
+@media (prefers-reduced-motion: reduce) {
+  button, a { transition: none !important; }
+}
