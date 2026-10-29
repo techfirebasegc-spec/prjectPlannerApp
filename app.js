@@ -813,15 +813,22 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       story.tasks.forEach((task) => counts[task.statusKey] = (counts[task.statusKey] || 0) + 1);
       const storyPoints = story.tasks.reduce((total, task) => total + (Number(task.storyPoints) || 0), 0);
       const criteria = story.acceptanceCriteria.length ? `<p class="story-criteria-count">${story.acceptanceCriteria.length} acceptance criteria</p>` : "";
-      return `<article class="story-card${story.archived ? " is-archived" : ""}"><div class="story-card-top"><span class="story-card-label">${story.archived ? "ARCHIVED STORY" : "USER STORY"}</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
-        <h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p>${criteria}
-        <div class="story-status-summary"><span>${counts.todo} To do</span><span>${counts.inprogress} In progress</span><span>${counts.done} Done</span></div>
-        <div class="story-metrics"><span><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></span><span><small>Total task points</small><strong>${storyPoints}</strong></span></div>
-        ${story.tasks.length ? `<div class="story-task-list">${(appState.storyViewMode === "list" || appState.expandedStoryTaskIds.has(story.id) ? story.tasks : story.tasks.slice(0,2)).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${appState.storyViewMode === "cards" && story.tasks.length>2 ? `<button type="button" class="story-expand-tasks" data-expand-story-tasks="${escapeHtml(story.id)}">${appState.expandedStoryTaskIds.has(story.id) ? "Show fewer tasks" : `Show all ${story.tasks.length} tasks`}</button>` : ""}</div>` : '<div class="story-no-tasks"><span aria-hidden="true">＋</span><div><strong>No tasks yet</strong><p>Add tasks when you are ready to break down this story.</p></div></div>'}
-        <div class="story-card-actions">
-          <button type="button" class="story-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit</button>
-          ${story.archived ? "" : `<button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>`}
-          <button type="button" class="story-archive-action" data-archive-story-id="${escapeHtml(story.id)}" data-archive-story-title="${escapeHtml(story.title)}">${story.archived ? "Restore" : "Archive"}</button>
+      const doneCount = counts.done;
+      const completion = story.tasks.length ? Math.round(doneCount / story.tasks.length * 100) : 0;
+      const detailsOpen = appState.expandedStoryTaskIds.has(story.id);
+      return `<article class="story-card story-row${story.archived ? " is-archived" : ""}${detailsOpen ? " is-expanded" : ""}">
+        <div class="story-row-main">
+          <div class="story-row-title"><span class="story-card-label">${story.archived ? "ARCHIVED" : "USER STORY"}</span><h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p></div>
+          <div class="story-row-status"><span class="story-lifecycle-pill">${escapeHtml(story.lifecycle)}</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
+          <div class="story-row-progress"><div class="story-progress-copy"><span>Task progress</span><strong>${completion}%</strong></div><div class="story-progress-track"><span style="width:${completion}%"></span></div><small>${counts.done} of ${story.tasks.length} done</small></div>
+          <div class="story-row-points"><small>Points</small><strong>${storyPoints}</strong></div>
+          <button type="button" class="story-details-toggle" data-toggle-story-details="${escapeHtml(story.id)}" aria-expanded="${detailsOpen}">${detailsOpen ? "Hide details ↑" : "View details ↓"}</button>
+        </div>
+        <div class="story-row-actions"><button type="button" class="story-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit</button>${story.archived ? "" : `<button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>`}<button type="button" class="story-archive-action" data-archive-story-id="${escapeHtml(story.id)}" data-archive-story-title="${escapeHtml(story.title)}">${story.archived ? "Restore" : "Archive"}</button></div>
+        <div class="story-row-details" ${detailsOpen ? "" : "hidden"}>
+          <div class="story-detail-summary"><div><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></div><div><small>Task status</small><strong>${counts.todo} To do · ${counts.inprogress} In progress · ${counts.done} Done</strong></div><div><small>Total task points</small><strong>${storyPoints}</strong></div></div>
+          <section class="story-detail-section"><h4>Acceptance criteria</h4>${story.acceptanceCriteria.length ? `<ul>${story.acceptanceCriteria.map(item => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : '<p class="story-detail-empty">No acceptance criteria added.</p>'}</section>
+          <section class="story-detail-section"><h4>Linked tasks <span>${story.tasks.length}</span></h4>${story.tasks.length ? `<div class="story-task-list">${story.tasks.map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}</div>` : '<div class="story-no-tasks"><strong>No tasks yet</strong><p>Add tasks when you are ready to break down this story.</p></div>'}</section>
         </div></article>`;
     }).join("");
     els.storiesGrid.querySelectorAll("[data-expand-story-tasks]").forEach(button => button.addEventListener("click", () => {
