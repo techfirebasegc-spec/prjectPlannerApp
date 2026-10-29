@@ -2564,3 +2564,81 @@ body { background: #f3f6fb; }
 .stories-grid-list .story-task-link{width:100%}
 @media(max-width:900px){.stories-grid-list .story-card{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}.stories-grid-list .story-card-top,.stories-grid-list .story-card h3,.stories-grid-list .story-description,.stories-grid-list .story-criteria-count,.stories-grid-list .story-status-summary,.stories-grid-list .story-metrics,.stories-grid-list .story-task-list,.stories-grid-list .story-no-tasks,.stories-grid-list .story-card-actions{grid-column:auto;grid-row:auto}.stories-grid-list .story-task-list,.stories-grid-list .story-no-tasks{max-height:240px}.stories-grid-list .story-card-actions{flex-direction:row;flex-wrap:wrap}.stories-grid-list .story-card-actions button{width:auto;flex:1}}
 @media(max-width:600px){.stories-toolbar-actions{width:100%;justify-content:space-between}.story-view-toggle{flex:1}.story-view-toggle button{flex:1;padding:9px 7px}.stories-grid-list .story-card{grid-template-columns:minmax(0,1fr);padding:15px}.stories-grid-list .story-card-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.stories-grid-list .story-card-actions button{width:100%}}
+
+
+/* User Story workspace polish — clearer hierarchy, tighter cards, and calmer controls */
+.stories-view { gap: 18px; }
+.stories-toolbar {
+  position: relative;
+  gap: 20px;
+  padding: 18px 22px;
+  border-color: #dfe7f2;
+  background: linear-gradient(120deg, #fff 0%, #f8fbff 100%);
+  box-shadow: 0 5px 18px rgba(30, 64, 110, .045);
+}
+.stories-toolbar h2 { font-size: 1.22rem; letter-spacing: -.025em; }
+.stories-summary { padding: 7px 10px; border: 1px solid #e2eaf5; border-radius: 999px; background: #fff; white-space: nowrap; }
+.stories-grid { gap: 16px; }
+.story-card {
+  position: relative;
+  padding: 18px;
+  border-color: #e0e8f3;
+  border-radius: 16px;
+  box-shadow: 0 3px 12px rgba(30, 64, 110, .035);
+}
+.story-card::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 16px 0 0 16px;
+  background: #cbdcf6;
+  content: "";
+}
+.story-card:hover { border-color: #c6d8f2; box-shadow: 0 9px 24px rgba(30, 64, 110, .08); transform: translateY(-1px); }
+.story-card-top { min-height: 28px; }
+.story-card-label { font-size: .67rem; letter-spacing: .09em; }
+.story-task-count { padding: 5px 9px; background: #edf4ff; }
+.story-card h3 { margin-top: 13px; font-size: 1.02rem; letter-spacing: -.015em; }
+.story-description { min-height: 0; margin-bottom: 12px; }
+.story-status-summary { gap: 7px; margin: 12px 0; }
+.story-status-summary span { border: 1px solid #e8edf5; background: #f8fafd; }
+.story-metrics { gap: 8px; margin: 12px 0; }
+.story-metrics > span { padding: 11px 12px; border-color: #e3eaf4; background: #f8faff; }
+.story-metrics small { letter-spacing: .025em; }
+.story-metrics strong { color: #18365e; font-size: 1rem; }
+.story-task-list { gap: 7px; }
+.story-task-link {
+  min-height: 42px;
+  padding: 9px 11px;
+  border-color: #e5ebf4;
+  border-radius: 10px;
+  background: #fbfcfe;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.story-task-link:hover { border-color: #a9c7f4; background: #f1f6ff; transform: translateX(2px); }
+.story-task-link span { font-size: .78rem; font-weight: 600; }
+.story-task-link small { padding: 4px 7px; border-radius: 6px; background: #eef3fa; }
+.story-card-actions { gap: 8px; margin-top: 14px; }
+.story-card-actions button { min-height: 39px; border-radius: 9px; transition: background .15s ease, border-color .15s ease; }
+.story-add-task { border-style: solid; border-color: #d7e5fb; background: #f3f7ff; }
+.story-add-task:hover { border-color: #a9c7f4; background: #eaf2ff; }
+.story-edit { border-color: #dfe7f1; }
+.stories-grid-list { gap: 12px; }
+.stories-grid-list .story-card { padding: 16px 18px; }
+.stories-grid-list .story-card h3 { margin: 0; align-self: center; }
+.stories-grid-list .story-card::before { background: #9dbcf0; }
+.stories-grid-list .story-task-list, .stories-grid-list .story-no-tasks { scrollbar-width: thin; scrollbar-color: #cbd8e8 transparent; }
+.story-card.is-archived::before { background: #cbd2dc; }
+.story-card.is-archived { background: #fafbfc; }
+@media (min-width: 1200px) {
+  .stories-grid:not(.stories-grid-list) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .stories-toolbar { padding: 16px; }
+  .stories-summary { white-space: normal; }
+}
+@media (max-width: 600px) {
+  .story-card { padding: 15px; border-radius: 13px; }
+  .story-card::before { border-radius: 13px 0 0 13px; }
+  .story-card-actions { gap: 7px; }
+}
