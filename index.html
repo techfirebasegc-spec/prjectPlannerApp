@@ -126,10 +126,22 @@
       </section>
 
       <section id="overviewStats" class="overview-stats" aria-label="Task summary">
-        <article class="overview-card total"><span class="overview-icon">▤</span><div><p>Total Tasks</p><strong id="totalTasks">0</strong><small>Across your portfolio</small></div></article>
-        <article class="overview-card complete"><span class="overview-icon">✓</span><div><p>Completed</p><strong id="completedPercent">0%</strong><small>Completion rate</small></div></article>
-        <article class="overview-card active"><span class="overview-icon">◌</span><div><p>In Progress</p><strong id="inProgressCount">0</strong><small>Active tasks</small></div></article>
-        <article class="overview-card todo"><span class="overview-icon">◷</span><div><p>To Do</p><strong id="todoStat">0</strong><small>Tasks yet to start</small></div></article>
+        <article class="overview-card total">
+          <div class="overview-card-copy"><p>Total tasks</p><strong id="totalTasks">0</strong><small>Across your portfolio</small></div>
+          <div class="overview-card-visual" aria-hidden="true"><span class="metric-caption">WORKLOAD</span><svg viewBox="0 0 112 38" role="presentation"><path class="metric-sparkline-area" d="M2 31 L18 23 L32 26 L47 12 L62 19 L77 8 L93 14 L110 3 L110 37 L2 37 Z"/><path class="metric-sparkline" d="M2 31 L18 23 L32 26 L47 12 L62 19 L77 8 L93 14 L110 3"/></svg></div>
+        </article>
+        <article class="overview-card complete">
+          <div class="overview-card-copy"><p>Completion rate</p><strong id="completedPercent">0%</strong><small>Tasks marked done</small></div>
+          <div class="overview-card-visual metric-ring-wrap" aria-hidden="true"><span class="metric-caption">PROGRESS</span><div class="metric-ring"><span>✓</span></div></div>
+        </article>
+        <article class="overview-card active">
+          <div class="overview-card-copy"><p>In progress</p><strong id="inProgressCount">0</strong><small>Currently being worked on</small></div>
+          <div class="overview-card-visual" aria-hidden="true"><span class="metric-caption">ACTIVE</span><div class="metric-bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        </article>
+        <article class="overview-card todo">
+          <div class="overview-card-copy"><p>To do</p><strong id="todoStat">0</strong><small>Tasks yet to start</small></div>
+          <div class="overview-card-visual" aria-hidden="true"><span class="metric-caption">BACKLOG</span><div class="metric-backlog"><i></i><i></i><i></i></div></div>
+        </article>
       </section>
 
       <div class="dashboard-main-grid">
