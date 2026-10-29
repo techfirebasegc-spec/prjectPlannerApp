@@ -1684,13 +1684,31 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const nextState = select.value;
       if (!STORY_LIFECYCLE_STATES.includes(nextState)) return;
       select.disabled = true;
+      const storyTitle = String(task.raw.userStory || task.story || "").trim();
+      const linkedTasks = storyTitle && storyTitle !== "-"
+        ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
+        : [task];
+      if (linkedTasks.length > 500) {
+        window.alert("This story is linked to more than 500 tasks. Status was not changed; split the update into smaller groups.");
+        select.disabled = false;
+        return;
+      }
       try {
-        await updateDoc(taskReference(task.id), { userStoryStatus: nextState, updatedAt: serverTimestamp() });
-        task.raw = { ...task.raw, userStoryStatus: nextState };
+        const batch = writeBatch(db);
+        linkedTasks.forEach((item) => {
+          batch.update(taskReference(item.id), {
+            userStoryStatus: nextState,
+            updatedAt: serverTimestamp()
+          });
+        });
+        await batch.commit();
+        linkedTasks.forEach((item) => {
+          item.raw = { ...item.raw, userStoryStatus: nextState };
+        });
         openTaskModal(appState.allTasks.find((item) => item.id === task.id) || task);
       } catch (error) {
-        console.error("Could not update user story status", error);
-        window.alert("Could not save the User Story status. Check project permissions and try again.");
+        console.error("Could not update linked User Story statuses", error);
+        window.alert("Could not save the User Story status for every linked task. Check project permissions and try again.");
         select.disabled = false;
       }
     });
