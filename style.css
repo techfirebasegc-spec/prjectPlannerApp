@@ -1888,3 +1888,62 @@ body { background: #f3f6fb; }
   .overview-card { padding: 10px; }
   .overview-icon { display: none; }
 }
+
+
+/* Critical mobile sidebar fix: the collapsed desktop grid must not override the mobile layout. */
+@media (max-width: 1100px) {
+  .app-shell,
+  .app-shell.sidebar-collapsed {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100%;
+    min-width: 0;
+  }
+  .app-shell > .sidebar {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    grid-column: 1;
+    grid-row: 1;
+    box-sizing: border-box;
+    border-right: 0;
+    border-bottom: 1px solid #e1e7f0;
+  }
+  .app-shell > .workspace {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .app-shell.sidebar-collapsed > .sidebar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto;
+    justify-items: start;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #fff;
+  }
+  .app-shell.sidebar-collapsed > .sidebar .sidebar-toggle {
+    position: static;
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .app-shell.sidebar-collapsed > .sidebar .sidebar-shortcuts {
+    display: none;
+  }
+  .app-shell.sidebar-collapsed > .sidebar .brand-block,
+  .app-shell.sidebar-collapsed > .sidebar .filter-panel,
+  .app-shell.sidebar-collapsed > .sidebar .controls-panel {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .app-shell > .sidebar { padding: 8px 10px; }
+  .app-shell.sidebar-collapsed > .sidebar { padding: 8px 10px; }
+  .app-shell > .workspace { padding: 10px; }
+}
