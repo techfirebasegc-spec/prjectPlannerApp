@@ -80,7 +80,9 @@ Sprints are timeboxes and are not necessarily permanent parents of tasks.
 - Archived stories are hidden from the active story list and accessible through a Show archived filter.
 - Users can restore an archived story.
 - Archiving/restoring is persisted and protected by the same project authorization as story edits.
-- Story cards show at most two task previews by default and display a count for remaining tasks; adding many tasks must not make cards grow without bound.
+- Story cards show at most two task previews by default and provide an explicit Show all / Show fewer control for remaining tasks.
+- Users can switch between Cards and List view; List view makes it easier to scan many stories and their tasks.
+- The list layout remains responsive and task lists are scrollable within the row so a story with many tasks does not make the whole page excessively tall.
 
 ## Phase 1 acceptance tests
 1. Create a story with a title and no task; it appears with zero tasks.
@@ -95,7 +97,8 @@ Sprints are timeboxes and are not necessarily permanent parents of tasks.
 10. Production build passes and browser console has no uncaught errors during the tested flow.
 11. Archive a story; it disappears from active stories but its tasks remain unchanged.
 12. Show archived stories, restore one, and verify it returns to the active list after refresh.
-13. Link at least 10 tasks to one story; the card shows no more than two task previews and a remaining-task count.
+13. Link at least 10 tasks to one story; Cards view initially shows two tasks and Show all reveals the remainder; Show fewer collapses the preview.
+14. Switch between Cards and List view; verify all linked tasks are reachable and layout remains usable on desktop and mobile.
 
 ## Definition of done
 A phase is complete only when code is committed, a production build passes, relevant automated/integration tests are run, and results are reported accurately. A code presence check alone is not a live integration test. Do not claim Firestore or browser verification without running it.
