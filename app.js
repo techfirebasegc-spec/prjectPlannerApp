@@ -1796,9 +1796,20 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.saveTaskBtn.textContent = appState.editingTaskId ? "Saving..." : "Creating...";
     els.taskEditorError.textContent = "";
     try {
+      const storyTitle = String(form.get("userStory") || "").trim();
+      const editingTask = appState.editingTaskId
+        ? appState.allTasks.find((item) => item.id === appState.editingTaskId)
+        : null;
+      const matchingStoryTasks = storyTitle && storyTitle !== "-"
+        ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
+        : [];
+      const storyId = storyTitle && storyTitle !== "-"
+        ? (editingTask?.raw.userStoryId || matchingStoryTasks.find((item) => item.raw.userStoryId)?.raw.userStoryId || doc(collection(db, "_storyIdGenerator")).id)
+        : "";
       const taskData = {
         task,
-        userStory: String(form.get("userStory") || "").trim(),
+        userStory: storyTitle,
+        userStoryId: storyId,
         userStoryDescription: String(form.get("userStoryDescription") || "").trim(),
         pi: String(form.get("pi") || "").trim(),
         sprint: String(form.get("sprint") || "").trim(),
@@ -1816,13 +1827,23 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       if (appState.editingTaskId) {
         await updateDoc(taskReference(appState.editingTaskId), taskData);
       } else {
-        await addDoc(taskCollection(), {
+        const newTaskData = {
           ...taskData,
           status: "To Do",
           archived: false,
           createdBy: appState.user.uid,
           createdAt: serverTimestamp()
-        });
+        };
+        if (storyId && matchingStoryTasks.some((item) => !item.raw.userStoryId)) {
+          const batch = writeBatch(db);
+          matchingStoryTasks.filter((item) => !item.raw.userStoryId).forEach((item) => {
+            batch.update(taskReference(item.id), { userStoryId: storyId, updatedAt: serverTimestamp() });
+          });
+          batch.set(doc(taskCollection()), newTaskData);
+          await batch.commit();
+        } else {
+          await addDoc(taskCollection(), newTaskData);
+        }
       }
       closeTaskEditor();
     } catch (error) {
