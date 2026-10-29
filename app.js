@@ -259,6 +259,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const unsubscribePI = onSnapshot(planningCollection("pi"), (snapshot) => {
       appState.programIncrements = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
         .sort((a, b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+      refreshNormalizedTasksFromCatalog();
       refreshPlanningSelectors();
       populatePlanningFilterOptions();
       renderProgramIncrements();
@@ -273,6 +274,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const unsubscribeFeature = onSnapshot(planningCollection("feature"), (snapshot) => {
       appState.features = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
         .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      refreshNormalizedTasksFromCatalog();
       refreshPlanningSelectors();
       populatePlanningFilterOptions();
       renderFeatures();
@@ -322,6 +324,13 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (els.storyFeatureInput) els.storyFeatureInput.disabled = !storyFeatureOptions.length;
     if (els.featureSaveBtn) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
     if (els.piSaveBtn) els.piSaveBtn.disabled = !planningCanEdit();
+  }
+
+  function refreshNormalizedTasksFromCatalog() {
+    if (!appState.allTasks.length) return;
+    appState.allTasks = normalizeRecords(appState.allTasks.map((task) => ({ id: task.id, ...task.raw }))).filter((task) => task.archived !== true);
+    appState.hierarchy = groupByHierarchy(appState.allTasks);
+    appState.sprintCatalog = buildSprintCatalog(appState.allTasks);
   }
 
   function populatePlanningFilterOptions() {
