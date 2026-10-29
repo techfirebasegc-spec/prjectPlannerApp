@@ -742,7 +742,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         <div class="story-metrics"><span><small>Lifecycle</small><strong>${escapeHtml(lifecycle)}</strong></span><span><small>Total task points</small><strong>${storyPoints}</strong></span></div>
         <div class="story-task-list">${story.tasks.slice(0,4).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${story.tasks.length>4?`<p class="story-more">+${story.tasks.length-4} more tasks</p>`:""}</div>
         <div class="story-card-actions">
-          <button type="button" class="story-edit" data-edit-story="${escapeHtml(story.title)}" data-story-description="${escapeHtml(story.description)}">Edit story</button>
+          <button type="button" class="story-edit" data-edit-story="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">Edit story</button>
           <button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>
         </div></article>`;
     }).join("");
@@ -754,7 +754,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       els.taskEditorForm.elements.namedItem("userStoryDescription").value = button.dataset.storyDescription || ""; els.newTaskName.focus();
     }));
     els.storiesGrid.querySelectorAll("[data-edit-story]").forEach(button => button.addEventListener("click", () => {
-      editUserStory(button.dataset.editStory || "", button.dataset.storyDescription || "");
+      editUserStory(button.dataset.editStory || "", button.dataset.storyDescription || "", button.dataset.storyId || "");
     }));
   }
 
@@ -762,7 +762,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const linkedTasks = currentStoryId
       ? appState.allTasks.filter((task) => String(task.raw.userStoryId || "").trim() === currentStoryId)
       : appState.allTasks.filter((task) =>
-          String(task.raw.userStory || task.story || "").trim() === currentTitle
+          !String(task.raw.userStoryId || "").trim()
+          && String(task.raw.userStory || task.story || "").trim() === currentTitle
         );
     if (!linkedTasks.length) {
       window.alert("This story has no linked tasks to store its details. Add a task to this story first.");
