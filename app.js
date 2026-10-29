@@ -1092,12 +1092,15 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     fillSelect(els.sprintFilter, collectUnique(tasks, "sprint"), "All Sprints");
     const selectedAssignee = appState.filters.assignee;
     try {
-      const members = await fetchAssignableMembers();
-      // Match the task editor's actual assignee directory/project-members source,
-      // while retaining legacy names already stored on existing tasks.
+      const memberResult = await fetchAssignableMembers();
+      // Normalize the directory response defensively: older callers/data may return
+      // a keyed object rather than an array. A directory issue must not break filters.
+      const members = Array.isArray(memberResult)
+        ? memberResult
+        : Object.values(memberResult || {}).filter((member) => member && typeof member === "object");
       const names = [...new Set([
         "Unassigned",
-        ...members.map((member) => String(member.displayName || "").trim()).filter(Boolean),
+        ...members.map((member) => String(member.displayName || member.name || "").trim()).filter(Boolean),
         ...tasks.map((task) => String(task.assignee || "").trim()).filter(Boolean)
       ])].sort((a, b) => a.localeCompare(b));
       fillSelect(els.assigneeFilter, names, "All Assignees");
@@ -1107,8 +1110,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       console.error("Could not load assignee filter options", error);
       // Fail visibly and safely back to task-backed options rather than leaving
       // an empty selector or breaking the rest of the board.
-      fillSelect(els.assigneeFilter, collectUnique(tasks, "assignee"), "All Assignees");
-      els.assigneeFilter.value = collectUnique(tasks, "assignee").includes(selectedAssignee) ? selectedAssignee : "all";
+      const taskAssignees = collectUnique(tasks, "assignee").filter(Boolean);
+      fillSelect(els.assigneeFilter, taskAssignees, "All Assignees");
+      els.assigneeFilter.value = taskAssignees.includes(selectedAssignee) ? selectedAssignee : "all";
       appState.filters.assignee = els.assigneeFilter.value;
     }
   }
@@ -2606,7 +2610,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const snapshot = await getDocs(collection(db, "plannerProjects", appState.activeProjectId, "members"));
       members = snapshot.docs.map((item) => item.data()).filter((member) => member.uid && member.displayName);
     }
-    return [...new Map(members.map((member) => [member.uid, member])).values()]
+    // Always return a predictable array of assignable identities.
+    return [...new Map((Array.isArray(members) ? members : [])
+      .filter((member) => member && member.uid && member.displayName)
+      .map((member) => [member.uid, member])).values()]
       .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
   }
 
