@@ -2990,3 +2990,151 @@ input:hover, select:hover, textarea:hover { border-color: #c4d2e6; }
  .stories-toolbar-actions { gap:6px; }
  .stories-layout-label { padding:8px; font-size:11px; }
 }
+
+
+/* Task details modal — match the structured, polished User Story workspace */
+#taskModal .task-detail-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(1080px, calc(100vw - 40px));
+  max-height: min(88vh, 900px);
+  overflow: hidden;
+  padding: 0;
+}
+#taskModal .task-detail-header {
+  flex: 0 0 auto;
+  gap: 16px;
+  padding: 22px 62px 18px 26px;
+  background: linear-gradient(110deg, #f6f8ff 0%, #fff 72%);
+}
+#taskModal .task-detail-header .task-editor-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #e5eaff, #f0e8ff);
+  color: #4b55d8;
+  font-size: 23px;
+}
+#taskModal .task-detail-header h2 {
+  font-size: 1.3rem;
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
+}
+#taskModal .task-detail-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  align-items: start;
+  grid-template-columns: minmax(0, 1.65fr) minmax(230px, .75fr);
+  gap: 14px;
+  padding: 18px 26px;
+}
+#taskModal .modal-body {
+  padding: 14px;
+  border-color: #dfe8f6;
+  border-radius: 13px;
+  background: #fbfdff;
+}
+#taskModal .task-detail-side {
+  position: sticky;
+  top: 0;
+  display: block;
+  align-self: start;
+  padding: 16px;
+  border-color: #dce7f8;
+  border-radius: 13px;
+  background: linear-gradient(150deg, #f1f6ff, #fbfdff 75%);
+}
+#taskModal .task-detail-side .status-editor {
+  display: grid;
+  gap: 9px;
+  color: #425875;
+  font-size: .8rem;
+  font-weight: 700;
+}
+#taskModal .task-detail-side .status-editor select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: #203958;
+  font-size: .9rem;
+}
+#taskModal .task-detail-grid {
+  gap: 8px;
+}
+#taskModal .modal-row {
+  min-height: 65px;
+  padding: 11px 12px;
+  border-color: #e1e9f5;
+  border-radius: 9px;
+  background: #fff;
+}
+#taskModal .modal-row b {
+  font-size: .67rem;
+  letter-spacing: .055em;
+  color: #7083a2;
+}
+#taskModal .modal-row span {
+  font-size: .84rem;
+  line-height: 1.4;
+  color: #243b5d;
+}
+#taskModal .task-detail-description {
+  margin-top: 12px;
+  padding: 14px 2px 0;
+  border-top-color: #e4ebf5;
+}
+#taskModal .task-detail-description h3,
+#taskModal .task-breakdown h3,
+#taskModal .task-acceptance-criteria h3 {
+  font-size: .86rem;
+  color: #263f63;
+}
+#taskModal .task-detail-description p {
+  min-height: 0;
+  padding: 11px 12px;
+  border: 1px solid #e7edf6;
+  border-radius: 9px;
+  background: #fff;
+  font-size: .84rem;
+  line-height: 1.6;
+}
+#taskModal .task-editor-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+  margin: 0;
+  padding: 14px 26px 18px;
+  border-top: 1px solid #e5ebf5;
+  background: #fff;
+}
+#taskModal .task-editor-actions button {
+  min-height: 38px;
+  border-radius: 8px;
+}
+@media (max-width: 760px) {
+  #taskModal .task-detail-modal {
+    width: calc(100vw - 20px);
+    max-height: 94vh;
+  }
+  #taskModal .task-detail-header { padding: 18px 52px 15px 16px; }
+  #taskModal .task-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+  #taskModal .task-detail-side { position: static; order: -1; }
+  #taskModal .task-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #taskModal .task-editor-actions { padding: 12px; }
+}
+@media (max-width: 420px) {
+  #taskModal .task-detail-grid { grid-template-columns: minmax(0, 1fr); }
+  #taskModal .task-editor-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  #taskModal .task-editor-actions button { width: 100%; }
+}
