@@ -521,8 +521,8 @@
           <label class="task-form-wide">Task name<input id="newTaskName" name="task" required maxlength="160" autocomplete="off"></label>
           <div class="task-form-grid">
             <label class="task-form-wide">User story
-              <input name="userStory" id="taskUserStoryInput" list="userStoryOptions" maxlength="160" autocomplete="off" placeholder="Choose a story or type a new one">
-              <datalist id="userStoryOptions"></datalist>
+              <select name="userStory" id="taskUserStoryInput"><option value="">Standalone task — no User Story</option></select>
+              <small class="field-help">Select a saved User Story to link this task to its Feature and PI.</small>
             </label>
             <label class="task-form-wide">User story description<textarea name="userStoryDescription" rows="3" maxlength="1500" placeholder="Describe the user need and expected outcome"></textarea></label>
             <label>Program Increment<select name="pi" id="taskPIInput"><option value="">Select a PI</option></select></label>
