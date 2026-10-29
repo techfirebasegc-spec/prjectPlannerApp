@@ -235,6 +235,291 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     taskFeatureInput: document.getElementById("taskFeatureInput")
   };
 
+
+  function planningCollection(kind) {
+    const name = kind === "pi" ? "plannerProgramIncrements" : "plannerFeatures";
+    return appState.activeProjectId === "default"
+      ? collection(db, name)
+      : collection(db, "plannerProjects", appState.activeProjectId, name);
+  }
+
+  function planningReference(kind, id) {
+    return doc(planningCollection(kind), id);
+  }
+
+  function planningCanEdit() {
+    if (appState.activeProjectId === "default") return true;
+    const project = appState.projects.find((item) => item.id === appState.activeProjectId);
+    return Boolean(project && (project.role === "owner" || project.role === "editor"));
+  }
+
+  async function loadPlanningRecords() {
+    if (appState.unsubscribePlanning) appState.unsubscribePlanning();
+    try {
+      const [pis, features] = await Promise.all([
+        getDocs(planningCollection("pi")),
+        getDocs(planningCollection("feature"))
+      ]);
+      appState.programIncrements = pis.docs.map((item) => ({ id: item.id, ...item.data() }))
+        .sort((a, b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+      appState.features = features.docs.map((item) => ({ id: item.id, ...item.data() }))
+        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      refreshPlanningSelectors();
+      renderProgramIncrements();
+      renderFeatures();
+    } catch (error) {
+      console.error("Could not load PI/Feature catalogue", error);
+      appState.programIncrements = [];
+      appState.features = [];
+      refreshPlanningSelectors();
+      renderProgramIncrements("Could not load Program Increments. Check project membership permissions.");
+      renderFeatures("Could not load Features. Check project membership permissions.");
+    }
+  }
+
+  function setSelectOptions(select, items, placeholder, selectedValue = "") {
+    if (!select) return;
+    const previous = selectedValue || select.value;
+    select.replaceChildren(new Option(placeholder, ""));
+    items.forEach((item) => {
+      const option = new Option(item.name, item.id);
+      select.add(option);
+    });
+    if (previous && [...select.options].some((option) => option.value === previous)) select.value = previous;
+  }
+
+  function refreshPlanningSelectors() {
+    const selectedTaskPI = els.taskPIInput?.value || "";
+    const selectedStoryPI = els.storyPiInput?.value || "";
+    const selectedFeature = els.taskFeatureInput?.value || "";
+    const selectedStoryFeature = els.storyFeatureInput?.value || "";
+    const selectedFeaturePI = els.featurePIInput?.value || "";
+    setSelectOptions(els.taskPIInput, appState.programIncrements, "Select a PI", selectedTaskPI);
+    setSelectOptions(els.storyPiInput, appState.programIncrements, "Optional — select a PI", selectedStoryPI);
+    setSelectOptions(els.featurePIInput, appState.programIncrements, "Select a PI", selectedFeaturePI);
+    setSelectOptions(els.featurePIFilter, appState.programIncrements, "All PIs", els.featurePIFilter?.value || "all");
+    if (els.featurePIFilter && ![...els.featurePIFilter.options].some((option) => option.value === "all")) {
+      els.featurePIFilter.insertBefore(new Option("All PIs", "all"), els.featurePIFilter.firstChild);
+    }
+    const featureOptions = appState.features.filter((feature) => !selectedTaskPI || feature.piId === selectedTaskPI);
+    const storyFeatureOptions = appState.features.filter((feature) => !selectedStoryPI || feature.piId === selectedStoryPI);
+    setSelectOptions(els.taskFeatureInput, featureOptions, "Select a Feature", selectedFeature);
+    setSelectOptions(els.storyFeatureInput, storyFeatureOptions, "Optional — select a Feature", selectedStoryFeature);
+    if (els.taskPIInput) els.taskPIInput.disabled = !appState.programIncrements.length;
+    if (els.storyPiInput) els.storyPiInput.disabled = !appState.programIncrements.length;
+    if (els.featurePIInput) els.featurePIInput.disabled = !appState.programIncrements.length;
+    if (els.taskFeatureInput) els.taskFeatureInput.disabled = !featureOptions.length;
+    if (els.storyFeatureInput) els.storyFeatureInput.disabled = !storyFeatureOptions.length;
+    if (els.featureSaveBtn) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
+    if (els.piSaveBtn) els.piSaveBtn.disabled = !planningCanEdit();
+  }
+
+  function formatPlanningDate(value) {
+    if (!value) return "Date not set";
+    const parsed = new Date(value + "T00:00:00");
+    return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(parsed);
+  }
+
+  function statusClass(value) {
+    return String(value || "").toLowerCase().replace(/[^a-z]+/g, "_");
+  }
+
+  function renderProgramIncrements(errorMessage = "") {
+    if (!els.piRecords) return;
+    const queryText = String(els.piSearchInput?.value || "").trim().toLowerCase();
+    const records = appState.programIncrements.filter((pi) => [pi.name, pi.description, pi.status].join(" ").toLowerCase().includes(queryText));
+    els.piCount.textContent = `${appState.programIncrements.length} PI${appState.programIncrements.length === 1 ? "" : "s"}`;
+    if (errorMessage || !records.length) {
+      els.piRecords.innerHTML = `<div class="planning-empty"><strong>${errorMessage ? "Unable to load PIs" : (queryText ? "No matching PIs" : "No Program Increments yet")}</strong>${escapeHtml(errorMessage || (queryText ? "Try another search term." : "Create a PI to establish the planning horizon for your Features."))}</div>`;
+      return;
+    }
+    els.piRecords.innerHTML = records.map((pi) => {
+      const features = appState.features.filter((feature) => feature.piId === pi.id);
+      const storyCount = appState.userStories.filter((story) => story.piId === pi.id || story.pi === pi.name).length;
+      const taskCount = appState.allTasks.filter((task) => task.raw.piId === pi.id || task.pi === pi.name).length;
+      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><h4>${escapeHtml(pi.name)}</h4><span class="planning-status ${statusClass(pi.status)}">${escapeHtml(String(pi.status || "PLANNED").replaceAll("_", " "))}</span></div><p class="planning-record-description">${escapeHtml(pi.description || "No description added.")}</p><div class="planning-record-meta"><span>${escapeHtml(formatPlanningDate(pi.startDate))} – ${escapeHtml(formatPlanningDate(pi.endDate))}</span><span><strong>${features.length}</strong> Features</span><span><strong>${storyCount}</strong> Stories</span><span><strong>${taskCount}</strong> Tasks</span></div></div><div class="planning-record-actions"><button type="button" data-edit-pi="${escapeHtml(pi.id)}">Edit</button><button type="button" data-delete-pi="${escapeHtml(pi.id)}" data-delete-name="${escapeHtml(pi.name)}">Archive</button></div></article>`;
+    }).join("");
+    els.piRecords.querySelectorAll("[data-edit-pi]").forEach((button) => button.addEventListener("click", () => editProgramIncrement(button.dataset.editPi)));
+    els.piRecords.querySelectorAll("[data-delete-pi]").forEach((button) => button.addEventListener("click", () => archiveProgramIncrement(button.dataset.deletePi, button.dataset.deleteName)));
+  }
+
+  function renderFeatures(errorMessage = "") {
+    if (!els.featureRecords) return;
+    const queryText = String(els.featureSearchInput?.value || "").trim().toLowerCase();
+    const piFilter = els.featurePIFilter?.value || "all";
+    const records = appState.features.filter((feature) =>
+      (piFilter === "all" || feature.piId === piFilter)
+      && [feature.name, feature.description, feature.owner, feature.status].join(" ").toLowerCase().includes(queryText));
+    els.featureCount.textContent = `${appState.features.length} Feature${appState.features.length === 1 ? "" : "s"}`;
+    if (errorMessage || !records.length) {
+      els.featureRecords.innerHTML = `<div class="planning-empty"><strong>${errorMessage ? "Unable to load Features" : (queryText ? "No matching Features" : "No Features yet")}</strong>${escapeHtml(errorMessage || (queryText ? "Try another search term or PI." : "Create a PI first, then add Features and connect User Stories to them."))}</div>`;
+      return;
+    }
+    els.featureRecords.innerHTML = records.map((feature) => {
+      const pi = appState.programIncrements.find((item) => item.id === feature.piId);
+      const stories = appState.userStories.filter((story) => story.featureId === feature.id || story.feature === feature.name);
+      const tasks = appState.allTasks.filter((task) => task.raw.featureId === feature.id || task.feature === feature.name);
+      const done = tasks.filter((task) => task.statusKey === "done").length;
+      const progress = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><h4>${escapeHtml(feature.name)}</h4><span class="planning-status ${statusClass(feature.status)}">${escapeHtml(String(feature.status || "PLANNED").replaceAll("_", " "))}</span><span class="planning-status">${escapeHtml(String(feature.priority || "MEDIUM"))} priority</span></div><p class="planning-record-description">${escapeHtml(feature.description || "No description added.")}</p><div class="planning-record-meta"><span>PI: <strong>${escapeHtml(pi?.name || "Missing PI")}</strong></span><span>Owner: <strong>${escapeHtml(feature.owner || "Unassigned")}</strong></span><span><strong>${stories.length}</strong> Stories</span><span><strong>${tasks.length}</strong> Tasks</span><span><strong>${progress}%</strong> task completion</span></div><div class="planning-record-progress"><span style="width:${progress}%"></span></div></div><div class="planning-record-actions"><button type="button" data-edit-feature="${escapeHtml(feature.id)}">Edit</button><button type="button" data-delete-feature="${escapeHtml(feature.id)}" data-delete-name="${escapeHtml(feature.name)}">Archive</button></div></article>`;
+    }).join("");
+    els.featureRecords.querySelectorAll("[data-edit-feature]").forEach((button) => button.addEventListener("click", () => editFeature(button.dataset.editFeature)));
+    els.featureRecords.querySelectorAll("[data-delete-feature]").forEach((button) => button.addEventListener("click", () => archiveFeature(button.dataset.deleteFeature, button.dataset.deleteName)));
+  }
+
+  function resetPIForm() {
+    els.piForm.reset();
+    els.piRecordId.value = "";
+    els.piFormTitle.textContent = "Create a Program Increment";
+    els.piSaveBtn.textContent = "Create PI";
+    els.piFormError.textContent = "";
+  }
+
+  function editProgramIncrement(id) {
+    const pi = appState.programIncrements.find((item) => item.id === id);
+    if (!pi) return;
+    els.piRecordId.value = pi.id;
+    els.piNameInput.value = pi.name || "";
+    els.piDescriptionInput.value = pi.description || "";
+    els.piStartInput.value = pi.startDate || "";
+    els.piEndInput.value = pi.endDate || "";
+    els.piStatusInput.value = pi.status || "PLANNED";
+    els.piFormTitle.textContent = "Edit Program Increment";
+    els.piSaveBtn.textContent = "Save PI";
+    els.piFormError.textContent = "";
+    els.piNameInput.focus();
+  }
+
+  async function saveProgramIncrement(event) {
+    event.preventDefault();
+    if (!planningCanEdit()) { els.piFormError.textContent = "You have read-only access to this project."; return; }
+    const id = els.piRecordId.value;
+    const name = els.piNameInput.value.trim();
+    const description = els.piDescriptionInput.value.trim();
+    const startDate = els.piStartInput.value;
+    const endDate = els.piEndInput.value;
+    if (!name) { els.piFormError.textContent = "Enter a PI name."; return; }
+    if (!startDate || !endDate || endDate < startDate) { els.piFormError.textContent = "Enter a valid date range; the end date must not be before the start date."; return; }
+    if (appState.programIncrements.some((pi) => pi.name.toLowerCase() === name.toLowerCase() && pi.id !== id)) { els.piFormError.textContent = "A PI with this name already exists in this project."; return; }
+    const previous = appState.programIncrements.find((pi) => pi.id === id);
+    const data = { name, description, startDate, endDate, status: els.piStatusInput.value, archived: false, createdBy: previous?.createdBy || appState.user.uid, updatedAt: serverTimestamp() };
+    els.piSaveBtn.disabled = true;
+    try {
+      if (id) await updateDoc(planningReference("pi", id), data);
+      else await addDoc(planningCollection("pi"), { ...data, createdAt: serverTimestamp() });
+      resetPIForm();
+      await loadPlanningRecords();
+    } catch (error) {
+      console.error("Could not save Program Increment", error);
+      els.piFormError.textContent = "Could not save the PI. Check project permissions and try again.";
+    } finally {
+      els.piSaveBtn.disabled = !planningCanEdit();
+    }
+  }
+
+  async function archiveProgramIncrement(id, name) {
+    if (!planningCanEdit()) return;
+    const linkedFeatures = appState.features.filter((feature) => feature.piId === id);
+    if (linkedFeatures.length) { window.alert("Move or archive the linked Features before archiving this PI."); return; }
+    if (!window.confirm(`Archive Program Increment "${name}"? Existing task records will be preserved.`)) return;
+    try {
+      await updateDoc(planningReference("pi", id), { archived: true, updatedAt: serverTimestamp() });
+      appState.programIncrements = appState.programIncrements.filter((pi) => pi.id !== id);
+      refreshPlanningSelectors(); renderProgramIncrements(); renderFeatures();
+    } catch (error) {
+      console.error("Could not archive PI", error);
+      window.alert("Could not archive the PI. Check project permissions and try again.");
+    }
+  }
+
+  function resetFeatureForm() {
+    els.featureForm.reset();
+    els.featureRecordId.value = "";
+    els.featureFormTitle.textContent = "Create a Feature";
+    els.featureSaveBtn.textContent = "Create Feature";
+    els.featureFormError.textContent = "";
+    refreshPlanningSelectors();
+  }
+
+  function editFeature(id) {
+    const feature = appState.features.find((item) => item.id === id);
+    if (!feature) return;
+    els.featureRecordId.value = feature.id;
+    els.featureNameInput.value = feature.name || "";
+    els.featurePIInput.value = feature.piId || "";
+    els.featureDescriptionInput.value = feature.description || "";
+    els.featureOwnerInput.value = feature.owner || "";
+    els.featurePriorityInput.value = feature.priority || "MEDIUM";
+    els.featureStatusInput.value = feature.status || "PLANNED";
+    els.featureFormTitle.textContent = "Edit Feature";
+    els.featureSaveBtn.textContent = "Save Feature";
+    els.featureFormError.textContent = "";
+    els.featureNameInput.focus();
+  }
+
+  async function saveFeature(event) {
+    event.preventDefault();
+    if (!planningCanEdit()) { els.featureFormError.textContent = "You have read-only access to this project."; return; }
+    const id = els.featureRecordId.value;
+    const name = els.featureNameInput.value.trim();
+    const piId = els.featurePIInput.value;
+    const pi = appState.programIncrements.find((item) => item.id === piId);
+    if (!name) { els.featureFormError.textContent = "Enter a Feature name."; return; }
+    if (!pi) { els.featureFormError.textContent = "Select a valid Program Increment first."; return; }
+    if (appState.features.some((feature) => feature.name.toLowerCase() === name.toLowerCase() && feature.id !== id)) { els.featureFormError.textContent = "A Feature with this name already exists in this project."; return; }
+    const previous = appState.features.find((feature) => feature.id === id);
+    const data = { name, piId, pi: pi.name, description: els.featureDescriptionInput.value.trim(), owner: els.featureOwnerInput.value.trim(), priority: els.featurePriorityInput.value, status: els.featureStatusInput.value, archived: false, createdBy: previous?.createdBy || appState.user.uid, updatedAt: serverTimestamp() };
+    els.featureSaveBtn.disabled = true;
+    try {
+      if (id) await updateDoc(planningReference("feature", id), data);
+      else await addDoc(planningCollection("feature"), { ...data, createdAt: serverTimestamp() });
+      resetFeatureForm();
+      await loadPlanningRecords();
+    } catch (error) {
+      console.error("Could not save Feature", error);
+      els.featureFormError.textContent = "Could not save the Feature. Check project permissions and try again.";
+    } finally {
+      els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
+    }
+  }
+
+  async function archiveFeature(id, name) {
+    if (!planningCanEdit()) return;
+    const linkedStories = appState.userStories.filter((story) => story.featureId === id);
+    const linkedTasks = appState.allTasks.filter((task) => task.raw.featureId === id);
+    if (linkedStories.length || linkedTasks.length) { window.alert("This Feature still has linked User Stories or Tasks. Reassign them before archiving the Feature."); return; }
+    if (!window.confirm(`Archive Feature "${name}"?`)) return;
+    try {
+      await updateDoc(planningReference("feature", id), { archived: true, updatedAt: serverTimestamp() });
+      appState.features = appState.features.filter((feature) => feature.id !== id);
+      refreshPlanningSelectors(); renderFeatures(); renderProgramIncrements();
+    } catch (error) {
+      console.error("Could not archive Feature", error);
+      window.alert("Could not archive the Feature. Check project permissions and try again.");
+    }
+  }
+
+  function onPlanningPIChange(select, featureSelect) {
+    if (!select || !featureSelect) return;
+    const current = featureSelect.value;
+    const options = appState.features.filter((feature) => !select.value || feature.piId === select.value);
+    setSelectOptions(featureSelect, options, "Select a Feature", current);
+  }
+
+  function bindPlanningEvents() {
+    els.piViewBtn?.addEventListener("click", () => setActiveView("pis"));
+    els.featuresViewBtn?.addEventListener("click", () => setActiveView("features"));
+    els.piForm?.addEventListener("submit", saveProgramIncrement);
+    els.featureForm?.addEventListener("submit", saveFeature);
+    els.piCancelBtn?.addEventListener("click", resetPIForm);
+    els.featureCancelBtn?.addEventListener("click", resetFeatureForm);
+    els.piSearchInput?.addEventListener("input", () => renderProgramIncrements());
+    els.featureSearchInput?.addEventListener("input", () => renderFeatures());
+    els.featurePIFilter?.addEventListener("change", () => renderFeatures());
+    els.taskPIInput?.addEventListener("change", () => onPlanningPIChange(els.taskPIInput, els.taskFeatureInput));
+    els.storyPiInput?.addEventListener("change", () => onPlanningPIChange(els.storyPiInput, els.storyFeatureInput));
+  }
+
   async function init() {
     const session = await getAuthenticatedPlannerUser();
     if (!session.user) {
