@@ -610,6 +610,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const story = appState.userStories.find((item) => item.id === value)
       || appState.allTasks.map((task) => task.raw).find((raw) => String(raw.userStoryId || "") === value || (!raw.userStoryId && String(raw.userStory || "").trim() === title));
     if (!story) return;
+    const descriptionField = els.taskEditorForm.elements.namedItem("userStoryDescription");
+    if (descriptionField) descriptionField.value = String(story.description || story.userStoryDescription || "").trim();
     const pi = appState.programIncrements.find((item) => item.id === story.piId || item.name === story.pi);
     const feature = appState.features.find((item) => item.id === story.featureId || item.name === story.feature);
     if (pi) els.taskPIInput.value = pi.id;
