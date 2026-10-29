@@ -276,7 +276,7 @@
             <label>Feature name<input id="featureNameInput" maxlength="120" required placeholder="e.g. Secure account recovery"></label>
             <label>Program Increment<select id="featurePIInput" required><option value="">Select a PI</option></select></label>
             <label>Description<textarea id="featureDescriptionInput" maxlength="1500" rows="3" placeholder="Capability and expected value"></textarea></label>
-            <div class="planning-form-row"><label>Owner<input id="featureOwnerInput" maxlength="120" placeholder="Feature owner"></label><label>Priority<select id="featurePriorityInput"><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="LOW">Low</option></select></label></div>
+            <div class="planning-form-row"><label>Owner<select id="featureOwnerInput"><option value="">Unassigned</option></select></label><label>Priority<select id="featurePriorityInput"><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="LOW">Low</option></select></label></div>
             <label>Status<select id="featureStatusInput"><option value="PLANNED">Planned</option><option value="IN_PROGRESS">In progress</option><option value="COMPLETED">Completed</option></select></label>
             <p id="featureFormError" class="task-editor-error" aria-live="polite"></p>
             <div class="planning-form-actions"><button id="featureCancelBtn" class="secondary-action" type="button">Clear</button><button id="featureSaveBtn" class="save-task-btn" type="submit">Create Feature</button></div>
