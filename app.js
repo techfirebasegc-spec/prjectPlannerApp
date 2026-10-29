@@ -92,6 +92,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     modalBody: document.getElementById("modalBody"),
     closeModal: document.getElementById("closeModal"),
     editTaskBtn: document.getElementById("editTaskBtn"),
+    copyTaskBtn: document.getElementById("copyTaskBtn"),
     deleteTaskBtn: document.getElementById("deleteTaskBtn"),
     taskStatusSelect: document.getElementById("taskStatusSelect"),
     saveStatusBtn: document.getElementById("saveStatusBtn"),
@@ -121,6 +122,13 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     boardViewBtn: document.getElementById("boardViewBtn"),
     listViewBtn: document.getElementById("listViewBtn"),
     insightsViewBtn: document.getElementById("insightsViewBtn"),
+    storiesViewBtn: document.getElementById("storiesViewBtn"),
+    newStoryBtn: document.getElementById("newStoryBtn"),
+    storiesView: document.getElementById("storiesView"),
+    storiesGrid: document.getElementById("storiesGrid"),
+    storiesSummary: document.getElementById("storiesSummary"),
+    userStoryOptions: document.getElementById("userStoryOptions"),
+    taskUserStoryInput: document.getElementById("taskUserStoryInput"),
     profileViewBtn: document.getElementById("profileViewBtn"),
     boardView: document.getElementById("boardView"),
     listView: document.getElementById("listView"),
@@ -330,6 +338,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.boardViewBtn.addEventListener("click", () => setActiveView("board"));
     els.listViewBtn.addEventListener("click", () => setActiveView("list"));
     els.insightsViewBtn.addEventListener("click", () => setActiveView("insights"));
+    els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
+    els.newStoryBtn.addEventListener("click", () => { openTaskEditor(); els.taskUserStoryInput.focus(); });
     els.profileViewBtn.addEventListener("click", () => setActiveView("profile"));
     els.profileForm.addEventListener("submit", saveProfile);
     els.calendarMonth.addEventListener("change", onCalendarMonthChange);
@@ -345,6 +355,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const task = appState.allTasks.find((item) => item.id === appState.viewedTaskId);
       if (task) openTaskEditor(task);
     });
+    els.copyTaskBtn.addEventListener("click", copyViewedTask);
     els.saveStatusBtn.addEventListener("click", saveModalStatus);
     els.deleteTaskBtn.addEventListener("click", deleteViewedTask);
     els.modal.addEventListener("click", (event) => {
@@ -659,6 +670,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
     renderBoard(appState.filteredTasks);
     renderList(appState.filteredTasks);
+    renderUserStories(appState.filteredTasks);
+    populateUserStoryOptions(appState.allTasks);
     updateStats(appState.filteredTasks);
     renderInsights();
   }
@@ -679,6 +692,45 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       .join(" ")
       .toLowerCase();
     return searchable.includes(searchValue);
+  }
+
+  function populateUserStoryOptions(tasks) {
+    const stories = [...new Set(tasks.map((task) => String(task.raw.userStory || task.story || "").trim()).filter((s) => s && s !== "-"))].sort((a,b) => a.localeCompare(b));
+    els.userStoryOptions.innerHTML = stories.map((s) => `<option value="${escapeHtml(s)}"></option>`).join("");
+  }
+
+  function renderUserStories(tasks) {
+    const groups = new Map();
+    tasks.forEach((task) => {
+      const title = String(task.raw.userStory || task.story || "").trim();
+      if (!title || title === "-") return;
+      if (!groups.has(title)) groups.set(title, { title, description: "", tasks: [] });
+      const group = groups.get(title); group.tasks.push(task);
+      if (!group.description) group.description = String(task.raw.userStoryDescription || "").trim();
+    });
+    const stories = [...groups.values()].sort((a,b) => a.title.localeCompare(b.title));
+    els.storiesSummary.textContent = `${stories.length} user stor${stories.length === 1 ? "y" : "ies"} · ${stories.reduce((n,s) => n+s.tasks.length,0)} linked tasks`;
+    if (!stories.length) {
+      els.storiesGrid.innerHTML = '<div class="stories-empty"><strong>No user stories yet</strong><p>Create a story and link tasks to it using the story field.</p><button class="save-task-btn" type="button" data-create-story>+ Create User Story</button></div>';
+      els.storiesGrid.querySelector("[data-create-story]")?.addEventListener("click", () => { openTaskEditor(); els.taskUserStoryInput.focus(); });
+      return;
+    }
+    els.storiesGrid.innerHTML = stories.map((story) => {
+      const counts = { todo: 0, inprogress: 0, done: 0 };
+      story.tasks.forEach((task) => counts[task.statusKey] = (counts[task.statusKey] || 0) + 1);
+      return `<article class="story-card"><div class="story-card-top"><span class="story-card-label">USER STORY</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
+        <h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No user story description added yet.")}</p>
+        <div class="story-status-summary"><span>${counts.todo} To do</span><span>${counts.inprogress} In progress</span><span>${counts.done} Done</span></div>
+        <div class="story-task-list">${story.tasks.slice(0,4).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${story.tasks.length>4?`<p class="story-more">+${story.tasks.length-4} more tasks</p>`:""}</div>
+        <button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-description="${escapeHtml(story.description)}">+ Add task to story</button></article>`;
+    }).join("");
+    els.storiesGrid.querySelectorAll("[data-story-task]").forEach(button => button.addEventListener("click", () => {
+      const task = appState.allTasks.find(item => item.id === button.dataset.storyTask); if (task) openTaskModal(task);
+    }));
+    els.storiesGrid.querySelectorAll("[data-story-title]").forEach(button => button.addEventListener("click", () => {
+      openTaskEditor(); els.taskUserStoryInput.value = button.dataset.storyTitle || "";
+      els.taskEditorForm.elements.namedItem("userStoryDescription").value = button.dataset.storyDescription || ""; els.newTaskName.focus();
+    }));
   }
 
   function renderBoard(tasks) {
@@ -1253,17 +1305,17 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function setActiveView(view, persist = true) {
-    appState.activeView = ["board", "list", "insights", "profile"].includes(view) ? view : "board";
-    const board = appState.activeView === "board";
-    const list = appState.activeView === "list";
-    const insights = appState.activeView === "insights";
-    const profile = appState.activeView === "profile";
+    appState.activeView = ["board", "list", "stories", "insights", "profile"].includes(view) ? view : "board";
+    const board = appState.activeView === "board", list = appState.activeView === "list", stories = appState.activeView === "stories";
+    const insights = appState.activeView === "insights", profile = appState.activeView === "profile";
     els.boardView.classList.toggle("is-hidden", !board);
     els.listView.classList.toggle("is-hidden", !list);
+    els.storiesView.classList.toggle("is-hidden", !stories);
     els.insightsView.classList.toggle("is-hidden", !insights);
     els.profileView.classList.toggle("is-hidden", !profile);
     els.boardViewBtn.classList.toggle("is-active", board);
     els.listViewBtn.classList.toggle("is-active", list);
+    els.storiesViewBtn.classList.toggle("is-active", stories);
     els.insightsViewBtn.classList.toggle("is-active", insights);
     els.profileViewBtn.classList.toggle("is-active", profile);
     if (persist) persistPreferences();
@@ -1377,7 +1429,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         ${modalRow("End date", formattedDueDate)}
         ${modalRow("App", task.app)}
       </section>
-      <section class="task-detail-description"><h3>Description</h3><p>${escapeHtml(task.description || "No description added.")}</p></section>
+      <section class="task-detail-description"><h3>User story description</h3><p>${escapeHtml(task.raw.userStoryDescription || "No user story description added.")}</p></section>
+      <section class="task-detail-description"><h3>Task description</h3><p>${escapeHtml(task.description || "No description added.")}</p></section>
     `;
 
     els.modal.classList.add("is-open");
@@ -1393,6 +1446,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     return `<div class="modal-row"><b>${escapeHtml(label)}</b><span>${escapeHtml(value || "—")}</span></div>`;
   }
 
+  function copyViewedTask() {
+    const task = appState.allTasks.find((item) => item.id === appState.viewedTaskId);
+    if (!task) return;
+    openTaskEditor({ ...task, id: null, raw: { ...task.raw, task: `Copy of ${task.task}` } });
+    document.getElementById("taskEditorTitle").textContent = "Copy Task";
+    els.saveTaskBtn.textContent = "Create Copy";
+  }
+
   function closeModal() {
     els.modal.classList.remove("is-open");
     els.modal.setAttribute("aria-hidden", "true");
@@ -1406,6 +1467,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const fields = {
         task: task.raw.task || task.task,
         userStory: task.raw.userStory || "",
+        userStoryDescription: task.raw.userStoryDescription || "",
         pi: task.raw.pi || "",
         sprint: task.raw.sprint || "",
         feature: task.raw.feature || "",
@@ -1460,6 +1522,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const taskData = {
         task,
         userStory: String(form.get("userStory") || "").trim(),
+        userStoryDescription: String(form.get("userStoryDescription") || "").trim(),
         pi: String(form.get("pi") || "").trim(),
         sprint: String(form.get("sprint") || "").trim(),
         feature: String(form.get("feature") || "").trim(),
