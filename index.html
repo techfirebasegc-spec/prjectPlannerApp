@@ -119,6 +119,7 @@
       <section class="view-switch" aria-label="View switcher">
         <button id="listViewBtn" class="view-btn" type="button">List View</button>
         <button id="boardViewBtn" class="view-btn is-active" type="button">Kanban View</button>
+        <button id="storiesViewBtn" class="view-btn" type="button">User Stories</button>
         <button id="insightsViewBtn" class="view-btn" type="button">Agile Insights</button>
         <button id="profileViewBtn" class="view-btn is-hidden" type="button">Profile</button>
       </section>
@@ -190,6 +191,10 @@
         </div>
       </section>
 
+      <section id="storiesView" class="stories-view is-hidden" aria-label="User stories">
+        <div class="stories-toolbar"><div><h2>User Stories</h2><p>Browse stories and the tasks linked to each one.</p></div><button id="newStoryBtn" class="save-task-btn" type="button">+ Create User Story</button></div>
+        <div id="storiesSummary" class="stories-summary" aria-live="polite"></div><div id="storiesGrid" class="stories-grid"></div>
+      </section>
       <section id="insightsView" class="insights-view is-hidden" aria-label="Agile insights">
         <div class="insights-header">
           <h2>Sprint Calendar & Delivery Insights</h2>
@@ -288,6 +293,7 @@
       </div>
       <div class="task-editor-actions">
         <button id="saveStatusBtn" class="save-task-btn" type="button">Save Status</button>
+        <button id="copyTaskBtn" class="secondary-action" type="button">Copy Task</button>
         <button id="editTaskBtn" class="secondary-action" type="button">Edit Task</button>
         <button id="deleteTaskBtn" class="danger-action" type="button">Delete Task</button>
       </div>
@@ -344,7 +350,11 @@
         <section class="task-editor-fields" aria-label="Task details">
           <label class="task-form-wide">Task name<input id="newTaskName" name="task" required maxlength="160" autocomplete="off"></label>
           <div class="task-form-grid">
-            <label class="task-form-wide">User story<input name="userStory" maxlength="160" autocomplete="off"></label>
+            <label class="task-form-wide">User story
+              <input name="userStory" id="taskUserStoryInput" list="userStoryOptions" maxlength="160" autocomplete="off" placeholder="Choose a story or type a new one">
+              <datalist id="userStoryOptions"></datalist>
+            </label>
+            <label class="task-form-wide">User story description<textarea name="userStoryDescription" rows="3" maxlength="1500" placeholder="Describe the user need and expected outcome"></textarea></label>
             <label>PI<input name="pi" maxlength="100" autocomplete="off"></label>
             <label>Sprint<input name="sprint" maxlength="100" autocomplete="off"></label>
             <label>Feature<input name="feature" maxlength="120" autocomplete="off"></label>
