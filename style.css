@@ -3802,3 +3802,68 @@ body {
   .topbar .topbar-actions { justify-content: flex-start; }
   .topbar .project-select { flex: 1 1 100%; width: 100%; }
 }
+
+
+/* Modal headers: subtle cool tint for clearer hierarchy without a heavy banner. */
+.task-editor-header,
+#taskModal .task-detail-header {
+  background: linear-gradient(112deg, #edf3ff 0%, #f5f3ff 58%, #fbfdff 100%);
+  border-bottom: 1px solid #dce7fb;
+}
+.task-editor-header {
+  padding: 22px 58px 20px 24px;
+  margin: -20px -20px 22px;
+  border-radius: 15px 15px 0 0;
+}
+.task-editor-header h2,
+#taskModal .task-detail-header h2,
+#projectEditorTitle,
+#membersTitle {
+  color: #17345c;
+}
+.task-editor-header .task-editor-subtitle,
+#taskEditorModal .task-editor-header p {
+  color: #60799d;
+}
+/* Project Details has a simpler heading structure, so tint its top region directly. */
+#projectEditorModal .project-editor {
+  padding-top: 0;
+  overflow: hidden;
+}
+#projectEditorModal .project-editor > #projectEditorTitle {
+  margin: 0 -20px 0;
+  padding: 24px 56px 4px 24px;
+  background: linear-gradient(112deg, #edf3ff 0%, #f5f3ff 58%, #fbfdff 100%);
+}
+#projectEditorModal .project-editor > .task-editor-subtitle {
+  margin: 0 -20px 20px;
+  padding: 4px 56px 20px 24px;
+  color: #60799d;
+  background: linear-gradient(112deg, #edf3ff 0%, #f5f3ff 58%, #fbfdff 100%);
+  border-bottom: 1px solid #dce7fb;
+}
+#membersModal .members-editor > #membersTitle,
+#membersModal .members-editor > .task-editor-subtitle {
+  margin-left: -20px;
+  margin-right: -20px;
+  background: linear-gradient(112deg, #edf3ff 0%, #f5f3ff 58%, #fbfdff 100%);
+}
+#membersModal .members-editor > #membersTitle {
+  margin-top: -20px;
+  margin-bottom: 0;
+  padding: 24px 56px 4px 24px;
+}
+#membersModal .members-editor > .task-editor-subtitle {
+  margin-top: 0;
+  margin-bottom: 20px;
+  padding: 4px 56px 20px 24px;
+  color: #60799d;
+  border-bottom: 1px solid #dce7fb;
+}
+@media (max-width: 600px) {
+  .task-editor-header { padding: 17px 48px 16px 16px; margin: -12px -12px 16px; }
+  #projectEditorModal .project-editor > #projectEditorTitle { padding: 18px 48px 4px 16px; }
+  #projectEditorModal .project-editor > .task-editor-subtitle { padding: 4px 48px 16px 16px; }
+  #membersModal .members-editor > #membersTitle { padding: 18px 48px 4px 16px; }
+  #membersModal .members-editor > .task-editor-subtitle { padding: 4px 48px 16px 16px; }
+}
