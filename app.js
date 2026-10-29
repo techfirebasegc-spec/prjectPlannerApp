@@ -802,7 +802,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         <h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p>${criteria}
         <div class="story-status-summary"><span>${counts.todo} To do</span><span>${counts.inprogress} In progress</span><span>${counts.done} Done</span></div>
         <div class="story-metrics"><span><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></span><span><small>Total task points</small><strong>${storyPoints}</strong></span></div>
-        ${story.tasks.length ? `<div class="story-task-list">${story.tasks.slice(0,4).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${story.tasks.length>4?`<p class="story-more">+${story.tasks.length-4} more tasks</p>`:""}</div>` : '<div class="story-no-tasks"><span aria-hidden="true">＋</span><div><strong>No tasks yet</strong><p>Add tasks when you are ready to break down this story.</p></div></div>'}
+        ${story.tasks.length ? `<div class="story-task-list">${story.tasks.slice(0,2).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${story.tasks.length>2?`<p class="story-more">+${story.tasks.length-2} more tasks</p>`:""}</div>` : '<div class="story-no-tasks"><span aria-hidden="true">＋</span><div><strong>No tasks yet</strong><p>Add tasks when you are ready to break down this story.</p></div></div>'}
         <div class="story-card-actions">
           <button type="button" class="story-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit</button>
           ${story.archived ? "" : `<button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>`}
@@ -825,6 +825,38 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         if (legacy) openStoryEditor({ id: legacy.id, title: legacy.title, description: legacy.description, lifecycle: legacy.lifecycle, pi: legacy.pi, feature: legacy.feature, startDate: legacy.startDate, endDate: legacy.endDate, acceptanceCriteria: legacy.acceptanceCriteria, legacy: true });
       }
     }));
+  }
+
+  async function archiveUserStory(storyId, storyTitle) {
+    if (!storyId) {
+      window.alert("This legacy story has no stable ID yet. Edit and save it first, then archive it.");
+      return;
+    }
+    const story = appState.userStories.find(item => item.id === storyId);
+    const isArchived = story?.archived === true;
+    const action = isArchived ? "restore" : "archive";
+    if (!window.confirm(`Are you sure you want to ${action} "${storyTitle}"? Its tasks will remain unchanged.`)) return;
+    try {
+      const now = serverTimestamp();
+      if (story) {
+        await updateDoc(userStoryReference(storyId), { archived: !isArchived, updatedAt: now });
+      } else {
+        const legacyTasks = appState.allTasks.filter(task => String(task.raw.userStoryId || "").trim() === storyId);
+        const first = legacyTasks[0];
+        await setDoc(userStoryReference(storyId), {
+          title: storyTitle,
+          description: String(first?.raw.userStoryDescription || ""),
+          acceptanceCriteria: Array.isArray(first?.raw.acceptanceCriteria) ? first.raw.acceptanceCriteria : [],
+          pi: String(first?.raw.pi || ""), feature: String(first?.raw.feature || ""),
+          startDate: String(first?.raw.startDate || ""), endDate: String(first?.raw.endDate || ""),
+          lifecycle: String(first?.raw.userStoryStatus || "Draft"),
+          createdBy: appState.user.uid, createdAt: now, updatedAt: now, archived: !isArchived
+        });
+      }
+    } catch (error) {
+      console.error("Could not archive User Story", error);
+      window.alert("Could not update this User Story. Check your project permissions and try again.");
+    }
   }
 
   function openStoryEditor(story = null) {
@@ -872,7 +904,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       title, description, acceptanceCriteria: criteria,
       pi: els.storyPiInput.value.trim(), feature: els.storyFeatureInput.value.trim(),
       startDate, endDate, lifecycle: appState.userStories.find(item => item.id === appState.editingStoryId)?.lifecycle || "Draft",
-      createdBy: existingStory?.createdBy || appState.user.uid, updatedAt: serverTimestamp()
+      createdBy: existingStory?.createdBy || appState.user.uid, archived: existingStory?.archived === true, updatedAt: serverTimestamp()
     };
     try {
       if (appState.editingStoryId) {
