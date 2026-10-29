@@ -39,6 +39,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     unsubscribeTasks: null,
     unsubscribeStories: null,
     editingStoryId: null,
+    showArchivedStories: false,
     unsubscribeProjects: null,
     unsubscribeOwnedProjects: null,
     unsubscribeUserProjectPointers: null,
@@ -146,6 +147,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     closeStoryEditor: document.getElementById("closeStoryEditor"),
     storiesView: document.getElementById("storiesView"),
     storiesGrid: document.getElementById("storiesGrid"),
+    toggleArchivedStoriesBtn: document.getElementById("toggleArchivedStoriesBtn"),
     storiesSummary: document.getElementById("storiesSummary"),
     userStoryOptions: document.getElementById("userStoryOptions"),
     taskUserStoryInput: document.getElementById("taskUserStoryInput"),
@@ -374,6 +376,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
     els.sidebarStoriesBtn?.addEventListener("click", () => { setActiveView("stories"); if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true); });
     els.newStoryBtn.addEventListener("click", () => openStoryEditor());
+    els.toggleArchivedStoriesBtn.addEventListener("click", () => {
+      appState.showArchivedStories = !appState.showArchivedStories;
+      els.toggleArchivedStoriesBtn.textContent = appState.showArchivedStories ? "Show active" : "Show archived";
+      els.toggleArchivedStoriesBtn.setAttribute("aria-pressed", String(appState.showArchivedStories));
+      renderUserStories(appState.filteredTasks);
+    });
     els.storyEditorForm.addEventListener("submit", saveUserStory);
     els.cancelStoryEditor.addEventListener("click", closeStoryEditor);
     els.closeStoryEditor.addEventListener("click", closeStoryEditor);
@@ -758,7 +766,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         id: record.id, title, description: String(record.description || ""),
         acceptanceCriteria: Array.isArray(record.acceptanceCriteria) ? record.acceptanceCriteria : [],
         lifecycle: record.lifecycle || "Draft", pi: record.pi || "", feature: record.feature || "",
-        startDate: record.startDate || "", endDate: record.endDate || "", tasks: []
+        startDate: record.startDate || "", endDate: record.endDate || "", archived: record.archived === true, tasks: []
       });
     });
     tasks.forEach((task) => {
@@ -768,7 +776,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const key = stableId ? `id:${stableId}` : `legacy:${title.toLocaleLowerCase()}`;
       if (!groups.has(key)) groups.set(key, {
         id: stableId, title, description: "", acceptanceCriteria: [],
-        lifecycle: "Draft", pi: "", feature: "", startDate: "", endDate: "", tasks: []
+        lifecycle: "Draft", pi: "", feature: "", startDate: "", endDate: "", archived: false, tasks: []
       });
       const group = groups.get(key);
       group.tasks.push(task);
@@ -777,8 +785,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       if (!group.feature) group.feature = task.raw.feature || "";
       if (group.lifecycle === "Draft" && task.raw.userStoryStatus) group.lifecycle = task.raw.userStoryStatus;
     });
-    const stories = [...groups.values()].sort((a,b) => a.title.localeCompare(b.title));
-    els.storiesSummary.textContent = `${stories.length} user stor${stories.length === 1 ? "y" : "ies"} · ${stories.reduce((n,s) => n+s.tasks.length,0)} linked tasks`;
+    const allStories = [...groups.values()];
+    const stories = allStories.filter(story => appState.showArchivedStories ? story.archived : !story.archived).sort((a,b) => a.title.localeCompare(b.title));
+    els.storiesSummary.textContent = `${stories.length} ${appState.showArchivedStories ? "archived" : "active"} stor${stories.length === 1 ? "y" : "ies"} · ${stories.reduce((n,s) => n+s.tasks.length,0)} linked tasks`;
     if (!stories.length) {
       els.storiesGrid.innerHTML = '<div class="stories-empty"><strong>No user stories yet</strong><p>Create your first story. You can add tasks whenever you are ready.</p><button class="save-task-btn" type="button" data-create-story>+ Create User Story</button></div>';
       els.storiesGrid.querySelector("[data-create-story]")?.addEventListener("click", () => openStoryEditor());
@@ -789,14 +798,15 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       story.tasks.forEach((task) => counts[task.statusKey] = (counts[task.statusKey] || 0) + 1);
       const storyPoints = story.tasks.reduce((total, task) => total + (Number(task.storyPoints) || 0), 0);
       const criteria = story.acceptanceCriteria.length ? `<p class="story-criteria-count">${story.acceptanceCriteria.length} acceptance criteria</p>` : "";
-      return `<article class="story-card"><div class="story-card-top"><span class="story-card-label">USER STORY</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
+      return `<article class="story-card${story.archived ? " is-archived" : ""}"><div class="story-card-top"><span class="story-card-label">${story.archived ? "ARCHIVED STORY" : "USER STORY"}</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
         <h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p>${criteria}
         <div class="story-status-summary"><span>${counts.todo} To do</span><span>${counts.inprogress} In progress</span><span>${counts.done} Done</span></div>
         <div class="story-metrics"><span><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></span><span><small>Total task points</small><strong>${storyPoints}</strong></span></div>
         ${story.tasks.length ? `<div class="story-task-list">${story.tasks.slice(0,4).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${story.tasks.length>4?`<p class="story-more">+${story.tasks.length-4} more tasks</p>`:""}</div>` : '<div class="story-no-tasks"><span aria-hidden="true">＋</span><div><strong>No tasks yet</strong><p>Add tasks when you are ready to break down this story.</p></div></div>'}
         <div class="story-card-actions">
-          <button type="button" class="story-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit story</button>
-          <button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>
+          <button type="button" class="story-edit" data-edit-story-id="${escapeHtml(story.id)}">Edit</button>
+          ${story.archived ? "" : `<button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>`}
+          <button type="button" class="story-archive-action" data-archive-story-id="${escapeHtml(story.id)}" data-archive-story-title="${escapeHtml(story.title)}">${story.archived ? "Restore" : "Archive"}</button>
         </div></article>`;
     }).join("");
     els.storiesGrid.querySelectorAll("[data-story-task]").forEach(button => button.addEventListener("click", () => {
@@ -806,6 +816,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       openTaskEditor(); els.taskUserStoryInput.value = button.dataset.storyTitle || ""; els.taskUserStoryInput.dataset.storyId = button.dataset.storyId || "";
       els.taskEditorForm.elements.namedItem("userStoryDescription").value = button.dataset.storyDescription || ""; els.newTaskName.focus();
     }));
+    els.storiesGrid.querySelectorAll("[data-archive-story-id]").forEach(button => button.addEventListener("click", () => archiveUserStory(button.dataset.archiveStoryId, button.dataset.archiveStoryTitle)));
     els.storiesGrid.querySelectorAll("[data-edit-story-id]").forEach(button => button.addEventListener("click", () => {
       const story = appState.userStories.find(item => item.id === button.dataset.editStoryId);
       if (story) openStoryEditor(story);
