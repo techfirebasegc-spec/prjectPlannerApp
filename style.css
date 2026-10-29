@@ -2642,3 +2642,46 @@ body { background: #f3f6fb; }
   .story-card::before { border-radius: 13px 0 0 13px; }
   .story-card-actions { gap: 7px; }
 }
+
+
+/* Compact density pass: fit more User Stories in the viewport */
+.stories-view { gap: 12px; }
+.stories-toolbar { padding: 14px 18px; border-radius: 13px; }
+.stories-toolbar h2 { margin-bottom: 2px; font-size: 1.08rem; }
+.stories-toolbar p { font-size: .78rem; }
+.stories-grid { gap: 12px; }
+.story-card { padding: 13px 15px; border-radius: 12px; }
+.story-card::before { width: 3px; border-radius: 12px 0 0 12px; }
+.story-card-top { min-height: 22px; }
+.story-card-label { font-size: .61rem; }
+.story-task-count { padding: 4px 7px; font-size: .64rem; }
+.story-card h3 { margin: 8px 0 4px; font-size: .93rem; line-height: 1.3; }
+.story-description { margin-bottom: 7px; font-size: .74rem; line-height: 1.35; }
+.story-status-summary { gap: 5px; margin: 8px 0; }
+.story-status-summary span { padding: 4px 6px; font-size: .61rem; }
+.story-metrics { gap: 7px; margin: 8px 0; }
+.story-metrics > span { gap: 3px; padding: 8px 10px; border-radius: 8px; }
+.story-metrics small { font-size: 10px; }
+.story-metrics strong { font-size: .9rem; }
+.story-task-list { gap: 5px; }
+.story-task-link { min-height: 34px; padding: 6px 9px; border-radius: 8px; }
+.story-task-link span { font-size: .72rem; }
+.story-task-link small { padding: 3px 6px; font-size: .61rem; }
+.story-card-actions { gap: 6px; margin-top: 9px; }
+.story-card-actions button { min-height: 32px; padding: 6px 9px; font-size: .7rem; }
+.stories-grid-list { gap: 9px; }
+.stories-grid-list .story-card { padding: 11px 14px; }
+.stories-grid-list .story-task-list, .stories-grid-list .story-no-tasks { max-height: 145px; }
+@media (min-width: 1200px) {
+  .stories-grid:not(.stories-grid-list) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .stories-toolbar { padding: 13px 15px; }
+  .stories-grid { gap: 10px; }
+  .story-card { padding: 12px; }
+}
+@media (max-width: 600px) {
+  .story-card { padding: 12px; }
+  .story-card-actions { gap: 6px; }
+  .story-card-actions button { min-height: 35px; }
+}
