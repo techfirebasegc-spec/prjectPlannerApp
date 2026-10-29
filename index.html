@@ -170,7 +170,7 @@
           </div>
           <div class="list-toolbar-actions">
             <span id="listSummary" class="list-summary"></span>
-            <button id="archiveSelectedTasksBtn" class="list-archive-btn" type="button" disabled>Archive selected</button>
+            <label class="bulk-status-label" for="bulkTaskStatus">Move to</label><select id="bulkTaskStatus" class="bulk-status-select" aria-label="Status for selected tasks"><option value="todo">To Do</option><option value="inprogress">In Progress</option><option value="done">Done</option></select><button id="applyBulkStatusBtn" class="secondary-action bulk-status-apply" type="button" disabled>Update status</button><button id="archiveSelectedTasksBtn" class="list-archive-btn" type="button" disabled>Archive selected</button>
           </div>
         </div>
         <div class="task-table-wrap">
