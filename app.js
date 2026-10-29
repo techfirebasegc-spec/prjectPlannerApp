@@ -781,6 +781,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const affectedTasks = appState.allTasks.filter((task) =>
       String(task.raw.userStory || task.story || "").trim() === currentTitle
     );
+    const storyId = affectedTasks.find((task) => task.raw.userStoryId)?.raw.userStoryId || crypto.randomUUID();
     try {
       for (let start = 0; start < affectedTasks.length; start += 450) {
         const batch = writeBatch(db);
