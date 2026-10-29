@@ -163,13 +163,19 @@ service cloud.firestore {
     match /plannerTasks/{taskId} {
       allow get, list: if isVerifiedUser();
       allow create: if isVerifiedUser() && validNewTask(request.resource.data)
-        && request.resource.data.createdBy == request.auth.uid;
+        && request.resource.data.createdBy == request.auth.uid
+        && (!request.resource.data.keys().hasAll(["featureId"]) || request.resource.data.featureId == ""
+          || (exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
+            && get(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId)).data.piId == request.resource.data.piId));
       allow update: if isVerifiedUser() && (
         (request.resource.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])
           && request.resource.data.status in ["To Do", "In Progress", "Done"])
         || (resource.data.createdBy == request.auth.uid
           && request.resource.data.createdBy == resource.data.createdBy
-          && validTask(request.resource.data))
+          && validTask(request.resource.data)
+          && (!request.resource.data.keys().hasAll(["featureId"]) || request.resource.data.featureId == ""
+            || (exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
+              && get(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId)).data.piId == request.resource.data.piId)))
         || (resource.data.createdBy == request.auth.uid
           && request.resource.diff(resource.data).affectedKeys().hasOnly(["archived", "updatedAt"])
           && request.resource.data.archived is bool)
@@ -300,11 +306,17 @@ service cloud.firestore {
       allow get, list: if isVerifiedUser() && isProjectMember(projectId);
       allow create: if isVerifiedUser() && canEditProject(projectId)
         && validNewTask(request.resource.data)
-        && request.resource.data.createdBy == request.auth.uid;
+        && request.resource.data.createdBy == request.auth.uid
+        && (!request.resource.data.keys().hasAll(["featureId"]) || request.resource.data.featureId == ""
+          || (exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
+            && get(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId)).data.piId == request.resource.data.piId));
       allow update: if isVerifiedUser() && canEditProject(projectId)
         && (
           (request.resource.data.createdBy == resource.data.createdBy
-            && validTask(request.resource.data))
+            && validTask(request.resource.data)
+            && (!request.resource.data.keys().hasAll(["featureId"]) || request.resource.data.featureId == ""
+              || (exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
+                && get(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId)).data.piId == request.resource.data.piId)))
           || (request.resource.diff(resource.data).affectedKeys().hasOnly(["archived", "updatedAt"])
             && request.resource.data.archived is bool)
         );
