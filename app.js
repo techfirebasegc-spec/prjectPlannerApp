@@ -1691,9 +1691,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       if (!STORY_LIFECYCLE_STATES.includes(nextState)) return;
       select.disabled = true;
       const storyTitle = String(task.raw.userStory || task.story || "").trim();
-      const linkedTasks = storyTitle && storyTitle !== "-"
-        ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
-        : [task];
+      const storyId = String(task.raw.userStoryId || "");
+      const linkedTasks = storyId
+        ? appState.allTasks.filter((item) => String(item.raw.userStoryId || "") === storyId)
+        : (storyTitle && storyTitle !== "-"
+          ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
+          : [task]);
       if (linkedTasks.length > 500) {
         window.alert("This story is linked to more than 500 tasks. Status was not changed; split the update into smaller groups.");
         select.disabled = false;
@@ -1805,7 +1808,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
         : [];
       const storyId = storyTitle && storyTitle !== "-"
-        ? (editingTask?.raw.userStoryId || matchingStoryTasks.find((item) => item.raw.userStoryId)?.raw.userStoryId || doc(collection(db, "_storyIdGenerator")).id)
+        ? (editingTask?.raw.userStoryId || matchingStoryTasks.find((item) => item.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id)
         : "";
       const taskData = {
         task,
