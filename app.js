@@ -722,7 +722,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         <h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No user story description added yet.")}</p>
         <div class="story-status-summary"><span>${counts.todo} To do</span><span>${counts.inprogress} In progress</span><span>${counts.done} Done</span></div>
         <div class="story-task-list">${story.tasks.slice(0,4).map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}${story.tasks.length>4?`<p class="story-more">+${story.tasks.length-4} more tasks</p>`:""}</div>
-        <button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-description="${escapeHtml(story.description)}">+ Add task to story</button></article>`;
+        <div class="story-card-actions">
+          <button type="button" class="story-edit" data-edit-story="${escapeHtml(story.title)}" data-story-description="${escapeHtml(story.description)}">Edit story</button>
+          <button type="button" class="story-add-task" data-story-title="${escapeHtml(story.title)}" data-story-description="${escapeHtml(story.description)}">+ Add task</button>
+        </div></article>`;
     }).join("");
     els.storiesGrid.querySelectorAll("[data-story-task]").forEach(button => button.addEventListener("click", () => {
       const task = appState.allTasks.find(item => item.id === button.dataset.storyTask); if (task) openTaskModal(task);
@@ -731,6 +734,58 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       openTaskEditor(); els.taskUserStoryInput.value = button.dataset.storyTitle || "";
       els.taskEditorForm.elements.namedItem("userStoryDescription").value = button.dataset.storyDescription || ""; els.newTaskName.focus();
     }));
+    els.storiesGrid.querySelectorAll("[data-edit-story]").forEach(button => button.addEventListener("click", () => {
+      editUserStory(button.dataset.editStory || "", button.dataset.storyDescription || "");
+    }));
+  }
+
+  async function editUserStory(currentTitle, currentDescription) {
+    const linkedTasks = appState.allTasks.filter((task) =>
+      String(task.raw.userStory || task.story || "").trim() === currentTitle
+    );
+    if (!linkedTasks.length) {
+      window.alert("This story has no linked tasks to store its details. Add a task to this story first.");
+      return;
+    }
+
+    const nextTitle = window.prompt("User story title", currentTitle);
+    if (nextTitle === null) return;
+    const title = nextTitle.trim();
+    if (!title) {
+      window.alert("The user story title cannot be empty.");
+      return;
+    }
+    if (title.length > 160) {
+      window.alert("The user story title must be 160 characters or fewer.");
+      return;
+    }
+    const nextDescription = window.prompt("User story description", currentDescription);
+    if (nextDescription === null) return;
+    const description = nextDescription.trim();
+    if (description.length > 1500) {
+      window.alert("The description must be 1,500 characters or fewer.");
+      return;
+    }
+
+    const affectedTasks = appState.allTasks.filter((task) =>
+      String(task.raw.userStory || task.story || "").trim() === currentTitle
+    );
+    try {
+      for (let start = 0; start < affectedTasks.length; start += 450) {
+        const batch = writeBatch(db);
+        affectedTasks.slice(start, start + 450).forEach((task) => {
+          batch.update(taskReference(task.id), {
+            userStory: title,
+            userStoryDescription: description,
+            updatedAt: serverTimestamp()
+          });
+        });
+        await batch.commit();
+      }
+    } catch (error) {
+      console.error("Could not update user story", error);
+      window.alert("The story could not be updated. Check your project permissions and try again.");
+    }
   }
 
   function renderBoard(tasks) {
