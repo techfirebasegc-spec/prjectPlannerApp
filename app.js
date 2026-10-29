@@ -1039,7 +1039,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const taskIcon = document.createElement("span");
       taskIcon.className = "list-task-icon";
       taskIcon.setAttribute("aria-hidden", "true");
-      taskIcon.textContent = "▧";
+      taskIcon.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2.2"></rect><path d="M9 3.5h6v3H9zM8.5 11h7M8.5 15h7"></path></svg>';
       const taskText = document.createElement("div");
       const taskName = document.createElement("strong");
       taskName.textContent = task.task;
