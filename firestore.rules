@@ -145,11 +145,17 @@ service cloud.firestore {
     match /plannerUserStories/{storyId} {
       allow get, list: if isVerifiedUser();
       allow create: if isVerifiedUser() && validUserStory(request.resource.data)
-        && request.resource.data.createdBy == request.auth.uid;
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.featureId is string
+        && exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
+        && get(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId)).data.piId == request.resource.data.piId;
       allow update: if isVerifiedUser() && resource.data.createdBy == request.auth.uid
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
-        && validUserStory(request.resource.data);
+        && validUserStory(request.resource.data)
+        && request.resource.data.featureId is string
+        && exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
+        && get(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId)).data.piId == request.resource.data.piId;
       allow delete: if isVerifiedUser() && resource.data.createdBy == request.auth.uid;
     }
 
@@ -276,11 +282,17 @@ service cloud.firestore {
       allow get, list: if isVerifiedUser() && isProjectMember(projectId);
       allow create: if isVerifiedUser() && canEditProject(projectId)
         && validUserStory(request.resource.data)
-        && request.resource.data.createdBy == request.auth.uid;
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.featureId is string
+        && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
+        && get(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId)).data.piId == request.resource.data.piId;
       allow update: if isVerifiedUser() && canEditProject(projectId)
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
-        && validUserStory(request.resource.data);
+        && validUserStory(request.resource.data)
+        && request.resource.data.featureId is string
+        && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
+        && get(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId)).data.piId == request.resource.data.piId;
       allow delete: if isVerifiedUser() && canEditProject(projectId);
     }
 
