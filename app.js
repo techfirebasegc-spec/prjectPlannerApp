@@ -538,7 +538,6 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     loadPreferences();
     bindEvents();
     if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true);
-    bindPlanningEvents();
     loadProjects();
   }
 
@@ -1347,8 +1346,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.storyTitleInput.value = story?.title || "";
     els.storyDescriptionInput.value = story?.description || "";
     els.storyCriteriaInput.value = Array.isArray(story?.acceptanceCriteria) ? story.acceptanceCriteria.join("\n") : "";
-    els.storyPiInput.value = story?.pi || "";
-    els.storyFeatureInput.value = story?.feature || "";
+    refreshPlanningSelectors();
+    const storyPI = appState.programIncrements.find((pi) => pi.id === story?.piId || pi.name === story?.pi);
+    const storyFeature = appState.features.find((feature) => feature.id === story?.featureId || feature.name === story?.feature);
+    els.storyPiInput.value = storyPI?.id || "";
+    onPlanningPIChange(els.storyPiInput, els.storyFeatureInput);
+    els.storyFeatureInput.value = storyFeature?.id || "";
     els.storyStartDateInput.value = story?.startDate || "";
     els.storyEndDateInput.value = story?.endDate || "";
     els.storyEditorError.textContent = "";
@@ -1382,7 +1385,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const previousTitle = existingStory?.title || "";
     const data = {
       title, description, acceptanceCriteria: criteria,
-      pi: els.storyPiInput.value.trim(), feature: els.storyFeatureInput.value.trim(),
+      piId: els.storyPiInput.value,
+      pi: appState.programIncrements.find((pi) => pi.id === els.storyPiInput.value)?.name || "",
+      featureId: els.storyFeatureInput.value,
+      feature: appState.features.find((feature) => feature.id === els.storyFeatureInput.value)?.name || "",
       startDate, endDate, lifecycle: appState.userStories.find(item => item.id === appState.editingStoryId)?.lifecycle || "Draft",
       createdBy: existingStory?.createdBy || appState.user.uid, archived: existingStory?.archived === true, updatedAt: serverTimestamp()
     };
@@ -2399,9 +2405,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         task: task.raw.task || task.task,
         userStory: task.raw.userStory || "",
         userStoryDescription: task.raw.userStoryDescription || "",
-        pi: task.raw.pi || "",
+        pi: task.raw.piId || appState.programIncrements.find((pi) => pi.name === task.raw.pi)?.id || "",
         sprint: task.raw.sprint || "",
-        feature: task.raw.feature || "",
+        feature: task.raw.featureId || appState.features.find((feature) => feature.name === task.raw.feature)?.id || "",
         assigneeUid: task.raw.assigneeUid || "",
         storyPoints: task.raw.storyPoints ?? 0,
         priority: task.raw.priority || "",
@@ -2419,6 +2425,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     } else {
       document.getElementById("taskEditorTitle").textContent = "New Task";
       els.saveTaskBtn.textContent = "Create Task";
+    }
+    refreshPlanningSelectors();
+    if (task) {
+      const pi = appState.programIncrements.find((item) => item.id === (task.raw.piId || "") || item.name === task.raw.pi);
+      const feature = appState.features.find((item) => item.id === (task.raw.featureId || "") || item.name === task.raw.feature);
+      els.taskPIInput.value = pi?.id || "";
+      onPlanningPIChange(els.taskPIInput, els.taskFeatureInput);
+      els.taskFeatureInput.value = feature?.id || "";
     }
     els.taskEditorError.textContent = "";
     populateTaskAssignees(task).catch((error) => {
@@ -2535,9 +2549,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         userStory: storyTitle,
         userStoryId: storyId,
         userStoryDescription: String(form.get("userStoryDescription") || "").trim(),
-        pi: String(form.get("pi") || "").trim(),
+        piId: String(form.get("pi") || "").trim(),
+        pi: appState.programIncrements.find((item) => item.id === String(form.get("pi") || "").trim())?.name || "",
         sprint: String(form.get("sprint") || "").trim(),
-        feature: String(form.get("feature") || "").trim(),
+        featureId: String(form.get("feature") || "").trim(),
+        feature: appState.features.find((item) => item.id === String(form.get("feature") || "").trim())?.name || "",
         assignee: assigneeName,
         assigneeUid,
         storyPoints,
