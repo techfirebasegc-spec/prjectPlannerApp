@@ -831,6 +831,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
           <section class="story-detail-section"><h4>Linked tasks <span>${story.tasks.length}</span></h4>${story.tasks.length ? `<div class="story-task-list">${story.tasks.map(task => `<button type="button" class="story-task-link" data-story-task="${escapeHtml(task.id)}"><span>${escapeHtml(task.task)}</span><small>${escapeHtml(task.statusLabel)}</small></button>`).join("")}</div>` : '<div class="story-no-tasks"><strong>No tasks yet</strong><p>Add tasks when you are ready to break down this story.</p></div>'}</section>
         </div></article>`;
     }).join("");
+    els.storiesGrid.querySelectorAll("[data-toggle-story-details]").forEach(button => button.addEventListener("click", () => {
+      const id = button.dataset.toggleStoryDetails;
+      if (appState.expandedStoryTaskIds.has(id)) appState.expandedStoryTaskIds.delete(id);
+      else appState.expandedStoryTaskIds.add(id);
+      renderUserStories(appState.filteredTasks);
+    }));
     els.storiesGrid.querySelectorAll("[data-expand-story-tasks]").forEach(button => button.addEventListener("click", () => {
       const id = button.dataset.expandStoryTasks;
       if (appState.expandedStoryTaskIds.has(id)) appState.expandedStoryTaskIds.delete(id);
