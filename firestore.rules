@@ -123,7 +123,7 @@ service cloud.firestore {
     match /plannerFeatures/{featureId} {
       allow get, list: if isVerifiedUser();
       allow create: if isVerifiedUser()
-        && request.resource.data.keys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["name", "piId", "pi", "description", "owner", "ownerUid", "priority", "status", "archived", "createdBy", "createdAt", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
         && request.resource.data.piId is string && exists(/databases/$(database)/documents/plannerProgramIncrements/$(request.resource.data.piId))
         && request.resource.data.pi is string && request.resource.data.description is string
@@ -132,7 +132,7 @@ service cloud.firestore {
         && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
       allow update: if isVerifiedUser()
         && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "updatedAt"])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "ownerUid", "priority", "status", "archived", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
         && request.resource.data.piId is string && exists(/databases/$(database)/documents/plannerProgramIncrements/$(request.resource.data.piId))
         && request.resource.data.pi is string && request.resource.data.description is string
@@ -267,7 +267,7 @@ service cloud.firestore {
     match /plannerProjects/{projectId}/features/{featureId} {
       allow get, list: if isVerifiedUser() && isProjectMember(projectId);
       allow create: if isVerifiedUser() && canEditProject(projectId)
-        && request.resource.data.keys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["name", "piId", "pi", "description", "owner", "ownerUid", "priority", "status", "archived", "createdBy", "createdAt", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
         && request.resource.data.piId is string
         && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/programIncrements/$(request.resource.data.piId))
@@ -275,7 +275,7 @@ service cloud.firestore {
         && request.resource.data.priority in ["HIGH", "MEDIUM", "LOW"] && request.resource.data.status in ["PLANNED", "IN_PROGRESS", "COMPLETED"]
         && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
       allow update: if isVerifiedUser() && canEditProject(projectId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "updatedAt"])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "ownerUid", "priority", "status", "archived", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
         && request.resource.data.piId is string
         && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/programIncrements/$(request.resource.data.piId))
