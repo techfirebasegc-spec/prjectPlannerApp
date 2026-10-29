@@ -1,61 +1,107 @@
-(() => {
-  "use strict";
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  updateProfile
+} from "firebase/auth";
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
+import { auth, db, googleProvider } from "./firebase.js";
 
-  const SESSION_KEY = "cliniqPlanner.auth.session.v1";
-  const AUTH_SALT = "cliniq-static-salt-v1";
-  const EXPECTED_USER_HASH = "a3220c5b0caed1529f1e1b5e73109d61c3930e95ebf9b5ae4c4d90cf8aba7d26";
-  const EXPECTED_PASS_HASH = "9dd7075a0f14663cbfd31acc345ed978189359619f9a4bbb04ace5b2d2e88fb7";
+export const USERS_COLLECTION = "plannerUsers";
+export const DIRECTORY_COLLECTION = "plannerDirectory";
 
-  async function sha256Hex(text) {
-    const bytes = new TextEncoder().encode(text);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", bytes);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+export function waitForAuthState() {
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
+}
+
+export async function ensureUserProfile(user) {
+  if (!user) return;
+
+  const profileRef = doc(db, USERS_COLLECTION, user.uid);
+  const existing = await getDoc(profileRef);
+  let profileName = user.displayName || "";
+  if (!existing.exists()) {
+    await setDoc(profileRef, {
+      uid: user.uid,
+      email: user.email || "",
+      displayName: user.displayName || "",
+      firstName: "",
+      lastName: "",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } else {
+    profileName = profileName || existing.data().displayName || "";
   }
+  await setDoc(doc(db, DIRECTORY_COLLECTION, user.uid), {
+    uid: user.uid,
+    displayName: profileName || "Unnamed user",
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
 
-  async function verifyCredentials(userId, password) {
-    const normalizedUser = String(userId || "").trim();
-    const normalizedPass = String(password || "");
+export async function getAuthenticatedPlannerUser() {
+  const user = await waitForAuthState();
+  if (!user) return { user: null, access: null, reason: "signed-out" };
 
-    const [userHash, passHash] = await Promise.all([
-      sha256Hex(`${AUTH_SALT}|${normalizedUser}`),
-      sha256Hex(`${AUTH_SALT}|${normalizedPass}`)
-    ]);
+  if (!user.emailVerified) return { user, access: null, reason: "email-unverified" };
 
-    return userHash === EXPECTED_USER_HASH && passHash === EXPECTED_PASS_HASH;
+  await ensureUserProfile(user);
+  return { user, access: null, reason: null };
+}
+
+export async function signInWithEmail(email, password) {
+  return signInWithEmailAndPassword(auth, email, password);
+}
+
+export async function createEmailAccount(email, password) {
+  const credential = await createUserWithEmailAndPassword(auth, email, password);
+  await sendEmailVerification(credential.user);
+  return credential;
+}
+
+export async function signInWithGoogle() {
+  const credential = await signInWithPopup(auth, googleProvider);
+  await ensureUserProfile(credential.user);
+  return credential;
+}
+
+export async function resendVerification() {
+  if (auth.currentUser) await sendEmailVerification(auth.currentUser);
+}
+
+export async function signOutUser() {
+  await signOut(auth);
+}
+
+export async function updatePlannerProfile(firstName, lastName) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("No signed-in user.");
+  const displayName = [firstName, lastName].filter(Boolean).join(" ");
+  await updateProfile(user, { displayName });
+  try {
+    await updateDoc(doc(db, USERS_COLLECTION, user.uid), {
+      firstName,
+      lastName,
+      displayName,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    // Firebase Authentication remains the source of truth for the visible name.
+    console.warn("Could not mirror the profile name to Firestore", error);
   }
-
-  function setSession(userId) {
-    const payload = {
-      userId: String(userId || "").trim(),
-      at: new Date().toISOString()
-    };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
-  }
-
-  function getSession() {
-    try {
-      const raw = localStorage.getItem(SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (error) {
-      return null;
-    }
-  }
-
-  function isAuthenticated() {
-    const session = getSession();
-    return Boolean(session && session.userId);
-  }
-
-  function clearSession() {
-    localStorage.removeItem(SESSION_KEY);
-  }
-
-  window.AuthGate = {
-    verifyCredentials,
-    setSession,
-    getSession,
-    isAuthenticated,
-    clearSession
-  };
-})();
+  await setDoc(doc(db, DIRECTORY_COLLECTION, user.uid), {
+    uid: user.uid,
+    displayName,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+  return { displayName };
+}

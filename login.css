@@ -103,9 +103,37 @@ button:disabled {
   cursor: default;
 }
 
+.secondary-btn,
+.google-btn {
+  background: #eef4ff;
+  color: var(--brand);
+  border: 1px solid var(--border);
+}
+
+.google-btn {
+  background: #fff;
+  color: var(--text);
+}
+
+.link-btn {
+  margin-top: 0;
+  padding: 4px;
+  background: transparent;
+  color: var(--brand);
+  text-decoration: underline;
+}
+
+.is-hidden {
+  display: none;
+}
+
 .login-error {
   margin: 4px 0 0;
   min-height: 20px;
   font-size: 0.85rem;
   color: var(--danger);
+}
+
+.login-error.is-success {
+  color: #157347;
 }

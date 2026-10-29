@@ -1,0 +1,178 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isVerifiedUser() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function validTask(data) {
+      return data.keys().hasOnly([
+          "task", "userStory", "pi", "sprint", "feature", "assignee",
+          "storyPoints", "priority", "startDate", "endDate", "description",
+          "status", "archived", "createdBy", "createdAt", "updatedAt"
+        ])
+        && data.task is string && data.task.size() > 0 && data.task.size() <= 160
+        && data.userStory is string && data.pi is string && data.sprint is string
+        && data.feature is string && data.assignee is string
+        && data.storyPoints is number && data.storyPoints >= 0
+        && data.priority is string && data.startDate is string && data.endDate is string
+        && data.description is string && data.status in ["To Do", "In Progress", "Done"]
+        && (!data.keys().hasAll(["archived"]) || data.archived is bool)
+        && data.createdBy is string;
+    }
+
+    function validNewTask(data) {
+      return validTask(data)
+        && data.keys().hasAll(["archived"])
+        && data.archived == false;
+    }
+
+    function isProjectOwner(projectId) {
+      return get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId == request.auth.uid;
+    }
+
+    function isProjectMember(projectId) {
+      return get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.archived != true
+        && (isProjectOwner(projectId)
+          || exists(/databases/$(database)/documents/plannerProjects/$(projectId)/members/$(request.auth.uid)));
+    }
+
+    function canEditProject(projectId) {
+      return get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.archived != true
+        && (isProjectOwner(projectId)
+          || get(/databases/$(database)/documents/plannerProjects/$(projectId)/members/$(request.auth.uid)).data.role in ["owner", "editor"]);
+    }
+
+    match /plannerUsers/{uid} {
+      allow create: if isVerifiedUser()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(["uid", "email", "displayName", "firstName", "lastName", "createdAt", "updatedAt"])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email;
+      allow get: if isVerifiedUser() && request.auth.uid == uid;
+      allow update: if isVerifiedUser()
+        && request.auth.uid == uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.displayName is string
+        && request.resource.data.firstName is string
+        && request.resource.data.lastName is string
+        && request.resource.diff(resource.data).affectedKeys().hasOnly(["firstName", "lastName", "displayName", "preferences", "updatedAt"]);
+      allow list, delete: if false;
+    }
+
+    // Contains only display names and UIDs so project owners can search users by name.
+    match /plannerDirectory/{uid} {
+      allow get, list: if isVerifiedUser();
+      allow create, update: if isVerifiedUser()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(["uid", "displayName", "updatedAt"])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 161;
+      allow delete: if false;
+    }
+
+    // Existing data remains the shared Default Project and is not migrated or overwritten.
+    match /plannerTasks/{taskId} {
+      allow get, list: if isVerifiedUser();
+      allow create: if isVerifiedUser() && validNewTask(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser() && (
+        (request.resource.diff(resource.data).affectedKeys().hasOnly(["status", "updatedAt"])
+          && request.resource.data.status in ["To Do", "In Progress", "Done"])
+        || (resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdBy == resource.data.createdBy
+          && validTask(request.resource.data))
+        || (resource.data.createdBy == request.auth.uid
+          && request.resource.diff(resource.data).affectedKeys().hasOnly(["archived", "updatedAt"])
+          && request.resource.data.archived is bool)
+      );
+      allow delete: if isVerifiedUser() && resource.data.createdBy == request.auth.uid;
+    }
+
+    match /plannerProjects/{projectId} {
+      allow create: if isVerifiedUser()
+        && request.resource.data.keys().hasOnly(["name", "description", "ownerId", "archived", "createdAt", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.description is string
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.archived == false;
+      allow get, list: if isVerifiedUser()
+        && (resource.data.ownerId == request.auth.uid || isProjectMember(projectId));
+      allow update: if isVerifiedUser() && isProjectOwner(projectId)
+        && request.resource.data.keys().hasOnly(["name", "description", "ownerId", "archived", "createdAt", "updatedAt"])
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.description is string
+        && request.resource.data.archived is bool;
+      // Parent-document deletion would leave Firestore subcollections behind.
+      allow delete: if false;
+    }
+
+    match /plannerProjects/{projectId}/members/{memberId} {
+      allow get, list: if isVerifiedUser() && (resource.data.uid == request.auth.uid || isProjectOwner(projectId));
+      allow create: if isVerifiedUser() && (
+        (memberId == request.auth.uid && request.resource.data.uid == request.auth.uid
+          && request.resource.data.role == "owner"
+          && request.resource.data.displayName is string
+          && request.resource.data.keys().hasOnly(["uid", "displayName", "role", "addedAt"])
+          && getAfter(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId == request.auth.uid)
+        || (isProjectOwner(projectId)
+          && request.resource.data.uid == memberId
+          && request.resource.data.keys().hasOnly(["uid", "displayName", "role", "addedAt"])
+          && request.resource.data.role in ["editor", "viewer"]
+          && request.resource.data.displayName is string)
+      );
+      allow update: if isVerifiedUser() && isProjectOwner(projectId)
+        && memberId != get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId
+        && request.resource.data.keys().hasOnly(["uid", "displayName", "role", "addedAt"])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.role in ["editor", "viewer"];
+      allow delete: if isVerifiedUser() && isProjectOwner(projectId)
+        && memberId != get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId;
+    }
+
+    match /plannerUserProjects/{uid}/projects/{projectId} {
+      allow get, list: if isVerifiedUser() && request.auth.uid == uid;
+      allow create: if isVerifiedUser() && request.resource.data.keys().hasOnly(["role", "addedAt"])
+        && request.resource.data.role in ["owner", "editor", "viewer"]
+        && (
+          isProjectOwner(projectId)
+          || (request.auth.uid == uid
+            && request.resource.data.role == "owner"
+            && getAfter(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId == request.auth.uid)
+        );
+      allow update: if isVerifiedUser() && isProjectOwner(projectId)
+        && request.resource.data.keys().hasOnly(["role", "addedAt"])
+        && request.resource.data.role in ["editor", "viewer"];
+      allow delete: if isVerifiedUser()
+        && (request.auth.uid == uid || isProjectOwner(projectId));
+    }
+
+    match /plannerProjects/{projectId}/tasks/{taskId} {
+      allow get, list: if isVerifiedUser() && isProjectMember(projectId);
+      allow create: if isVerifiedUser() && canEditProject(projectId)
+        && validNewTask(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser() && canEditProject(projectId)
+        && (
+          (request.resource.data.createdBy == resource.data.createdBy
+            && validTask(request.resource.data))
+          || (request.resource.diff(resource.data).affectedKeys().hasOnly(["archived", "updatedAt"])
+            && request.resource.data.archived is bool)
+        );
+      allow delete: if isVerifiedUser() && canEditProject(projectId);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

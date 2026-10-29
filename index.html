@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The CliniQ Agile Planner</title>
+  <title>Arcflow</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -11,11 +11,16 @@
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar">
+    <aside class="sidebar" aria-label="Planner navigation and controls">
+      <button id="sidebarToggleBtn" class="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true">☰</button>
+      <nav class="sidebar-shortcuts" aria-label="Collapsed sidebar">
+        <button type="button" data-sidebar-expand title="Show filters" aria-label="Show filters">⌕</button>
+        <button type="button" data-sidebar-expand title="Show board controls" aria-label="Show board controls">☷</button>
+      </nav>
       <div class="brand-block">
         <p class="brand-kicker">Portfolio View</p>
-        <h1>The CliniQ Agile Planner</h1>
-        <p class="brand-subtitle">Your Health Partner</p>
+        <h1>Arcflow</h1>
+        <p class="brand-subtitle">Plan with clarity</p>
       </div>
 
       <section class="filter-panel">
@@ -68,33 +73,54 @@
 
     <div class="workspace">
       <header class="topbar">
+        <span id="currentUserName" class="user-name nav-user-name"></span>
         <label class="search-wrap" for="searchInput">
           <span class="search-icon" aria-hidden="true">&#128269;</span>
           <input id="searchInput" type="search" placeholder="Search by task, story, assignee, feature..." autocomplete="off">
         </label>
 
         <div class="topbar-right">
-          <div class="stats-grid">
-            <article class="stat-card">
-              <p>Total Tasks</p>
-              <strong id="totalTasks">0</strong>
-            </article>
-            <article class="stat-card">
-              <p>Completed</p>
-              <strong id="completedPercent">0%</strong>
-            </article>
-            <article class="stat-card">
-              <p>In Progress</p>
-              <strong id="inProgressCount">0</strong>
-            </article>
+          <div class="topbar-actions">
+            <select id="projectSelect" class="project-select" aria-label="Select project">
+              <option value="default">Default Project</option>
+            </select>
+            <button id="newProjectBtn" class="secondary-action" type="button">+ Project</button>
+            <button id="editProjectBtn" class="secondary-action is-hidden" type="button">Project Details</button>
+            <button id="archiveProjectBtn" class="danger-action is-hidden" type="button">Archive Project</button>
+            <button id="membersBtn" class="secondary-action is-hidden" type="button">Members</button>
+            <button id="newTaskBtn" class="new-task-btn" type="button" onclick="document.getElementById('taskEditorModal').classList.add('is-open'); document.getElementById('taskEditorModal').setAttribute('aria-hidden', 'false'); document.getElementById('newTaskName').focus();">+ New Task</button>
+            <div class="account-menu-wrap">
+              <button id="accountMenuBtn" class="account-avatar" type="button" aria-label="Open account menu" aria-expanded="false">--</button>
+              <div id="accountMenu" class="account-menu is-hidden" role="menu">
+                <button id="settingsBtn" type="button" role="menuitem">Settings</button>
+                <button id="logoutBtn" type="button" role="menuitem">Logout</button>
+              </div>
+            </div>
           </div>
-          <button id="logoutBtn" class="logout-btn" type="button">Logout</button>
         </div>
       </header>
 
+      <section class="portfolio-hero" aria-label="Planner overview">
+        <div>
+          <p class="brand-kicker">Portfolio View</p>
+          <h2>Arcflow</h2>
+          <p>Plan, track and deliver better — together</p>
+        </div>
+        <div class="hero-quote"><strong>“Progress, one task at a time.”</strong><span>Delivering value, together</span></div>
+      </section>
+
+      <section class="overview-stats" aria-label="Task summary">
+        <article class="overview-card total"><span class="overview-icon">▤</span><div><p>Total Tasks</p><strong id="totalTasks">0</strong><small>Across your portfolio</small></div></article>
+        <article class="overview-card complete"><span class="overview-icon">✓</span><div><p>Completed</p><strong id="completedPercent">0%</strong><small>Completion rate</small></div></article>
+        <article class="overview-card active"><span class="overview-icon">◌</span><div><p>In Progress</p><strong id="inProgressCount">0</strong><small>Active tasks</small></div></article>
+        <article class="overview-card todo"><span class="overview-icon">◷</span><div><p>To Do</p><strong id="todoStat">0</strong><small>Tasks yet to start</small></div></article>
+      </section>
+
       <section class="view-switch" aria-label="View switcher">
-        <button id="boardViewBtn" class="view-btn is-active" type="button">Kanban Board</button>
+        <button id="listViewBtn" class="view-btn" type="button">List View</button>
+        <button id="boardViewBtn" class="view-btn is-active" type="button">Kanban View</button>
         <button id="insightsViewBtn" class="view-btn" type="button">Agile Insights</button>
+        <button id="profileViewBtn" class="view-btn is-hidden" type="button">Profile</button>
       </section>
 
       <div id="boardView">
@@ -134,6 +160,35 @@
           </section>
         </main>
       </div>
+
+      <section id="listView" class="list-view is-hidden" aria-label="Task list">
+        <div class="list-toolbar">
+          <div class="list-title-wrap">
+            <span class="list-title-icon" aria-hidden="true">☑</span>
+            <div><h2>Tasks</h2><p>Track and manage your work items</p></div>
+          </div>
+          <div class="list-toolbar-actions">
+            <span id="listSummary" class="list-summary"></span>
+            <button id="archiveSelectedTasksBtn" class="list-archive-btn" type="button" disabled>Archive selected</button>
+          </div>
+        </div>
+        <div class="task-table-wrap">
+          <table class="task-table">
+            <thead><tr>
+              <th class="list-select-heading"><input id="selectAllTasks" type="checkbox" aria-label="Select all archivable tasks"></th>
+              <th aria-sort="none"><button class="list-sort-button" type="button" data-list-sort="task">Task / Story <span aria-hidden="true">↕</span></button></th>
+              <th aria-sort="none"><button class="list-sort-button" type="button" data-list-sort="feature">Feature <span aria-hidden="true">↕</span></button></th>
+              <th aria-sort="none"><button class="list-sort-button" type="button" data-list-sort="pi">PI <span aria-hidden="true">↕</span></button></th>
+              <th aria-sort="none"><button class="list-sort-button" type="button" data-list-sort="sprint">Sprint <span aria-hidden="true">↕</span></button></th>
+              <th aria-sort="none"><button class="list-sort-button" type="button" data-list-sort="assignee">Assignee <span aria-hidden="true">↕</span></button></th>
+              <th aria-sort="none"><button class="list-sort-button" type="button" data-list-sort="status">Status <span aria-hidden="true">↕</span></button></th>
+              <th aria-sort="none"><button class="list-sort-button" type="button" data-list-sort="priority">Priority <span aria-hidden="true">↕</span></button></th>
+              <th aria-sort="none"><button class="list-sort-button" type="button" data-list-sort="dueDate">Due date <span aria-hidden="true">↕</span></button></th>
+            </tr></thead>
+            <tbody id="taskTableBody"></tbody>
+          </table>
+        </div>
+      </section>
 
       <section id="insightsView" class="insights-view is-hidden" aria-label="Agile insights">
         <div class="insights-header">
@@ -181,19 +236,145 @@
           </section>
         </div>
       </section>
+
+      <section id="profileView" class="profile-view is-hidden" aria-label="Profile">
+        <header class="profile-header">
+          <p class="brand-kicker">Account</p>
+          <h2>Your Profile</h2>
+          <p>Your signed-in account and access for the selected project.</p>
+        </header>
+        <div class="profile-grid">
+          <article class="profile-card"><p>First name</p><strong id="profileFirstName">-</strong></article>
+          <article class="profile-card"><p>Last name</p><strong id="profileLastName">-</strong></article>
+          <article class="profile-card"><p>Email</p><strong id="profileEmail">-</strong></article>
+          <article class="profile-card profile-card-wide"><p>Firebase UID</p><code id="profileUid">-</code></article>
+          <article class="profile-card"><p>Selected project</p><strong id="profileProject">-</strong></article>
+          <article class="profile-card"><p>Your role</p><strong id="profileRole">-</strong></article>
+        </div>
+        <form id="profileForm" class="profile-form" novalidate>
+          <h3>Edit profile</h3>
+          <label>First name<input id="profileFirstNameInput" name="firstName" required maxlength="80" autocomplete="given-name"></label>
+          <label>Last name<input id="profileLastNameInput" name="lastName" maxlength="80" autocomplete="family-name"></label>
+          <button id="saveProfileBtn" class="save-task-btn" type="submit">Save Profile</button>
+          <p id="profileError" class="task-editor-error" aria-live="polite"></p>
+        </form>
+        <section class="profile-access">
+          <h3>Your project access</h3>
+          <div id="profileAccessList" class="profile-access-list"></div>
+        </section>
+      </section>
+
     </div>
   </div>
 
   <div id="taskModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
-    <div class="modal-card" role="document">
+    <div class="modal-card task-detail-modal" role="document">
       <button id="closeModal" class="modal-close" type="button" aria-label="Close">&times;</button>
-      <h2 id="modalTitle"></h2>
-      <div id="modalBody" class="modal-body"></div>
+      <header class="task-detail-header">
+        <span class="task-editor-icon" aria-hidden="true">▧</span>
+        <div><h2 id="modalTitle"></h2><p>Task details</p></div>
+      </header>
+      <div class="task-detail-layout">
+        <div id="modalBody" class="modal-body"></div>
+        <aside class="task-detail-side">
+          <label class="status-editor" for="taskStatusSelect">Status
+            <select id="taskStatusSelect">
+              <option value="todo">To Do</option>
+              <option value="inprogress">In Progress</option>
+              <option value="done">Done</option>
+            </select>
+          </label>
+        </aside>
+      </div>
+      <div class="task-editor-actions">
+        <button id="saveStatusBtn" class="save-task-btn" type="button">Save Status</button>
+        <button id="editTaskBtn" class="secondary-action" type="button">Edit Task</button>
+        <button id="deleteTaskBtn" class="danger-action" type="button">Delete Task</button>
+      </div>
     </div>
   </div>
 
+  <div id="projectEditorModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="projectEditorTitle">
+    <form id="projectEditorForm" class="modal-card task-editor project-editor" novalidate>
+      <button id="closeProjectEditor" class="modal-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="projectEditorTitle">New Project</h2>
+      <p class="task-editor-subtitle">Create or update the project details. Manage member access separately.</p>
+      <div class="task-form-grid">
+        <label class="task-form-wide">Project name<input id="newProjectName" name="name" required maxlength="120" autocomplete="off"></label>
+        <label class="task-form-wide">Description<textarea name="description" rows="3" maxlength="1000"></textarea></label>
+      </div>
+      <p id="projectEditorError" class="task-editor-error" aria-live="polite"></p>
+      <div class="task-editor-actions">
+        <button id="cancelProjectEditor" class="secondary-action" type="button">Cancel</button>
+        <button id="saveProjectBtn" class="save-task-btn" type="submit">Create Project</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="membersModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="membersTitle">
+    <section class="modal-card task-editor members-editor">
+      <button id="closeMembers" class="modal-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="membersTitle">Project Members</h2>
+      <p class="task-editor-subtitle">Choose a signed-in user by name. Editors can manage tasks; viewers can only read.</p>
+      <form id="memberForm" class="task-form-grid" novalidate>
+        <label class="task-form-wide">User name
+          <select id="memberSelect" name="member"><option value="">Choose a user</option></select>
+        </label>
+        <label>Access role
+          <select name="role"><option value="viewer">Viewer</option><option value="editor">Editor</option></select>
+        </label>
+        <div class="member-submit-wrap"><button id="saveMemberBtn" class="save-task-btn" type="submit">Add Member</button></div>
+      </form>
+      <p id="memberError" class="task-editor-error" aria-live="polite"></p>
+      <div id="memberList" class="member-list"></div>
+    </section>
+  </div>
+
+  <div id="taskEditorModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="taskEditorTitle">
+    <form id="taskEditorForm" class="modal-card task-editor" novalidate>
+      <button id="closeTaskEditor" class="modal-close" type="button" aria-label="Close">&times;</button>
+      <header class="task-editor-header">
+        <span class="task-editor-icon" aria-hidden="true">▧</span>
+        <div>
+          <h2 id="taskEditorTitle">New Task</h2>
+          <p class="task-editor-subtitle">Add the details needed to plan and track this work.</p>
+        </div>
+      </header>
+      <div class="task-editor-layout">
+        <section class="task-editor-fields" aria-label="Task details">
+          <label class="task-form-wide">Task name<input id="newTaskName" name="task" required maxlength="160" autocomplete="off"></label>
+          <div class="task-form-grid">
+            <label class="task-form-wide">User story<input name="userStory" maxlength="160" autocomplete="off"></label>
+            <label>PI<input name="pi" maxlength="100" autocomplete="off"></label>
+            <label>Sprint<input name="sprint" maxlength="100" autocomplete="off"></label>
+            <label>Feature<input name="feature" maxlength="120" autocomplete="off"></label>
+            <label>Assignee<input name="assignee" maxlength="120" autocomplete="off"></label>
+            <label>Priority
+              <select name="priority">
+                <option value="">No priority</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </label>
+            <label>Story points<input name="storyPoints" type="number" min="0" step="0.5" value="0"></label>
+            <label>Start date<input name="startDate" type="date"></label>
+            <label>End date<input name="endDate" type="date"></label>
+          </div>
+        </section>
+        <section class="task-editor-notes" aria-label="Task description">
+          <label>Description<textarea name="description" rows="8" maxlength="1000" placeholder="Add context, notes, or acceptance criteria"></textarea></label>
+        </section>
+      </div>
+      <p id="taskEditorError" class="task-editor-error" aria-live="polite"></p>
+      <div class="task-editor-actions">
+        <button id="cancelTaskEditor" class="secondary-action" type="button">Cancel</button>
+        <button id="saveTaskBtn" class="save-task-btn" type="submit">Create Task</button>
+      </div>
+    </form>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="auth.js" defer></script>
-  <script src="app.js" defer></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
