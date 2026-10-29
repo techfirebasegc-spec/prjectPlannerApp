@@ -9,7 +9,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
           "task", "userStory", "userStoryDescription", "pi", "sprint", "feature", "assignee",
           "storyPoints", "priority", "startDate", "endDate", "description",
-          "status", "archived", "createdBy", "createdAt", "updatedAt", "subtasks", "dependencies"
+          "status", "archived", "createdBy", "createdAt", "updatedAt", "subtasks", "dependencies", "acceptanceCriteria"
         ])
         && data.task is string && data.task.size() > 0 && data.task.size() <= 160
         && data.userStory is string && data.pi is string && data.sprint is string
@@ -20,7 +20,8 @@ service cloud.firestore {
         && (!data.keys().hasAll(["archived"]) || data.archived is bool)
         && data.createdBy is string
         && (!data.keys().hasAll(["subtasks"]) || (data.subtasks is list && data.subtasks.size() <= 50))
-        && (!data.keys().hasAll(["dependencies"]) || (data.dependencies is list && data.dependencies.size() <= 50));
+        && (!data.keys().hasAll(["dependencies"]) || (data.dependencies is list && data.dependencies.size() <= 50))
+        && (!data.keys().hasAll(["acceptanceCriteria"]) || (data.acceptanceCriteria is list && data.acceptanceCriteria.size() <= 50));
     }
 
     function validNewTask(data) {
