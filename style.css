@@ -2109,3 +2109,5 @@ body { background: #f3f6fb; }
 
 
 .story-lifecycle-control{display:grid;gap:6px;max-width:360px}.story-lifecycle-control span{font-size:12px;font-weight:700;color:#51627d}.story-lifecycle-control select{width:100%;min-height:42px;padding:9px 11px;border:1px solid #d7e1ef;border-radius:8px;background:#fff;color:#20314d;font:inherit;font-size:14px}.story-lifecycle-note{margin:10px 0 0;color:#7a879b;font-size:12px;line-height:1.45}
+
+.story-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}.story-metrics>span{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-soft)}.story-metrics small{color:var(--text-muted);font-size:11px;font-weight:700;text-transform:uppercase}.story-metrics strong{font-size:14px;overflow-wrap:anywhere}@media(max-width:520px){.story-metrics{gap:8px}.story-metrics>span{padding:9px}}
