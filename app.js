@@ -254,28 +254,33 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     return Boolean(project && (project.role === "owner" || project.role === "editor"));
   }
 
-  async function loadPlanningRecords() {
-    if (appState.unsubscribePlanning) appState.unsubscribePlanning();
-    try {
-      const [pis, features] = await Promise.all([
-        getDocs(planningCollection("pi")),
-        getDocs(planningCollection("feature"))
-      ]);
-      appState.programIncrements = pis.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
+  function loadPlanningRecords() {
+    if (Array.isArray(appState.unsubscribePlanning)) appState.unsubscribePlanning.forEach((unsubscribe) => unsubscribe());
+    const unsubscribePI = onSnapshot(planningCollection("pi"), (snapshot) => {
+      appState.programIncrements = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
         .sort((a, b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
-      appState.features = features.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
-        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
       refreshPlanningSelectors();
       renderProgramIncrements();
       renderFeatures();
-    } catch (error) {
-      console.error("Could not load PI/Feature catalogue", error);
+    }, (error) => {
+      console.error("Could not load Program Increments", error);
       appState.programIncrements = [];
-      appState.features = [];
       refreshPlanningSelectors();
       renderProgramIncrements("Could not load Program Increments. Check project membership permissions.");
+    });
+    const unsubscribeFeature = onSnapshot(planningCollection("feature"), (snapshot) => {
+      appState.features = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
+        .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      refreshPlanningSelectors();
+      renderFeatures();
+      renderProgramIncrements();
+    }, (error) => {
+      console.error("Could not load Features", error);
+      appState.features = [];
+      refreshPlanningSelectors();
       renderFeatures("Could not load Features. Check project membership permissions.");
-    }
+    });
+    appState.unsubscribePlanning = [unsubscribePI, unsubscribeFeature];
   }
 
   function setSelectOptions(select, items, placeholder, selectedValue = "") {
@@ -486,8 +491,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   async function archiveFeature(id, name) {
     if (!planningCanEdit()) return;
-    const linkedStories = appState.userStories.filter((story) => story.featureId === id);
-    const linkedTasks = appState.allTasks.filter((task) => task.raw.featureId === id);
+    const linkedFeature = appState.features.find((feature) => feature.id === id);
+    const linkedStories = appState.userStories.filter((story) => story.featureId === id || (linkedFeature && story.feature === linkedFeature.name));
+    const linkedTasks = appState.allTasks.filter((task) => task.raw.featureId === id || (linkedFeature && task.feature === linkedFeature.name));
     if (linkedStories.length || linkedTasks.length) { window.alert("This Feature still has linked User Stories or Tasks. Reassign them before archiving the Feature."); return; }
     if (!window.confirm(`Archive Feature "${name}"?`)) return;
     try {
@@ -2478,6 +2484,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       els.taskPIInput.value = pi?.id || "";
       onPlanningPIChange(els.taskPIInput, els.taskFeatureInput);
       els.taskFeatureInput.value = feature?.id || "";
+      onTaskStoryChange();
     }
     els.taskEditorError.textContent = "";
     populateTaskAssignees(task).catch((error) => {
