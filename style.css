@@ -2527,3 +2527,16 @@ body { background: #f3f6fb; }
   .story-editor .task-editor-actions button,
   .story-editor .task-editor-actions #saveStoryBtn { min-width: 0; width: 100%; min-height: 46px; padding: 10px 8px; }
 }
+
+
+/* User Story archive controls and compact task previews */
+.stories-list-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.story-archive-toggle,.story-archive-action{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 11px;border:1px solid #cbd7e8;border-radius:9px;background:#fff;color:#405875;font:inherit;font-size:.74rem;font-weight:700;cursor:pointer;transition:background .15s ease,border-color .15s ease,color .15s ease}
+.story-archive-toggle:hover,.story-archive-action:hover{border-color:#8fb0e8;background:#f2f7ff;color:#245ca8}
+.story-card.is-archived{background:#f8fafc;border-style:dashed;opacity:.88}
+.story-card.is-archived .story-card-label{color:#7a8799}
+.story-card-actions{grid-template-columns:auto minmax(0,1fr) auto;align-items:center}
+.story-task-list{gap:5px}
+.story-task-link{padding:7px 9px}
+.story-more{padding:2px 3px}
+@media(max-width:760px){.stories-list-controls{align-items:stretch}.story-archive-toggle{width:100%}.story-card-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.story-card-actions .story-add-task{grid-column:1/-1;grid-row:1}.story-card-actions .story-edit,.story-card-actions .story-archive-action{min-height:38px}}
