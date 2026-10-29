@@ -2588,7 +2588,6 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         : "";
       const linkedStory = appState.userStories.find((story) => story.id === selectedStoryId)
         || matchingStoryTasks.find((item) => item.raw.userStoryId || String(item.raw.userStory || "").trim() === storyTitle)?.raw;
-      const mappedPI = appState.programIncrements.find((item) => item.id === (linkedStory?.piId || "") || item.name === linkedStory?.pi);
       const mappedFeature = appState.features.find((item) => item.id === (linkedStory?.featureId || "") || item.name === linkedStory?.feature)
         || appState.features.find((item) => item.id === String(form.get("feature") || "").trim());
       const mappedPI = appState.programIncrements.find((item) => item.id === (linkedStory?.piId || "") || item.name === linkedStory?.pi)
