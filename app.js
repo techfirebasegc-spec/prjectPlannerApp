@@ -873,7 +873,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const sprintEndDate = parseDate(cleaned.sprintEndDate || cleaned["Sprint End Date"]);
       const dueDate = endDate || sprintEndDate;
 
-      const pi = getString(cleaned.pi || cleaned.PI) || getString(cleaned.piId || cleaned.PI_ID) || "Unspecified PI";
+      const pi = appState.programIncrements.find((item) => item.id === getString(cleaned.piId || cleaned.PI_ID))?.name
+        || getString(cleaned.pi || cleaned.PI) || getString(cleaned.piId || cleaned.PI_ID) || "Unspecified PI";
       const sprint = getString(cleaned.sprint || cleaned.Sprint) || "Unspecified Sprint";
       const taskTitle = getString(cleaned.task || cleaned.Task) || getString(cleaned.userStory || cleaned["User Story"]) || `Task ${index + 1}`;
 
@@ -885,7 +886,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         pi,
         sprint,
         sprintKey: `${pi}::${sprint}`,
-        feature: getString(cleaned.feature || cleaned.Feature) || "Unspecified Feature",
+        feature: appState.features.find((item) => item.id === getString(cleaned.featureId || cleaned.Feature_ID))?.name
+          || getString(cleaned.feature || cleaned.Feature) || "Unspecified Feature",
         featureId: getString(cleaned.featureId || cleaned.Feature_ID) || "-",
         story: getString(cleaned.userStory || cleaned["User Story"]) || "-",
         storyId: getString(cleaned.storyId || cleaned.Story_ID) || "-",
