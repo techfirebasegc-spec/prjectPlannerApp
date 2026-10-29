@@ -1929,7 +1929,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         pi: task.raw.pi || "",
         sprint: task.raw.sprint || "",
         feature: task.raw.feature || "",
-        assignee: task.raw.assignee || "",
+        assigneeUid: task.raw.assigneeUid || "",
         storyPoints: task.raw.storyPoints ?? 0,
         priority: task.raw.priority || "",
         startDate: task.raw.startDate || "",
@@ -1948,9 +1948,58 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       els.saveTaskBtn.textContent = "Create Task";
     }
     els.taskEditorError.textContent = "";
+    populateTaskAssignees(task).catch((error) => {
+      console.error("Could not load task assignees", error);
+      els.taskEditorError.textContent = "Could not load assignees. Check project membership permissions.";
+    });
     els.taskEditorModal.classList.add("is-open");
     els.taskEditorModal.setAttribute("aria-hidden", "false");
     els.newTaskName.focus();
+  }
+
+  async function populateTaskAssignees(task = null) {
+    const select = els.taskEditorForm.elements.namedItem("assigneeUid");
+    if (!select) return;
+    const previousUid = task?.raw?.assigneeUid || "";
+    const legacyName = task?.raw?.assignee || "";
+    select.innerHTML = '<option value="">Unassigned</option>';
+    let members = [];
+    if (appState.activeProjectId === "default") {
+      // The shared Default Project has no project-members collection, so use the
+      // signed-in-user directory and retain compatibility with existing assignments.
+      const snapshot = await getDocs(query(collection(db, "plannerDirectory"), orderBy("displayName")));
+      members = snapshot.docs.map((item) => item.data()).filter((user) => user.uid && user.displayName);
+    } else {
+      const snapshot = await getDocs(collection(db, "plannerProjects", appState.activeProjectId, "members"));
+      members = snapshot.docs.map((item) => item.data()).filter((member) => member.uid && member.displayName);
+    }
+    const uniqueMembers = [...new Map(members.map((member) => [member.uid, member])).values()]
+      .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
+    uniqueMembers.forEach((member) => {
+      const option = document.createElement("option");
+      option.value = member.uid;
+      option.textContent = member.uid === appState.user.uid ? `${member.displayName} (you)` : member.displayName;
+      option.dataset.displayName = member.displayName;
+      select.appendChild(option);
+    });
+    // Older tasks stored only a display name. Keep that assignment visible until
+    // a real directory identity is selected, rather than silently unassigning it.
+    if (legacyName && !previousUid && !uniqueMembers.some((member) => member.displayName === legacyName)) {
+      const legacy = document.createElement("option");
+      legacy.value = "";
+      legacy.textContent = `${legacyName} (legacy assignment — reselect a member to link)`;
+      legacy.disabled = true;
+      select.appendChild(legacy);
+    }
+    select.value = previousUid;
+    if (previousUid && !uniqueMembers.some((member) => member.uid === previousUid)) {
+      const missing = document.createElement("option");
+      missing.value = previousUid;
+      missing.textContent = `${legacyName || "Former member"} (no longer in this project)`;
+      missing.dataset.displayName = legacyName;
+      select.appendChild(missing);
+      select.value = previousUid;
+    }
   }
 
   function closeTaskEditor() {
@@ -1993,6 +2042,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const storyId = storyTitle && storyTitle !== "-"
         ? (selectedStoryId || editingTask?.raw.userStoryId || matchingStoryTasks.find((item) => item.raw.userStoryId)?.raw.userStoryId || doc(taskCollection()).id)
         : "";
+      const assigneeSelect = els.taskEditorForm.elements.namedItem("assigneeUid");
+      const selectedAssigneeOption = assigneeSelect?.options[assigneeSelect.selectedIndex];
+      const assigneeUid = String(form.get("assigneeUid") || "").trim();
+      const assigneeName = assigneeUid ? String(selectedAssigneeOption?.dataset.displayName || selectedAssigneeOption?.textContent || "").trim() : "";
       const taskData = {
         task,
         userStory: storyTitle,
@@ -2001,7 +2054,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         pi: String(form.get("pi") || "").trim(),
         sprint: String(form.get("sprint") || "").trim(),
         feature: String(form.get("feature") || "").trim(),
-        assignee: String(form.get("assignee") || "").trim(),
+        assignee: assigneeName,
+        assigneeUid,
         storyPoints,
         priority: String(form.get("priority") || "").trim(),
         startDate: String(form.get("startDate") || ""),
