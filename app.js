@@ -823,7 +823,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.saveStoryBtn.textContent = story ? "Save Changes" : "Create User Story";
     els.storyTitleInput.value = story?.title || "";
     els.storyDescriptionInput.value = story?.description || "";
-    els.storyCriteriaInput.value = Array.isArray(story?.acceptanceCriteria) ? story.acceptanceCriteria.join("\\n") : "";
+    els.storyCriteriaInput.value = Array.isArray(story?.acceptanceCriteria) ? story.acceptanceCriteria.join("\n") : "";
     els.storyPiInput.value = story?.pi || "";
     els.storyFeatureInput.value = story?.feature || "";
     els.storyStartDateInput.value = story?.startDate || "";
@@ -844,7 +844,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     event.preventDefault();
     const title = els.storyTitleInput.value.trim();
     const description = els.storyDescriptionInput.value.trim();
-    const criteria = els.storyCriteriaInput.value.split("\\n").map(value => value.trim()).filter(Boolean);
+    const criteria = els.storyCriteriaInput.value.split("\n").map(value => value.trim()).filter(Boolean);
     if (!title) { els.storyEditorError.textContent = "Enter a User Story title."; els.storyTitleInput.focus(); return; }
     if (title.length > 160) { els.storyEditorError.textContent = "Title must be 160 characters or fewer."; return; }
     if (description.length > 1500) { els.storyEditorError.textContent = "Description must be 1,500 characters or fewer."; return; }
