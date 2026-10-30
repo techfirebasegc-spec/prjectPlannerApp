@@ -119,6 +119,7 @@
         <button id="listViewBtn" class="view-btn" type="button">Work Items</button>
         <button id="boardViewBtn" class="view-btn" type="button">Board</button>
         <button id="storiesViewBtn" class="view-btn" type="button">User Stories</button>
+        <button id="sprintPlanningViewBtn" class="view-btn" type="button">Sprint Planning</button>
         <button id="piViewBtn" class="view-btn" type="button">PIs</button>
         <button id="featuresViewBtn" class="view-btn" type="button">Features</button>
         <button id="insightsViewBtn" class="view-btn" type="button">Reports</button>
@@ -238,6 +239,19 @@
             <tbody id="taskTableBody"></tbody>
           </table>
         </div>
+      </section>
+
+      <section id="sprintPlanningView" class="sprint-planning-view is-hidden" aria-label="Sprint planning workspace">
+        <header class="planning-page-header">
+          <div><p class="brand-kicker">Delivery workspace</p><h2>Sprint Planning</h2><p>Review capacity, plan work, and spot delivery risks before committing.</p></div>
+          <label class="planning-sprint-picker">Sprint<select id="planningSprintSelect" class="filter-select"><option value="all">All sprint work</option></select></label>
+        </header>
+        <div id="planningSprintStats" class="planning-metrics" aria-live="polite"></div>
+        <div class="planning-content-grid">
+          <section class="planning-column"><header><div><p class="planning-eyebrow">Ready to plan</p><h3>Backlog</h3></div><span id="planningBacklogCount" class="planning-count">0</span></header><p class="planning-column-help">Tasks not currently assigned to the selected sprint.</p><div id="planningBacklogList" class="planning-task-list"></div></section>
+          <section class="planning-column planning-committed"><header><div><p class="planning-eyebrow">Sprint commitment</p><h3>Sprint work</h3></div><span id="planningSprintCount" class="planning-count">0</span></header><p class="planning-column-help">Tasks already assigned to the selected sprint.</p><div id="planningSprintList" class="planning-task-list"></div></section>
+        </div>
+        <aside id="planningRiskPanel" class="planning-risk-panel" aria-live="polite"></aside>
       </section>
 
       <section id="storiesView" class="stories-view is-hidden" aria-label="User stories">
