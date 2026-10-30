@@ -4782,3 +4782,8 @@ textarea:focus-visible {
 .planning-assignment select { width:100%; min-width:0; padding:9px 10px; border:1px solid #d7e1ef; border-radius:9px; background:#fff; color:#20324b; font:inherit; font-size:.78rem; font-weight:700; outline:none; }
 .planning-assignment select:focus { border-color:#5686dc; box-shadow:0 0 0 3px rgba(58,112,211,.13); }
 .planning-assignment select:disabled { cursor:not-allowed; background:#f3f6fa; color:#7b8798; }
+
+/* Sprint metadata management */
+.planning-header-actions{display:grid;justify-items:end;gap:10px}.planning-manage-link{color:#315fa6;font-size:.78rem;font-weight:800;text-decoration:none}.planning-manage-link:hover{text-decoration:underline}
+.sprint-management{display:grid;gap:16px;margin-top:8px;padding-top:24px;border-top:1px solid #e0e8f2}.sprint-management-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}.sprint-management-header h3{margin:5px 0;color:#1b3555;font-size:1.2rem}.sprint-management-header p:last-child{max-width:680px;margin:0;color:#6a7e96;font-size:.82rem;line-height:1.5}.sprint-management-grid{display:grid;grid-template-columns:minmax(260px,.72fr) minmax(0,1.5fr);gap:16px;align-items:start}
+@media(max-width:1000px){.sprint-management-grid{grid-template-columns:1fr}.planning-header-actions{justify-items:start}.sprint-management-header{align-items:flex-start}}@media(max-width:600px){.sprint-management-header{flex-direction:column}.planning-header-actions{width:100%}}
