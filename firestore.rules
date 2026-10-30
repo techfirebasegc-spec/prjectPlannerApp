@@ -143,6 +143,21 @@ service cloud.firestore {
 
     match /plannerSprints/{sprintId} {
       allow get, list: if isVerifiedUser();
+      match /dailySnapshots/{snapshotDate} {
+        allow get, list: if isVerifiedUser();
+        allow create, update: if isVerifiedUser()
+          && request.resource.data.keys().hasOnly(["date", "sprintId", "sprintName", "projectId", "taskCount", "totalPoints", "completedPoints", "remainingPoints", "todoCount", "inProgressCount", "doneCount", "recordedBy", "recordedAt"])
+          && request.resource.data.date == snapshotDate
+          && request.resource.data.sprintId == sprintId
+          && request.resource.data.projectId == "default"
+          && request.resource.data.recordedBy == request.auth.uid
+          && request.resource.data.taskCount is int && request.resource.data.taskCount >= 0
+          && request.resource.data.totalPoints is number && request.resource.data.totalPoints >= 0
+          && request.resource.data.completedPoints is number && request.resource.data.completedPoints >= 0
+          && request.resource.data.remainingPoints is number && request.resource.data.remainingPoints >= 0
+          && request.resource.data.todoCount is int && request.resource.data.inProgressCount is int && request.resource.data.doneCount is int;
+        allow delete: if false;
+      }
       allow create: if isVerifiedUser()
         && request.resource.data.keys().hasOnly(["name", "goal", "startDate", "endDate", "capacity", "status", "archived", "createdBy", "createdAt", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
@@ -319,6 +334,22 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
         && get(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId)).data.piId == request.resource.data.piId;
       allow delete: if isVerifiedUser() && canEditProject(projectId);
+    }
+
+    match /plannerProjects/{projectId}/sprints/{sprintId}/dailySnapshots/{snapshotDate} {
+      allow get, list: if isVerifiedUser() && isProjectMember(projectId);
+      allow create, update: if isVerifiedUser() && canEditProject(projectId)
+        && request.resource.data.keys().hasOnly(["date", "sprintId", "sprintName", "projectId", "taskCount", "totalPoints", "completedPoints", "remainingPoints", "todoCount", "inProgressCount", "doneCount", "recordedBy", "recordedAt"])
+        && request.resource.data.date == snapshotDate
+        && request.resource.data.sprintId == sprintId
+        && request.resource.data.projectId == projectId
+        && request.resource.data.recordedBy == request.auth.uid
+        && request.resource.data.taskCount is int && request.resource.data.taskCount >= 0
+        && request.resource.data.totalPoints is number && request.resource.data.totalPoints >= 0
+        && request.resource.data.completedPoints is number && request.resource.data.completedPoints >= 0
+        && request.resource.data.remainingPoints is number && request.resource.data.remainingPoints >= 0
+        && request.resource.data.todoCount is int && request.resource.data.inProgressCount is int && request.resource.data.doneCount is int;
+      allow delete: if false;
     }
 
     match /plannerProjects/{projectId}/tasks/{taskId} {
