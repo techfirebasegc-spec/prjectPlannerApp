@@ -473,8 +473,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const previous = els.taskSprintInput.value;
       els.taskSprintInput.replaceChildren(new Option("Backlog — no Sprint", ""));
       appState.sprints.forEach((sprint) => els.taskSprintInput.add(new Option((sprint.code ? sprint.code + " · " : "") + sprint.name, sprint.id)));
-      if (previous && previous.startsWith("legacy:")) els.taskSprintInput.add(new Option("Legacy assignment · " + previous.slice(7) + " (unmapped)", previous));
       if ([...els.taskSprintInput.options].some((option) => option.value === previous)) els.taskSprintInput.value = previous;
+      else els.taskSprintInput.value = "";
     }
     if (els.storyFeatureInput) els.storyFeatureInput.disabled = !storyFeatureOptions.length;
     if (els.featureSaveBtn) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
