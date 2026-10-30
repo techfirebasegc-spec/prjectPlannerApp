@@ -247,6 +247,11 @@
           <div class="planning-header-actions"><label class="planning-sprint-picker">Sprint<select id="planningSprintSelect" class="filter-select"><option value="all">All sprint work</option></select></label><a class="planning-manage-link" href="#sprintManagement">Manage sprints ↓</a></div>
         </header>
         <div id="planningSprintStats" class="planning-metrics" aria-live="polite"></div>
+        <section class="sprint-execution" aria-label="Sprint execution">
+          <header class="sprint-execution-header"><div><p class="planning-eyebrow">DELIVERY CONTROL</p><h3>Sprint execution</h3><p>Move committed work through delivery and monitor remaining effort against planned pace.</p></div></header>
+          <div class="execution-layout"><section class="execution-board-panel"><div id="sprintExecutionBoard" class="execution-board"></div></section>
+          <aside class="execution-burndown-panel"><div class="execution-panel-heading"><div><p class="planning-eyebrow">SPRINT HEALTH</p><h4>Burndown</h4></div><span class="execution-badge">Plan vs current</span></div><div id="sprintBurndownSummary" class="execution-summary"></div><div id="sprintBurndownChart" class="execution-chart" role="img" aria-label="Planned remaining story points and current remaining effort"></div><p id="sprintBurndownNote" class="execution-chart-note">Historical actuals require daily snapshots; none are fabricated.</p></aside></div>
+        </section>
         <div class="planning-content-grid">
           <section class="planning-column"><header><div><p class="planning-eyebrow">Ready to plan</p><h3>Backlog</h3></div><span id="planningBacklogCount" class="planning-count">0</span></header><p class="planning-column-help">Tasks not currently assigned to the selected sprint.</p><div id="planningBacklogList" class="planning-task-list"></div></section>
           <section class="planning-column planning-committed"><header><div><p class="planning-eyebrow">Sprint commitment</p><h3>Sprint work</h3></div><span id="planningSprintCount" class="planning-count">0</span></header><p class="planning-column-help">Tasks already assigned to the selected sprint.</p><div id="planningSprintList" class="planning-task-list"></div></section>
