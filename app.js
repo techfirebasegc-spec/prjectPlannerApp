@@ -21,6 +21,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     filteredTasks: [],
     sprintCatalog: [],
     sprints: [],
+    sprintSnapshots: {},
+    sprintSnapshotLoads: {},
     unsubscribeSprints: null,
     editingSprintId: null,
     filters: {
@@ -295,6 +297,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     appState.unsubscribeSprints = onSnapshot(sprintCollection(), (snapshot) => {
       appState.sprints = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
         .sort((a,b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+      recordDailySprintSnapshots();
       renderSprintRecords(); renderSprintPlanning();
     }, (error) => {
       console.error("Could not load sprints", error); appState.sprints = [];
@@ -908,6 +911,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       appState.selectedTaskIds = new Set([...appState.selectedTaskIds].filter((taskId) => appState.allTasks.some((task) => task.id === taskId)));
       appState.hierarchy = groupByHierarchy(appState.allTasks);
       appState.sprintCatalog = buildSprintCatalog(appState.allTasks);
+      recordDailySprintSnapshots();
 
       populateCalendarMonthOptions();
       // Populate PI/Sprint/Feature immediately; await assignee options from the
@@ -2366,6 +2370,57 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
 
+
+  function sprintSnapshotCollection(sprintId) {
+    return appState.activeProjectId === "default"
+      ? collection(db, "plannerSprints", sprintId, "dailySnapshots")
+      : collection(db, "plannerProjects", appState.activeProjectId, "sprints", sprintId, "dailySnapshots");
+  }
+
+  function recordDailySprintSnapshots() {
+    if (!appState.user || !appState.sprints.length) return;
+    const now = new Date();
+    const date = [now.getFullYear(), String(now.getMonth()+1).padStart(2,"0"), String(now.getDate()).padStart(2,"0")].join("-");
+    const projectId = appState.activeProjectId;
+    for (const sprint of appState.sprints) {
+      const sprintTasks = appState.allTasks.filter((task) => String(task.raw?.sprint || task.raw?.Sprint || "").trim() === sprint.name && !task.archived);
+      if (!sprintTasks.length) continue;
+      const points = (task) => Math.max(0, Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0);
+      const status = (task) => task.statusKey || normalizeStatus(task.status || task.raw?.status || task.raw?.Status);
+      const doneTasks = sprintTasks.filter((task) => status(task) === "done");
+      const totalPoints = sprintTasks.reduce((sum, task) => sum + points(task), 0);
+      const completedPoints = doneTasks.reduce((sum, task) => sum + points(task), 0);
+      const payload = {
+        date, sprintId:sprint.id, sprintName:sprint.name, projectId,
+        taskCount:sprintTasks.length, totalPoints, completedPoints, remainingPoints:totalPoints-completedPoints,
+        todoCount:sprintTasks.filter((task)=>status(task)==="todo").length,
+        inProgressCount:sprintTasks.filter((task)=>status(task)==="inprogress").length,
+        doneCount:doneTasks.length, recordedBy:appState.user.uid, recordedAt:serverTimestamp()
+      };
+      setDoc(doc(sprintSnapshotCollection(sprint.id), date), payload, {merge:true})
+        .then(() => {
+          delete appState.sprintSnapshotLoads[sprint.id];
+          if (appState.activeProjectId === projectId) renderSprintPlanning();
+        })
+        .catch((error) => console.error("Could not record daily sprint progress", error));
+    }
+  }
+
+  function loadSprintSnapshots(sprintId) {
+    if (!sprintId || appState.sprintSnapshotLoads[sprintId]) return;
+    appState.sprintSnapshotLoads[sprintId] = true;
+    const projectId = appState.activeProjectId;
+    getDocs(query(sprintSnapshotCollection(sprintId), orderBy("date", "asc"))).then((snapshot) => {
+      if (appState.activeProjectId !== projectId) return;
+      appState.sprintSnapshots[sprintId] = snapshot.docs.map((item) => ({id:item.id,...item.data()}))
+        .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+      renderSprintPlanning();
+    }).catch((error) => {
+      delete appState.sprintSnapshotLoads[sprintId];
+      console.error("Could not load sprint history", error);
+    });
+  }
+
   function renderSprintExecution(selected, sprintTasks, sprintMetadata, canEdit) {
     const board = els.sprintExecutionBoard, summary = els.sprintBurndownSummary, chart = els.sprintBurndownChart;
     if (!board || !summary || !chart) return;
@@ -2375,6 +2430,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       chart.innerHTML = '<div class="execution-chart-empty">Select one sprint to view its planned burndown.</div>';
       return;
     }
+    loadSprintSnapshots(sprintMetadata?.id);
     const columns = [{key:"todo",title:"To do"},{key:"inprogress",title:"In progress"},{key:"done",title:"Done"}];
     const points = (task) => Math.max(0, Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0);
     const taskStatus = (task) => COLUMN_KEYS.includes(task.statusKey) ? task.statusKey : normalizeStatus(task.status || task.raw?.status || task.raw?.Status);
@@ -2394,8 +2450,13 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const x=(d)=>l+(w-l-r)*d/days,y=(v)=>t+(h-t-b)*(1-v/max);
     const ideal=Array.from({length:days+1},(_,d)=>x(d).toFixed(1)+","+y(total*(1-d/days)).toFixed(1)).join(" ");
     const today=new Date();today.setHours(12,0,0,0);const elapsed=Math.max(0,Math.min(days,Math.round((today-start)/86400000)));
-    chart.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" class="execution-burndown-svg" aria-hidden="true"><line x1="'+l+'" y1="'+(h-b)+'" x2="'+(w-r)+'" y2="'+(h-b)+'" class="execution-axis"/>'+[0,.5,1].map(v=>'<line x1="'+l+'" y1="'+y(max*v)+'" x2="'+(w-r)+'" y2="'+y(max*v)+'" class="execution-gridline"/><text x="'+(l-7)+'" y="'+(y(max*v)+4)+'" text-anchor="end" class="execution-chart-label">'+Math.round(max*v)+'</text>').join("")+'<polyline points="'+ideal+'" class="execution-planned-line"/><circle cx="'+x(elapsed)+'" cy="'+y(remaining)+'" r="5" class="execution-current-point"/></svg><div class="execution-chart-legend"><span><i class="execution-line-key"></i>Ideal pace</span><span><i class="execution-point-key"></i>Current remaining: '+remaining+' pts</span></div>';
-    if(els.sprintBurndownNote) { const delta=remaining-total*(1-elapsed/days); els.sprintBurndownNote.textContent=(delta>0.5?"Current remaining effort is "+Math.round(delta)+" points above ideal pace. ":delta<-.5?"Current remaining effort is "+Math.round(-delta)+" points ahead of ideal pace. ":"Current remaining effort is close to ideal pace. ")+"This compares current state to the ideal line; historical daily actuals are not stored."; }
+    const history = (appState.sprintSnapshots[sprintMetadata.id] || []).filter((item) => item.date >= sprintMetadata.startDate && item.date <= sprintMetadata.endDate);
+    const actualPoints = history.map((item) => {
+      const dayIndex = Math.max(0, Math.min(days, Math.round((new Date(item.date + "T12:00:00") - start) / 86400000)));
+      return x(dayIndex).toFixed(1) + "," + y(Math.max(0, Number(item.remainingPoints) || 0)).toFixed(1);
+    }).join(" ");
+    chart.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" class="execution-burndown-svg" aria-hidden="true"><line x1="'+l+'" y1="'+(h-b)+'" x2="'+(w-r)+'" y2="'+(h-b)+'" class="execution-axis"/>'+[0,.5,1].map(v=>'<line x1="'+l+'" y1="'+y(max*v)+'" x2="'+(w-r)+'" y2="'+y(max*v)+'" class="execution-gridline"/><text x="'+(l-7)+'" y="'+(y(max*v)+4)+'" text-anchor="end" class="execution-chart-label">'+Math.round(max*v)+'</text>').join("")+'<polyline points="'+ideal+'" class="execution-planned-line"/>'+(actualPoints ? '<polyline points="'+actualPoints+'" class="execution-actual-line"/>' : '')+'<circle cx="'+x(elapsed)+'" cy="'+y(remaining)+'" r="5" class="execution-current-point"/></svg><div class="execution-chart-legend"><span><i class="execution-line-key"></i>Ideal pace</span>'+(actualPoints ? '<span><i class="execution-actual-key"></i>Daily recorded actuals</span>' : '')+'<span><i class="execution-point-key"></i>Current remaining: '+remaining+' pts</span></div>';
+    if(els.sprintBurndownNote) { const delta=remaining-total*(1-elapsed/days); els.sprintBurndownNote.textContent=(delta>0.5?"Current remaining effort is "+Math.round(delta)+" points above ideal pace. ":delta<-.5?"Current remaining effort is "+Math.round(-delta)+" points ahead of ideal pace. ":"Current remaining effort is close to ideal pace. ")+(history.length ? history.length+" daily snapshot(s) are plotted; snapshots are captured while the planner is open and data refreshes." : "Daily actuals appear after the planner records its first daily snapshot."); }
   }
 
   function renderSprintPlanning() {
