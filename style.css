@@ -4830,7 +4830,7 @@ textarea:focus-visible {
   .app-shell > .sidebar .controls-panel select,
   .app-shell > .sidebar .filter-panel input,
   .app-shell > .sidebar .controls-panel input { width:100%; box-sizing:border-box; }
-  .app-shell > .sidebar .sidebar-toggle { position:absolute; top:12px; right:12px; }
+  .app-shell > .sidebar .sidebar-toggle { display:none !important; }
   .app-shell > .sidebar .sidebar-shortcuts { display:none !important; }
   .app-shell .workspace { width:100%; max-width:100%; min-width:0; padding:58px 12px 24px; box-sizing:border-box; }
   .mobile-nav-toggle {

@@ -1011,6 +1011,17 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         if (els.mobileNavToggle) els.mobileNavToggle.innerHTML = "☰ <span>Menu</span>";
       }
     });
+    document.addEventListener("click", (event) => {
+      if (!window.matchMedia("(max-width: 1100px)").matches) return;
+      if (!els.appShell.classList.contains("mobile-sidebar-open")) return;
+      const target = event.target;
+      const sidebar = els.appShell.querySelector(":scope > .sidebar");
+      if (sidebar?.contains(target) || els.mobileNavToggle?.contains(target)) return;
+      els.appShell.classList.remove("mobile-sidebar-open");
+      els.mobileNavToggle?.setAttribute("aria-expanded", "false");
+      if (els.mobileNavToggle) els.mobileNavToggle.innerHTML = "☰ <span>Menu</span>";
+    });
+
 
     document.querySelectorAll("[data-sidebar-expand]").forEach((button) => {
       button.addEventListener("click", () => setSidebarCollapsed(false));
