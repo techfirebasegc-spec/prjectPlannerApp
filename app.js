@@ -742,6 +742,18 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.featuresViewBtn?.addEventListener("click", () => setActiveView("features"));
     els.piForm?.addEventListener("submit", saveProgramIncrement);
     els.sprintForm?.addEventListener("submit", saveSprint);
+    els.sprintExecutionBoard?.addEventListener("change", async (event) => {
+      const control = event.target.closest("[data-execution-status]");
+      if (!control || !COLUMN_KEYS.includes(control.value)) return;
+      control.disabled = true;
+      const taskId = control.dataset.executionStatus;
+      const saved = await updateTaskStatus(taskId, control.value);
+      if (saved) {
+        const task = appState.allTasks.find((item) => item.id === taskId);
+        if (task) { task.raw = { ...task.raw, status: statusDisplay(control.value) }; refreshNormalizedTasksFromCatalog(); applyFiltersAndRender(); }
+      }
+      renderSprintPlanning();
+    });
     els.sprintCancelBtn?.addEventListener("click", resetSprintForm);
     els.featureForm?.addEventListener("submit", saveFeature);
     els.piCancelBtn?.addEventListener("click", resetPIForm);
@@ -2353,6 +2365,39 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (persist) persistPreferences();
   }
 
+
+  function renderSprintExecution(selected, sprintTasks, sprintMetadata, canEdit) {
+    const board = els.sprintExecutionBoard, summary = els.sprintBurndownSummary, chart = els.sprintBurndownChart;
+    if (!board || !summary || !chart) return;
+    if (selected === "all") {
+      board.innerHTML = '<div class="planning-empty execution-empty">Choose a specific sprint above to manage execution.</div>';
+      summary.innerHTML = '<div class="execution-summary-item"><span>Selected sprint</span><strong>All sprint work</strong></div>';
+      chart.innerHTML = '<div class="execution-chart-empty">Select one sprint to view its planned burndown.</div>';
+      return;
+    }
+    const columns = [{key:"todo",title:"To do"},{key:"inprogress",title:"In progress"},{key:"done",title:"Done"}];
+    const points = (task) => Math.max(0, Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0);
+    const taskStatus = (task) => COLUMN_KEYS.includes(task.statusKey) ? task.statusKey : normalizeStatus(task.status || task.raw?.status || task.raw?.Status);
+    board.innerHTML = columns.map((column) => {
+      const items = sprintTasks.filter((task) => taskStatus(task) === column.key);
+      return '<section class="execution-column"><header><h4>' + column.title + '</h4><span class="execution-column-count">' + items.length + '</span></header><div class="execution-column-meta">' + items.reduce((sum, task) => sum + points(task), 0) + ' story points</div>' +
+        (items.length ? items.map((task) => '<article class="execution-task"><div class="execution-task-top"><span class="planning-task-id">' + escapeHtml(task.id || "TASK") + '</span><span class="execution-task-points">' + points(task) + ' pts</span></div><h5>' + escapeHtml(task.task || task.title || "Untitled task") + '</h5><p>' + escapeHtml(task.assignee || "Unassigned") + '</p><label class="execution-status-control"><span>Move to</span><select data-execution-status="' + escapeHtml(task.id) + '"' + (canEdit ? "" : " disabled") + '>' + columns.map((option) => '<option value="' + option.key + '"' + (option.key === column.key ? " selected" : "") + '>' + option.title + '</option>').join("") + '</select></label></article>').join("") : '<div class="execution-column-empty">No tasks in this stage</div>') + '</section>';
+    }).join("");
+    const total = sprintTasks.reduce((sum, task) => sum + points(task), 0);
+    const remaining = sprintTasks.filter((task) => taskStatus(task) !== "done").reduce((sum, task) => sum + points(task), 0);
+    const completed = total - remaining, capacity = Math.max(0, Number(sprintMetadata?.capacity) || 0);
+    summary.innerHTML = [["Remaining",remaining+" pts",total?Math.round(remaining/total*100)+"% of committed effort":"No estimates available"],["Completed",completed+" pts",sprintTasks.filter((task)=>taskStatus(task)==="done").length+" of "+sprintTasks.length+" tasks"],["Capacity",capacity?capacity+" pts":"Not set",capacity&&total>capacity?(total-capacity)+" pts over capacity":"Configured sprint capacity"]].map(([label,value,note])=>'<div class="execution-summary-item"><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(value)+'</strong><small>'+escapeHtml(note)+'</small></div>').join("");
+    const day = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value||"")) ? new Date(value+"T12:00:00") : null;
+    const start = day(sprintMetadata?.startDate), end = day(sprintMetadata?.endDate);
+    if (!start || !end || end < start) { chart.innerHTML='<div class="execution-chart-empty">Add valid sprint start and end dates to calculate the planned trajectory.</div>'; return; }
+    const days=Math.max(1,Math.round((end-start)/86400000)),w=520,h=210,l=42,r=12,t=16,b=30,max=Math.max(total,remaining,1);
+    const x=(d)=>l+(w-l-r)*d/days,y=(v)=>t+(h-t-b)*(1-v/max);
+    const ideal=Array.from({length:days+1},(_,d)=>x(d).toFixed(1)+","+y(total*(1-d/days)).toFixed(1)).join(" ");
+    const today=new Date();today.setHours(12,0,0,0);const elapsed=Math.max(0,Math.min(days,Math.round((today-start)/86400000)));
+    chart.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" class="execution-burndown-svg" aria-hidden="true"><line x1="'+l+'" y1="'+(h-b)+'" x2="'+(w-r)+'" y2="'+(h-b)+'" class="execution-axis"/>'+[0,.5,1].map(v=>'<line x1="'+l+'" y1="'+y(max*v)+'" x2="'+(w-r)+'" y2="'+y(max*v)+'" class="execution-gridline"/><text x="'+(l-7)+'" y="'+(y(max*v)+4)+'" text-anchor="end" class="execution-chart-label">'+Math.round(max*v)+'</text>').join("")+'<polyline points="'+ideal+'" class="execution-planned-line"/><circle cx="'+x(elapsed)+'" cy="'+y(remaining)+'" r="5" class="execution-current-point"/></svg><div class="execution-chart-legend"><span><i class="execution-line-key"></i>Ideal pace</span><span><i class="execution-point-key"></i>Current remaining: '+remaining+' pts</span></div>';
+    if(els.sprintBurndownNote) { const delta=remaining-total*(1-elapsed/days); els.sprintBurndownNote.textContent=(delta>0.5?"Current remaining effort is "+Math.round(delta)+" points above ideal pace. ":delta<-.5?"Current remaining effort is "+Math.round(-delta)+" points ahead of ideal pace. ":"Current remaining effort is close to ideal pace. ")+"This compares current state to the ideal line; historical daily actuals are not stored."; }
+  }
+
   function renderSprintPlanning() {
     if (!els.planningSprintSelect || !els.planningSprintStats) return;
     const previous = els.planningSprintSelect.value || "all";
@@ -2392,6 +2437,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.planningSprintCount.textContent = String(sprintTasks.length);
     els.planningBacklogList.innerHTML = backlog.length ? backlog.map(card).join("") : '<div class="planning-empty">No backlog tasks for the current filters.</div>';
     els.planningSprintList.innerHTML = sprintTasks.length ? sprintTasks.map(card).join("") : '<div class="planning-empty">No tasks assigned to ' + escapeHtml(selected === "all" ? "a sprint" : selected) + ' yet.</div>';
+    renderSprintExecution(selected, sprintTasks, sprintMetadata, canEdit);
 
     const risks = [];
     const unassigned = sprintTasks.filter((task) => !String(task.raw?.assigneeUid || task.raw?.assignee || task.raw?.Assignee || "").trim()).length;
