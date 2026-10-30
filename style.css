@@ -4776,3 +4776,9 @@ textarea:focus-visible {
 .planning-risk.is-clear { grid-column:1/-1; border-color:#cde9d8; background:#f1fbf5; color:#26734b; }
 @media(max-width:1000px){.planning-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.planning-content-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.planning-page-header{align-items:stretch;flex-direction:column;padding:20px}.planning-sprint-picker{min-width:0}.planning-metrics{gap:9px}.planning-metric{padding:14px}.planning-metric strong{font-size:1.45rem}.planning-risk-panel{grid-template-columns:1fr}.planning-column{padding:14px}}
+
+
+.planning-assignment { display:grid; gap:6px; margin-top:13px; color:#60728b; font-size:.72rem; font-weight:800; }
+.planning-assignment select { width:100%; min-width:0; padding:9px 10px; border:1px solid #d7e1ef; border-radius:9px; background:#fff; color:#20324b; font:inherit; font-size:.78rem; font-weight:700; outline:none; }
+.planning-assignment select:focus { border-color:#5686dc; box-shadow:0 0 0 3px rgba(58,112,211,.13); }
+.planning-assignment select:disabled { cursor:not-allowed; background:#f3f6fa; color:#7b8798; }
