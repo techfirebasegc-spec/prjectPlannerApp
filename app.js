@@ -1,8 +1,9 @@
 import {
   addDoc, collection, collectionGroup, deleteDoc, doc, getDocs, getDoc, onSnapshot,
-  orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch
+  orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch
 } from "firebase/firestore";
 import { db } from "./firebase.js";
+import { formatBusinessId, highestBusinessIdSequence } from "./business-ids.js";
 import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "./auth.js";
 
 (() => {
@@ -270,7 +271,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     featurePIFilter: document.getElementById("featurePIFilter"),
     reconcilePlanningBtn: document.getElementById("reconcilePlanningBtn"),
     taskPIInput: document.getElementById("taskPIInput"),
-    taskFeatureInput: document.getElementById("taskFeatureInput")
+    taskFeatureInput: document.getElementById("taskFeatureInput"),
+    taskSprintInput: document.getElementById("taskSprintInput")
   };
 
 
@@ -285,6 +287,44 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   function planningReference(kind, id) {
     return doc(planningCollection(kind), id);
   }
+  async function allocateBusinessCode(collectionRef, entityType) {
+    let code = "";
+    await runTransaction(db, async (transaction) => {
+      const sequenceRef = appState.activeProjectId === "default"
+        ? doc(db, "plannerSequences", entityType)
+        : doc(db, "plannerProjects", appState.activeProjectId, "sequences", entityType);
+      const snapshot = await transaction.get(sequenceRef);
+      let lastAllocated = Number(snapshot.exists() ? snapshot.data().lastAllocated : 0) || 0;
+      if (!snapshot.exists()) {
+        const existing = await transaction.get(collectionRef);
+        lastAllocated = Math.max(lastAllocated, highestBusinessIdSequence(entityType, existing.docs.map((item) => item.data())));
+      }
+      lastAllocated += 1;
+      code = formatBusinessId(entityType, lastAllocated);
+      transaction.set(sequenceRef, { entityType, lastAllocated, updatedAt: serverTimestamp() }, { merge: true });
+    });
+    return code;
+  }
+
+  async function createRecordWithBusinessCode(collectionRef, entityType, data, documentId = null) {
+    const recordRef = documentId ? doc(collectionRef, documentId) : doc(collectionRef);
+    await runTransaction(db, async (transaction) => {
+      const sequenceRef = appState.activeProjectId === "default"
+        ? doc(db, "plannerSequences", entityType)
+        : doc(db, "plannerProjects", appState.activeProjectId, "sequences", entityType);
+      const snapshot = await transaction.get(sequenceRef);
+      let lastAllocated = Number(snapshot.exists() ? snapshot.data().lastAllocated : 0) || 0;
+      if (!snapshot.exists()) {
+        const existing = await transaction.get(collectionRef);
+        lastAllocated = Math.max(lastAllocated, highestBusinessIdSequence(entityType, existing.docs.map((item) => item.data())));
+      }
+      lastAllocated += 1;
+      transaction.set(sequenceRef, { entityType, lastAllocated, updatedAt: serverTimestamp() }, { merge: true });
+      transaction.set(recordRef, { ...data, code: formatBusinessId(entityType, lastAllocated) });
+    });
+    return { id: recordRef.id };
+  }
+
 
 
   function sprintCollection() {
@@ -297,6 +337,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     appState.unsubscribeSprints = onSnapshot(sprintCollection(), (snapshot) => {
       appState.sprints = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
         .sort((a,b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+      refreshPlanningSelectors();
       recordDailySprintSnapshots();
       renderSprintRecords(); renderSprintPlanning();
     }, (error) => {
@@ -313,7 +354,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.sprintRecords.innerHTML = appState.sprints.map((sprint) => {
       const tasks = appState.allTasks.filter((task) => String(task.raw?.sprint || task.raw?.Sprint || "").trim() === sprint.name && !task.archived);
       const points = tasks.reduce((sum, task) => sum + (Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0), 0);
-      return '<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><h4>' + escapeHtml(sprint.name) + '</h4><span class="planning-status ' + escapeHtml(statusClass(sprint.status)) + '">' + escapeHtml(String(sprint.status || "PLANNED").replaceAll("_", " ")) + '</span></div><p class="planning-record-description">' + escapeHtml(sprint.goal || "No sprint goal added.") + '</p><div class="planning-record-meta"><span>Dates: <strong>' + escapeHtml(sprint.startDate || "—") + ' → ' + escapeHtml(sprint.endDate || "—") + '</strong></span><span>Capacity: <strong>' + escapeHtml(String(sprint.capacity || 0)) + ' points</strong></span><span><strong>' + tasks.length + '</strong> tasks</span><span><strong>' + points + '</strong> points committed</span></div></div><div class="planning-record-actions"><button type="button" data-edit-sprint="' + escapeHtml(sprint.id) + '">Edit</button><button type="button" data-archive-sprint="' + escapeHtml(sprint.id) + '">Archive</button></div></article>';
+      return '<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><span class="planning-record-code">' + escapeHtml(sprint.code || "ID pending") + '</span><h4>' + escapeHtml(sprint.name) + '</h4><span class="planning-status ' + escapeHtml(statusClass(sprint.status)) + '">' + escapeHtml(String(sprint.status || "PLANNED").replaceAll("_", " ")) + '</span></div><p class="planning-record-description">' + escapeHtml(sprint.goal || "No sprint goal added.") + '</p><div class="planning-record-meta"><span>Dates: <strong>' + escapeHtml(sprint.startDate || "—") + ' → ' + escapeHtml(sprint.endDate || "—") + '</strong></span><span>Capacity: <strong>' + escapeHtml(String(sprint.capacity || 0)) + ' points</strong></span><span><strong>' + tasks.length + '</strong> tasks</span><span><strong>' + points + '</strong> points committed</span></div></div><div class="planning-record-actions"><button type="button" data-edit-sprint="' + escapeHtml(sprint.id) + '">Edit</button><button type="button" data-archive-sprint="' + escapeHtml(sprint.id) + '">Archive</button></div></article>';
     }).join("");
     els.sprintRecords.querySelectorAll("[data-edit-sprint]").forEach((b) => b.addEventListener("click", () => editSprint(b.dataset.editSprint)));
     els.sprintRecords.querySelectorAll("[data-archive-sprint]").forEach((b) => b.addEventListener("click", () => archiveSprint(b.dataset.archiveSprint)));
@@ -345,7 +386,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.sprintSaveBtn.disabled = true; els.sprintFormError.textContent = "";
     try {
       if (existing) await updateDoc(sprintReference(existing.id), data);
-      else await addDoc(sprintCollection(), {...data,createdBy:appState.user.uid,createdAt:serverTimestamp()});
+      else await createRecordWithBusinessCode(sprintCollection(), "sprint", {...data,createdBy:appState.user.uid,createdAt:serverTimestamp()});
       resetSprintForm();
     } catch (error) { console.error("Could not save sprint",error); els.sprintFormError.textContent = "Could not save this sprint. Check your permissions and try again."; }
     finally { els.sprintSaveBtn.disabled = !planningCanEdit(); }
@@ -405,7 +446,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const previous = selectedValue || select.value;
     select.replaceChildren(new Option(placeholder, ""));
     items.forEach((item) => {
-      const option = new Option(item.name, item.id);
+      const option = new Option((item.code ? item.code + " · " : "") + item.name, item.id);
       select.add(option);
     });
     if (previous && [...select.options].some((option) => option.value === previous)) select.value = previous;
@@ -423,7 +464,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (els.featurePIFilter) {
       const previousPI = els.featurePIFilter.value || "all";
       els.featurePIFilter.replaceChildren(new Option("All PIs", "all"));
-      appState.programIncrements.forEach((pi) => els.featurePIFilter.add(new Option(pi.name, pi.id)));
+      appState.programIncrements.forEach((pi) => els.featurePIFilter.add(new Option((pi.code ? pi.code + " · " : "") + pi.name, pi.id)));
       els.featurePIFilter.value = previousPI === "all" || appState.programIncrements.some((pi) => pi.id === previousPI) ? previousPI : "all";
     }
     const featureOptions = appState.features.filter((feature) => !selectedTaskPI || feature.piId === selectedTaskPI);
@@ -434,6 +475,13 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (els.storyPiInput) els.storyPiInput.disabled = !appState.programIncrements.length;
     if (els.featurePIInput) els.featurePIInput.disabled = !appState.programIncrements.length;
     if (els.taskFeatureInput) els.taskFeatureInput.disabled = !featureOptions.length;
+    if (els.taskSprintInput) {
+      const previous = els.taskSprintInput.value;
+      els.taskSprintInput.replaceChildren(new Option("Backlog — no Sprint", ""));
+      appState.sprints.forEach((sprint) => els.taskSprintInput.add(new Option((sprint.code ? sprint.code + " · " : "") + sprint.name, sprint.id)));
+      if (previous && previous.startsWith("legacy:")) els.taskSprintInput.add(new Option("Legacy assignment · " + previous.slice(7) + " (unmapped)", previous));
+      if ([...els.taskSprintInput.options].some((option) => option.value === previous)) els.taskSprintInput.value = previous;
+    }
     if (els.storyFeatureInput) els.storyFeatureInput.disabled = !storyFeatureOptions.length;
     if (els.featureSaveBtn) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
     if (els.piSaveBtn) els.piSaveBtn.disabled = !planningCanEdit();
@@ -472,7 +520,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   function renderProgramIncrements(errorMessage = "") {
     if (!els.piRecords) return;
     const queryText = String(els.piSearchInput?.value || "").trim().toLowerCase();
-    const records = appState.programIncrements.filter((pi) => [pi.name, pi.description, pi.status].join(" ").toLowerCase().includes(queryText));
+    const records = appState.programIncrements.filter((pi) => [pi.code, pi.name, pi.description, pi.status].join(" ").toLowerCase().includes(queryText));
     els.piCount.textContent = `${appState.programIncrements.length} PI${appState.programIncrements.length === 1 ? "" : "s"}`;
     if (errorMessage || !records.length) {
       els.piRecords.innerHTML = `<div class="planning-empty"><strong>${errorMessage ? "Unable to load PIs" : (queryText ? "No matching PIs" : "No Program Increments yet")}</strong>${escapeHtml(errorMessage || (queryText ? "Try another search term." : "Create a PI to establish the planning horizon for your Features."))}</div>`;
@@ -482,7 +530,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const features = appState.features.filter((feature) => feature.piId === pi.id);
       const storyCount = appState.userStories.filter((story) => story.piId === pi.id || story.pi === pi.name).length;
       const taskCount = appState.allTasks.filter((task) => task.raw.piId === pi.id || task.pi === pi.name).length;
-      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><h4>${escapeHtml(pi.name)}</h4><span class="planning-status ${statusClass(pi.status)}">${escapeHtml(String(pi.status || "PLANNED").replaceAll("_", " "))}</span></div><p class="planning-record-description">${escapeHtml(pi.description || "No description added.")}</p><div class="planning-record-meta"><span>${escapeHtml(formatPlanningDate(pi.startDate))} – ${escapeHtml(formatPlanningDate(pi.endDate))}</span><span><strong>${features.length}</strong> Features</span><span><strong>${storyCount}</strong> Stories</span><span><strong>${taskCount}</strong> Tasks</span></div></div><div class="planning-record-actions"><button type="button" data-edit-pi="${escapeHtml(pi.id)}">Edit</button><button type="button" data-delete-pi="${escapeHtml(pi.id)}" data-delete-name="${escapeHtml(pi.name)}">Archive</button></div></article>`;
+      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><span class="planning-record-code">${escapeHtml(pi.code || "ID pending")}</span><h4>${escapeHtml(pi.name)}</h4><span class="planning-status ${statusClass(pi.status)}">${escapeHtml(String(pi.status || "PLANNED").replaceAll("_", " "))}</span></div><p class="planning-record-description">${escapeHtml(pi.description || "No description added.")}</p><div class="planning-record-meta"><span>${escapeHtml(formatPlanningDate(pi.startDate))} – ${escapeHtml(formatPlanningDate(pi.endDate))}</span><span><strong>${features.length}</strong> Features</span><span><strong>${storyCount}</strong> Stories</span><span><strong>${taskCount}</strong> Tasks</span></div></div><div class="planning-record-actions"><button type="button" data-edit-pi="${escapeHtml(pi.id)}">Edit</button><button type="button" data-delete-pi="${escapeHtml(pi.id)}" data-delete-name="${escapeHtml(pi.name)}">Archive</button></div></article>`;
     }).join("");
     els.piRecords.querySelectorAll("[data-edit-pi]").forEach((button) => button.addEventListener("click", () => editProgramIncrement(button.dataset.editPi)));
     els.piRecords.querySelectorAll("[data-delete-pi]").forEach((button) => button.addEventListener("click", () => archiveProgramIncrement(button.dataset.deletePi, button.dataset.deleteName)));
@@ -494,7 +542,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const piFilter = els.featurePIFilter?.value || "all";
     const records = appState.features.filter((feature) =>
       (piFilter === "all" || feature.piId === piFilter)
-      && [feature.name, feature.description, feature.owner, feature.status].join(" ").toLowerCase().includes(queryText));
+      && [feature.code, feature.name, feature.description, feature.owner, feature.status].join(" ").toLowerCase().includes(queryText));
     els.featureCount.textContent = `${appState.features.length} Feature${appState.features.length === 1 ? "" : "s"}`;
     if (errorMessage || !records.length) {
       els.featureRecords.innerHTML = `<div class="planning-empty"><strong>${errorMessage ? "Unable to load Features" : (queryText ? "No matching Features" : "No Features yet")}</strong>${escapeHtml(errorMessage || (queryText ? "Try another search term or PI." : "Create a PI first, then add Features and connect User Stories to them."))}</div>`;
@@ -506,7 +554,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const tasks = appState.allTasks.filter((task) => task.raw.featureId === feature.id || task.feature === feature.name);
       const done = tasks.filter((task) => task.statusKey === "done").length;
       const progress = tasks.length ? Math.round(done / tasks.length * 100) : 0;
-      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><h4>${escapeHtml(feature.name)}</h4><span class="planning-status ${statusClass(feature.status)}">${escapeHtml(String(feature.status || "PLANNED").replaceAll("_", " "))}</span><span class="planning-status">${escapeHtml(String(feature.priority || "MEDIUM"))} priority</span></div><p class="planning-record-description">${escapeHtml(feature.description || "No description added.")}</p><div class="planning-record-meta"><span>PI: <strong>${escapeHtml(pi?.name || "Missing PI")}</strong></span><span>Owner: <strong>${escapeHtml(feature.owner || "Unassigned")}</strong></span><span><strong>${stories.length}</strong> Stories</span><span><strong>${tasks.length}</strong> Tasks</span><span><strong>${progress}%</strong> task completion</span></div><div class="planning-record-progress"><span style="width:${progress}%"></span></div></div><div class="planning-record-actions"><button type="button" data-edit-feature="${escapeHtml(feature.id)}">Edit</button><button type="button" data-delete-feature="${escapeHtml(feature.id)}" data-delete-name="${escapeHtml(feature.name)}">Archive</button></div></article>`;
+      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><span class="planning-record-code">${escapeHtml(feature.code || "ID pending")}</span><h4>${escapeHtml(feature.name)}</h4><span class="planning-status ${statusClass(feature.status)}">${escapeHtml(String(feature.status || "PLANNED").replaceAll("_", " "))}</span><span class="planning-status">${escapeHtml(String(feature.priority || "MEDIUM"))} priority</span></div><p class="planning-record-description">${escapeHtml(feature.description || "No description added.")}</p><div class="planning-record-meta"><span>PI: <strong>${escapeHtml(pi ? `${pi.code || "ID pending"} · ${pi.name}` : "Missing PI")}</strong></span><span>Owner: <strong>${escapeHtml(feature.owner || "Unassigned")}</strong></span><span><strong>${stories.length}</strong> Stories</span><span><strong>${tasks.length}</strong> Tasks</span><span><strong>${progress}%</strong> task completion</span></div><div class="planning-record-progress"><span style="width:${progress}%"></span></div></div><div class="planning-record-actions"><button type="button" data-edit-feature="${escapeHtml(feature.id)}">Edit</button><button type="button" data-delete-feature="${escapeHtml(feature.id)}" data-delete-name="${escapeHtml(feature.name)}">Archive</button></div></article>`;
     }).join("");
     els.featureRecords.querySelectorAll("[data-edit-feature]").forEach((button) => button.addEventListener("click", () => editFeature(button.dataset.editFeature)));
     els.featureRecords.querySelectorAll("[data-delete-feature]").forEach((button) => button.addEventListener("click", () => archiveFeature(button.dataset.deleteFeature, button.dataset.deleteName)));
@@ -551,7 +599,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.piSaveBtn.disabled = true;
     try {
       if (id) await updateDoc(planningReference("pi", id), data);
-      else await addDoc(planningCollection("pi"), { ...data, createdAt: serverTimestamp() });
+      else await createRecordWithBusinessCode(planningCollection("pi"), "pi", { ...data, createdAt: serverTimestamp() });
       resetPIForm();
       await loadPlanningRecords();
     } catch (error) {
@@ -621,7 +669,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.featureSaveBtn.disabled = true;
     try {
       if (id) await updateDoc(planningReference("feature", id), data);
-      else await addDoc(planningCollection("feature"), { ...data, createdAt: serverTimestamp() });
+      else await createRecordWithBusinessCode(planningCollection("feature"), "feature", { ...data, createdAt: serverTimestamp() });
       resetFeatureForm();
       await loadPlanningRecords();
     } catch (error) {
@@ -1101,6 +1149,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
       return {
         id: getString(cleaned.id) || `task-${index + 1}`,
+        code: getString(cleaned.code),
         originalIndex: index,
         raw: cleaned,
         archived: cleaned.archived === true,
@@ -1526,7 +1575,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const title = String(record.title || "").trim();
       if (!title) return;
       groups.set(`id:${record.id}`, {
-        id: record.id, title, description: String(record.description || ""),
+        id: record.id, code: String(record.code || ""), title, description: String(record.description || ""),
         acceptanceCriteria: Array.isArray(record.acceptanceCriteria) ? record.acceptanceCriteria : [],
         lifecycle: record.lifecycle || "Draft",
         owner: String(record.owner || ""),
@@ -1584,7 +1633,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const detailsOpen = appState.expandedStoryTaskIds.has(story.id);
       return `<article class="story-card story-row${story.archived ? " is-archived" : ""}${detailsOpen ? " is-expanded" : ""}">
         <div class="story-row-main">
-          <div class="story-row-title"><span class="story-card-label">${story.archived ? "ARCHIVED" : "USER STORY"}</span><h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p><div class="entity-id-line"><span>STORY ID</span><code>${escapeHtml(story.id || "Legacy / not assigned")}</code></div></div>
+          <div class="story-row-title"><span class="story-card-label">${story.archived ? "ARCHIVED" : "USER STORY"}</span><h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p><div class="entity-id-line"><span>STORY ID</span><code>${escapeHtml(story.code || "Legacy / not assigned")}</code></div></div>
           <div class="story-row-status"><span class="story-lifecycle-pill">${escapeHtml(story.lifecycle)}</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
           <div class="story-row-progress"><div class="story-progress-copy"><span>Task progress</span><strong>${completion}%</strong></div><div class="story-progress-track"><span style="width:${completion}%"></span></div><small>${counts.done} of ${story.tasks.length} done</small></div>
           <div class="story-row-points"><small>Points</small><strong>${storyPoints}</strong></div>
@@ -1746,7 +1795,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         else {
           // Legacy stories are upgraded into independent records; linked task IDs are preserved.
           const legacyId = appState.editingStoryId;
-          await setDoc(userStoryReference(legacyId), { ...data, createdAt: serverTimestamp() });
+          await createRecordWithBusinessCode(userStoryCollection(), "story", { ...data, createdAt: serverTimestamp() }, legacyId)
           const linked = appState.allTasks.filter(task => String(task.raw.userStoryId || "") === legacyId || (!task.raw.userStoryId && String(task.raw.userStory || task.story || "").trim() === previousTitle));
           for (let start = 0; start < linked.length; start += 450) {
             const batch = writeBatch(db);
@@ -1756,7 +1805,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         }
       } else {
         data.createdAt = serverTimestamp();
-        await addDoc(userStoryCollection(), data);
+        await createRecordWithBusinessCode(userStoryCollection(), "story", data);
       }
       closeStoryEditor();
     } catch (error) {
@@ -1836,8 +1885,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       taskText.appendChild(taskName);
       const taskId = document.createElement("code");
       taskId.className = "task-identity-inline";
-      taskId.textContent = "TASK ID · " + task.id;
-      taskId.title = task.id;
+      taskId.textContent = "TASK ID · " + (task.code || "Legacy / not assigned");
+      taskId.title = "Firestore document ID: " + task.id;
       taskText.appendChild(taskId);
       if (task.story && task.story !== "-") {
         const story = document.createElement("span");
@@ -2045,7 +2094,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const overdueBadge = task.overdue ? '<span class="overdue-badge">Overdue</span>' : "";
 
     card.innerHTML = `
-      <div class="task-card-identity"><span>TASK ID</span><code>${escapeHtml(task.id)}</code></div>
+      <div class="task-card-identity"><span>TASK ID</span><code>${escapeHtml(task.code || "Legacy / not assigned")}</code></div>
       <h4 class="card-title">${escapeHtml(task.task)}</h4>
       <p class="card-story">${escapeHtml(task.story)}</p>
       <div class="card-grid">
@@ -2584,12 +2633,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       return;
     }
     const nextSprint = String(sprintName || "").trim();
-    const patch = { sprint: nextSprint, updatedAt: serverTimestamp() };
+    const matches = appState.sprints.filter((item) => item.name === nextSprint);
+    const selectedSprint = matches.length === 1 ? matches[0] : null;
+    const patch = { sprintId: selectedSprint?.id || "", sprint: selectedSprint?.name || "", updatedAt: serverTimestamp() };
     const controls = [...document.querySelectorAll('[data-task-sprint="' + CSS.escape(taskId) + '"]')];
     controls.forEach((control) => { control.disabled = true; });
     try {
       await updateDoc(taskReference(taskId), patch);
-      task.raw = { ...task.raw, sprint: nextSprint };
+      task.raw = { ...task.raw, ...patch };
       refreshNormalizedTasksFromCatalog();
       applyFiltersAndRender();
       renderSprintPlanning();
@@ -2701,7 +2752,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.modalTitle.textContent = task.task;
     els.modalBody.innerHTML = `
       <section class="task-detail-grid" aria-label="Task information">
-        ${modalRow("Task ID", task.id)}
+        ${modalRow("Task ID", task.code || "Legacy / not assigned")}
+        ${modalRow("Firestore Document ID", task.id)}
         ${modalRow("Project ID", appState.activeProjectId)}
         ${modalRow("Created by User ID", task.raw.createdBy || "—")}
         ${modalRow("Assignee User ID", task.raw.assigneeUid || task.raw.assigneeId || task.raw.ownerUid || "—")}
@@ -2936,7 +2988,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         userStory: task.raw.userStoryId || (task.raw.userStory ? `legacy:${task.raw.userStory}` : ""),
         userStoryDescription: task.raw.userStoryDescription || "",
         pi: task.raw.piId || appState.programIncrements.find((pi) => pi.name === task.raw.pi)?.id || "",
-        sprint: task.raw.sprint || "",
+        sprint: task.raw.sprintId || (() => { const matches = appState.sprints.filter((item) => item.name === String(task.raw.sprint || "").trim()); return matches.length === 1 ? matches[0].id : (task.raw.sprint ? "legacy:" + task.raw.sprint : ""); })(),
         feature: task.raw.featureId || appState.features.find((feature) => feature.name === task.raw.feature)?.id || "",
         assigneeUid: task.raw.assigneeUid || "",
         storyPoints: task.raw.storyPoints ?? 0,
@@ -3172,7 +3224,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         userStoryDescription: String(form.get("userStoryDescription") || "").trim(),
         piId: mappedPI?.id || String(form.get("pi") || "").trim(),
         pi: mappedPI?.name || appState.programIncrements.find((item) => item.id === String(form.get("pi") || "").trim())?.name || String(editingTask?.raw.pi || ""),
-        sprint: String(form.get("sprint") || "").trim(),
+        sprintId: (() => { const value = String(form.get("sprint") || "").trim(); return value && !value.startsWith("legacy:") ? value : (editingTask?.raw.sprintId || ""); })(),
+        sprint: (() => { const value = String(form.get("sprint") || "").trim(); const selected = appState.sprints.find((item) => item.id === value); return selected ? selected.name : (value.startsWith("legacy:") ? value.slice(7) : ""); })(),
         featureId: mappedFeature?.id || String(form.get("feature") || "").trim(),
         feature: mappedFeature?.name || appState.features.find((item) => item.id === String(form.get("feature") || "").trim())?.name || String(editingTask?.raw.feature || ""),
         assignee: assigneeName,
@@ -3210,7 +3263,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
             batch.update(taskReference(item.id), { userStoryId: storyId, piId: taskData.piId, pi: taskData.pi, featureId: taskData.featureId, feature: taskData.feature, updatedAt: serverTimestamp() });
           });
           batch.update(taskReference(appState.editingTaskId), taskData);
-          if (shouldCreateStoryRecord) batch.set(userStoryReference(storyId), storyRecordData);
+          if (shouldCreateStoryRecord) { storyRecordData.code = await allocateBusinessCode(userStoryCollection(), "story"); batch.set(userStoryReference(storyId), storyRecordData); }
           await batch.commit();
         } else {
           await updateDoc(taskReference(appState.editingTaskId), taskData);
@@ -3228,11 +3281,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
           matchingStoryTasks.filter((item) => !item.raw.userStoryId).forEach((item) => {
             batch.update(taskReference(item.id), { userStoryId: storyId, piId: taskData.piId, pi: taskData.pi, featureId: taskData.featureId, feature: taskData.feature, updatedAt: serverTimestamp() });
           });
-          if (shouldCreateStoryRecord) batch.set(userStoryReference(storyId), storyRecordData);
+          if (shouldCreateStoryRecord) { storyRecordData.code = await allocateBusinessCode(userStoryCollection(), "story"); batch.set(userStoryReference(storyId), storyRecordData); }
+          newTaskData.code = await allocateBusinessCode(taskCollection(), "task");
           batch.set(doc(taskCollection()), newTaskData);
           await batch.commit();
         } else {
-          await addDoc(taskCollection(), newTaskData);
+          await createRecordWithBusinessCode(taskCollection(), "task", newTaskData);
         }
       }
       closeTaskEditor();

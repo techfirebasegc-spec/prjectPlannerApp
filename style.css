@@ -4790,3 +4790,7 @@ textarea:focus-visible {
 
 /* Record identifiers in task and story views */
 .task-card-identity{display:flex;align-items:center;gap:7px;min-width:0;margin-bottom:8px}.task-card-identity>span,.entity-id-line>span{font-size:.59rem;font-weight:850;letter-spacing:.09em;color:#7b8da5;white-space:nowrap}.task-card-identity code,.task-identity-inline,.entity-id-line code,.story-detail-stats code{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 .67rem/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;color:#49617e;background:#f2f6fb;border:1px solid #e3eaf3;border-radius:5px;padding:3px 6px}.task-identity-inline{display:block;width:max-content;max-width:240px;margin-top:4px;font-size:.61rem}.entity-id-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 2px}.story-detail-stats code{max-width:100%;font-size:.62rem}@media(max-width:760px){.task-card-identity{flex-wrap:wrap}.task-identity-inline{max-width:180px}}
+
+
+/* Business identifiers */
+.planning-record-code{display:inline-flex;align-items:center;width:max-content;max-width:100%;padding:4px 8px;border:1px solid #c7d8f0;border-radius:6px;background:#edf4ff;color:#244d83;font:750 .72rem/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.02em;white-space:nowrap}.planning-record-title{flex-wrap:wrap}
