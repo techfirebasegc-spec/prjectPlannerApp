@@ -21,3 +21,12 @@ Any user authenticated with Firebase Authentication and a verified email address
 2. In Firebase Console, enable Google and Email/Password sign-in and configure email verification.
 3. Build with `npm run build`.
 4. Deploy Hosting and Firestore rules with `firebase deploy --only hosting,firestore:rules --project project-palnner`.
+
+
+## Sprint metadata
+
+- Shared Default Project: `plannerSprints/{sprintId}`
+- Named projects: `plannerProjects/{projectId}/sprints/{sprintId}`
+- Each sprint stores `name`, `goal`, `startDate`, `endDate`, `capacity`, `status`, `archived`, `createdBy`, `createdAt`, and `updatedAt`.
+- Deploy updated Firestore rules before using sprint create/edit/archive. Project members can read project sprints; project owners/editors can write them. Default-project sprint writes are limited to verified users and updates are restricted to the creator.
+- Task assignments still store sprint names in the existing task `sprint` field. The UI prevents renaming a sprint while active tasks are assigned to it. Archiving preserves task assignments and does not delete tasks.
