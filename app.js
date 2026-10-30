@@ -144,6 +144,15 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     knowledgeViewBtn: document.getElementById("knowledgeViewBtn"),
     knowledgeView: document.getElementById("knowledgeView"),
     storiesViewBtn: document.getElementById("storiesViewBtn"),
+    sprintPlanningViewBtn: document.getElementById("sprintPlanningViewBtn"),
+    sprintPlanningView: document.getElementById("sprintPlanningView"),
+    planningSprintSelect: document.getElementById("planningSprintSelect"),
+    planningSprintStats: document.getElementById("planningSprintStats"),
+    planningBacklogCount: document.getElementById("planningBacklogCount"),
+    planningSprintCount: document.getElementById("planningSprintCount"),
+    planningBacklogList: document.getElementById("planningBacklogList"),
+    planningSprintList: document.getElementById("planningSprintList"),
+    planningRiskPanel: document.getElementById("planningRiskPanel"),
     sidebarStoriesBtn: document.getElementById("sidebarStoriesBtn"),
     newStoryBtn: document.getElementById("newStoryBtn"),
     storyEditorModal: document.getElementById("storyEditorModal"),
@@ -856,6 +865,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.insightsViewBtn.addEventListener("click", () => setActiveView("insights"));
     els.knowledgeViewBtn?.addEventListener("click", () => setActiveView("knowledge"));
     els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
+    els.sprintPlanningViewBtn?.addEventListener("click", () => setActiveView("sprintPlanning"));
     els.sidebarStoriesBtn?.addEventListener("click", () => { setActiveView("stories"); if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true); });
     els.newStoryBtn.addEventListener("click", () => openStoryEditor());
     bindPlanningEvents();
@@ -871,6 +881,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.closeStoryEditor.addEventListener("click", closeStoryEditor);
     els.storyEditorModal.addEventListener("click", (event) => { if (event.target === els.storyEditorModal) closeStoryEditor(); });
     els.profileViewBtn.addEventListener("click", () => setActiveView("profile"));
+    els.planningSprintSelect?.addEventListener("change", renderSprintPlanning);
     els.profileForm.addEventListener("submit", saveProfile);
     els.calendarMonth.addEventListener("change", onCalendarMonthChange);
 
@@ -2214,9 +2225,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function setActiveView(view, persist = true) {
-    appState.activeView = ["dashboard", "board", "list", "stories", "pis", "features", "insights", "knowledge", "profile"].includes(view) ? view : "dashboard";
+    appState.activeView = ["dashboard", "board", "list", "stories", "sprintPlanning", "pis", "features", "insights", "knowledge", "profile"].includes(view) ? view : "dashboard";
     const dashboard = appState.activeView === "dashboard";
-    const board = appState.activeView === "board", list = appState.activeView === "list", stories = appState.activeView === "stories";
+    const board = appState.activeView === "board", list = appState.activeView === "list", stories = appState.activeView === "stories", sprintPlanning = appState.activeView === "sprintPlanning";
     const pis = appState.activeView === "pis", features = appState.activeView === "features";
     const insights = appState.activeView === "insights", knowledge = appState.activeView === "knowledge", profile = appState.activeView === "profile";
     els.dashboardView?.classList.toggle("is-hidden", !dashboard);
@@ -2226,6 +2237,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.boardView.classList.toggle("is-hidden", !board);
     els.listView.classList.toggle("is-hidden", !list);
     els.storiesView.classList.toggle("is-hidden", !stories);
+    els.sprintPlanningView?.classList.toggle("is-hidden", !sprintPlanning);
+    els.sprintPlanningViewBtn?.classList.toggle("is-active", sprintPlanning);
+    if (sprintPlanning) renderSprintPlanning();
     els.piManagementView?.classList.toggle("is-hidden", !pis);
     els.featuresManagementView?.classList.toggle("is-hidden", !features);
     els.piViewBtn?.classList.toggle("is-active", pis);
@@ -2240,6 +2254,39 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.insightsViewBtn.classList.toggle("is-active", insights);
     els.profileViewBtn.classList.toggle("is-active", profile);
     if (persist) persistPreferences();
+  }
+
+  function renderSprintPlanning() {
+    if (!els.planningSprintSelect || !els.planningSprintStats) return;
+    const previous = els.planningSprintSelect.value || "all";
+    const sprintNames = [...new Set(appState.allTasks.map(t => String(t.sprint || "").trim()).filter(Boolean))].sort();
+    els.planningSprintSelect.innerHTML = '<option value="all">All sprint work</option>' + sprintNames.map(name => '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>').join("");
+    els.planningSprintSelect.value = sprintNames.includes(previous) || previous === "all" ? previous : "all";
+    const selected = els.planningSprintSelect.value;
+    const projectTasks = appState.filteredTasks || [];
+    const sprintTasks = projectTasks.filter(t => String(t.sprint || "").trim() && (selected === "all" || String(t.sprint).trim() === selected));
+    const backlog = projectTasks.filter(t => !String(t.sprint || "").trim());
+    const done = sprintTasks.filter(t => ["done","complete","completed"].includes(String(t.statusKey || t.status || "").toLowerCase())).length;
+    const points = list => list.reduce((sum,t) => sum + (Number(t.storyPoints ?? t.points ?? t.estimate) || 0),0);
+    const capacity = Number(sprintTasks[0]?.sprintCapacity || sprintTasks[0]?.capacity || 0);
+    els.planningSprintStats.innerHTML = [
+      ['Committed tasks', sprintTasks.length, selected === "all" ? "Across named sprints" : selected],
+      ['Story points', points(sprintTasks), 'Based on available task estimates'],
+      ['Completed', done, sprintTasks.length ? Math.round(done / sprintTasks.length * 100) + '% of committed tasks' : 'No sprint tasks yet'],
+      ['Capacity', capacity || 'Not set', capacity ? (points(sprintTasks) > capacity ? 'Over capacity by ' + (points(sprintTasks)-capacity) + ' points' : Math.max(0,capacity-points(sprintTasks)) + ' points remaining') : 'Capacity data is not configured']
+    ].map(([label,value,note]) => '<article class="planning-metric"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value)) + '</strong><small>' + escapeHtml(note) + '</small></article>').join('');
+    const card = t => '<article class="planning-task-card"><div class="planning-task-card-top"><span class="planning-task-id">' + escapeHtml(t.id || t.taskId || 'TASK') + '</span><span class="planning-status">' + escapeHtml(t.statusLabel || t.status || 'To Do') + '</span></div><h4>' + escapeHtml(t.task || t.title || 'Untitled task') + '</h4><div class="planning-task-meta"><span>' + escapeHtml(t.assignee || 'Unassigned') + '</span><span>' + escapeHtml(t.story || t.userStory || 'No linked story') + '</span><span>' + escapeHtml(String(Number(t.storyPoints ?? t.points ?? t.estimate) || 0) + ' pts') + '</span></div></article>';
+    els.planningBacklogCount.textContent = backlog.length;
+    els.planningSprintCount.textContent = sprintTasks.length;
+    els.planningBacklogList.innerHTML = backlog.length ? backlog.map(card).join('') : '<div class="planning-empty">No unassigned backlog tasks for the current filters.</div>';
+    els.planningSprintList.innerHTML = sprintTasks.length ? sprintTasks.map(card).join('') : '<div class="planning-empty">No tasks assigned to ' + escapeHtml(selected === "all" ? "a sprint" : selected) + ' yet.</div>';
+    const risks = [];
+    const unassigned = sprintTasks.filter(t => !String(t.assigneeUid || t.assignee || "").trim()).length;
+    const undated = sprintTasks.filter(t => !t.dueDate && !t.endDate).length;
+    if (capacity && points(sprintTasks) > capacity) risks.push(['Capacity exceeded', (points(sprintTasks)-capacity) + ' story points above the configured capacity.']);
+    if (unassigned) risks.push(['Unassigned work', unassigned + ' sprint task(s) have no identifiable assignee.']);
+    if (undated) risks.push(['Missing target dates', undated + ' sprint task(s) have no due/end date.']);
+    els.planningRiskPanel.innerHTML = risks.length ? risks.map(([title,body]) => '<div class="planning-risk"><span aria-hidden="true">!</span><div><strong>' + escapeHtml(title) + '</strong>' + escapeHtml(body) + '</div></div>').join('') : '<div class="planning-risk is-clear"><span aria-hidden="true">✓</span><div><strong>No obvious planning warnings</strong>Based on the fields currently available in task records.</div></div>';
   }
 
   function renderProfile() {
