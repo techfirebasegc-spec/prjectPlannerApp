@@ -40,3 +40,8 @@ Daily progress is stored at `plannerSprints/{sprintId}/dailySnapshots/{YYYY-MM-D
 ## Sprint velocity and completion analytics
 
 The Reports view summarizes historical sprint delivery using the daily snapshots stored under each sprint's `dailySnapshots` subcollection. The trend uses the latest snapshot on or before the sprint end date; completion rate is completed points divided by committed points. Average velocity includes only sprints whose status is Completed, Complete, Closed, or Done and that have a measurable snapshot on or before the end date. Sprints without such a snapshot display unavailable metrics rather than estimating historical results from today's task state. Snapshots are recorded while the planner is open and sprint/task data refreshes; this is not a scheduled backend job and history is not backfilled.
+
+
+## Visible record identifiers in the UI
+
+Task cards and task lists display the saved Task ID. The task detail panel includes Task ID, Project ID, creator UID, assignee UID when present, PI ID, and User Story ID. User Story cards and details show their saved IDs plus owner UID and linked Feature/PI IDs. The profile displays the signed-in Firebase UID and selected Project ID. Legacy stories without a saved record ID are labeled accordingly; IDs are not fabricated.
