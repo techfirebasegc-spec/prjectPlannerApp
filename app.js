@@ -1128,7 +1128,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const cleaned = trimObjectKeys(record);
       const statusRaw = getString(cleaned.status || cleaned.Status);
       const statusKey = normalizeStatus(statusRaw);
-      const priorityRaw = getString(cleaned.Priority || cleaned.Severity || cleaned.Rank);
+      const priorityRaw = getString(cleaned.priority || cleaned.Priority || cleaned.Severity || cleaned.Rank);
+      const priority = normalizePriority(priorityRaw);
+      const priorityText = priority === "none" ? "No Priority" : priority.charAt(0).toUpperCase() + priority.slice(1);
 
       const startDate = parseDate(cleaned.startDate || cleaned["Start Date"]);
       const endDate = parseDate(cleaned.endDate || cleaned["End Date"]);
@@ -1167,8 +1169,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         statusRaw,
         statusKey,
         statusLabel: statusDisplay(statusKey),
-        priority: normalizePriority(priorityRaw),
-        priorityText: priorityRaw || "No Priority",
+        priority,
+        priorityText,
         startDate,
         dueDate,
         overdue: Boolean(dueDate && isPast(dueDate) && statusKey !== "done"),
