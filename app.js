@@ -1404,8 +1404,13 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       groups.set(`id:${record.id}`, {
         id: record.id, title, description: String(record.description || ""),
         acceptanceCriteria: Array.isArray(record.acceptanceCriteria) ? record.acceptanceCriteria : [],
-        lifecycle: record.lifecycle || "Draft", pi: record.pi || "", feature: record.feature || "",
-        startDate: record.startDate || "", endDate: record.endDate || "", archived: record.archived === true, tasks: []
+        lifecycle: record.lifecycle || "Draft",
+        owner: String(record.owner || ""),
+        ownerUid: String(record.ownerUid || ""),
+        pi: record.pi || "", piId: record.piId || "",
+        feature: record.feature || "", featureId: record.featureId || "",
+        startDate: record.startDate || "", endDate: record.endDate || "",
+        archived: record.archived === true, tasks: []
       });
     });
     tasks.forEach((task) => {
