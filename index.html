@@ -244,7 +244,7 @@
       <section id="sprintPlanningView" class="sprint-planning-view is-hidden" aria-label="Sprint planning workspace">
         <header class="planning-page-header">
           <div><p class="brand-kicker">Delivery workspace</p><h2>Sprint Planning</h2><p>Review capacity, plan work, and spot delivery risks before committing.</p></div>
-          <label class="planning-sprint-picker">Sprint<select id="planningSprintSelect" class="filter-select"><option value="all">All sprint work</option></select></label>
+          <div class="planning-header-actions"><label class="planning-sprint-picker">Sprint<select id="planningSprintSelect" class="filter-select"><option value="all">All sprint work</option></select></label><a class="planning-manage-link" href="#sprintManagement">Manage sprints ↓</a></div>
         </header>
         <div id="planningSprintStats" class="planning-metrics" aria-live="polite"></div>
         <div class="planning-content-grid">
@@ -252,6 +252,21 @@
           <section class="planning-column planning-committed"><header><div><p class="planning-eyebrow">Sprint commitment</p><h3>Sprint work</h3></div><span id="planningSprintCount" class="planning-count">0</span></header><p class="planning-column-help">Tasks already assigned to the selected sprint.</p><div id="planningSprintList" class="planning-task-list"></div></section>
         </div>
         <aside id="planningRiskPanel" class="planning-risk-panel" aria-live="polite"></aside>
+        <section id="sprintManagement" class="sprint-management" aria-label="Sprint management">
+          <header class="sprint-management-header"><div><p class="planning-eyebrow">SPRINT CONFIGURATION</p><h3>Manage sprints</h3><p>Set sprint goals, dates, capacity, and lifecycle status. Existing task assignments continue to use the sprint name field.</p></div><span id="sprintCount" class="planning-count">0 sprints</span></header>
+          <div class="sprint-management-grid">
+            <form id="sprintForm" class="planning-form"><input id="sprintRecordId" type="hidden"><h3 id="sprintFormTitle">Create a sprint</h3>
+              <label>Sprint name<input id="sprintNameInput" maxlength="100" required placeholder="e.g. Sprint 24"></label>
+              <label>Sprint goal<textarea id="sprintGoalInput" maxlength="1200" rows="3" placeholder="Outcome the team intends to deliver"></textarea></label>
+              <div class="planning-form-row"><label>Start date<input id="sprintStartInput" type="date" required></label><label>End date<input id="sprintEndInput" type="date" required></label></div>
+              <label>Capacity (story points)<input id="sprintCapacityInput" type="number" min="0" max="10000" step="0.5" required value="0"></label>
+              <label>Status<select id="sprintStatusInput"><option value="PLANNED">Planned</option><option value="ACTIVE">Active</option><option value="COMPLETED">Completed</option></select></label>
+              <p id="sprintFormError" class="task-editor-error" aria-live="polite"></p>
+              <div class="planning-form-actions"><button id="sprintCancelBtn" class="secondary-action" type="button">Clear</button><button id="sprintSaveBtn" class="save-task-btn" type="submit">Create sprint</button></div>
+            </form>
+            <section class="planning-records-panel"><div class="planning-records-heading"><div><h3>Sprint catalogue</h3><p>Capacity and delivery windows for this project</p></div></div><div id="sprintRecords" class="planning-record-list"></div></section>
+          </div>
+        </section>
       </section>
 
       <section id="storiesView" class="stories-view is-hidden" aria-label="User stories">
