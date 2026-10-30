@@ -288,44 +288,38 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     return doc(planningCollection(kind), id);
   }
   async function allocateBusinessCode(collectionRef, entityType) {
+    const sequenceRef = appState.activeProjectId === "default"
+      ? doc(db, "plannerSequences", entityType)
+      : doc(db, "plannerProjects", appState.activeProjectId, "sequences", entityType);
+    const sequenceSnapshot = await getDoc(sequenceRef);
+    let initialHighWater = 0;
+    if (!sequenceSnapshot.exists()) {
+      // Web SDK transactions cannot read a CollectionReference. Inspect legacy
+      // records before the transaction; concurrent initial writers are serialized
+      // by the sequence document transaction below.
+      const existing = await getDocs(collectionRef);
+      initialHighWater = highestBusinessIdSequence(entityType, existing.docs.map((item) => item.data()));
+    }
     let code = "";
     await runTransaction(db, async (transaction) => {
-      const sequenceRef = appState.activeProjectId === "default"
-        ? doc(db, "plannerSequences", entityType)
-        : doc(db, "plannerProjects", appState.activeProjectId, "sequences", entityType);
       const snapshot = await transaction.get(sequenceRef);
-      let lastAllocated = Number(snapshot.exists() ? snapshot.data().lastAllocated : 0) || 0;
-      if (!snapshot.exists()) {
-        const existing = await transaction.get(collectionRef);
-        lastAllocated = Math.max(lastAllocated, highestBusinessIdSequence(entityType, existing.docs.map((item) => item.data())));
-      }
-      lastAllocated += 1;
-      code = formatBusinessId(entityType, lastAllocated);
-      transaction.set(sequenceRef, { entityType, lastAllocated, updatedAt: serverTimestamp() }, { merge: true });
+      const lastAllocated = Math.max(
+        Number(snapshot.exists() ? snapshot.data().lastAllocated : 0) || 0,
+        initialHighWater
+      );
+      const next = lastAllocated + 1;
+      code = formatBusinessId(entityType, next);
+      transaction.set(sequenceRef, { entityType, lastAllocated: next, updatedAt: serverTimestamp() }, { merge: true });
     });
     return code;
   }
 
   async function createRecordWithBusinessCode(collectionRef, entityType, data, documentId = null) {
     const recordRef = documentId ? doc(collectionRef, documentId) : doc(collectionRef);
-    await runTransaction(db, async (transaction) => {
-      const sequenceRef = appState.activeProjectId === "default"
-        ? doc(db, "plannerSequences", entityType)
-        : doc(db, "plannerProjects", appState.activeProjectId, "sequences", entityType);
-      const snapshot = await transaction.get(sequenceRef);
-      let lastAllocated = Number(snapshot.exists() ? snapshot.data().lastAllocated : 0) || 0;
-      if (!snapshot.exists()) {
-        const existing = await transaction.get(collectionRef);
-        lastAllocated = Math.max(lastAllocated, highestBusinessIdSequence(entityType, existing.docs.map((item) => item.data())));
-      }
-      lastAllocated += 1;
-      transaction.set(sequenceRef, { entityType, lastAllocated, updatedAt: serverTimestamp() }, { merge: true });
-      transaction.set(recordRef, { ...data, code: formatBusinessId(entityType, lastAllocated) });
-    });
-    return { id: recordRef.id };
+    const code = await allocateBusinessCode(collectionRef, entityType);
+    await setDoc(recordRef, { ...data, code });
+    return { id: recordRef.id, code };
   }
-
-
 
   function sprintCollection() {
     return appState.activeProjectId === "default" ? collection(db, "plannerSprints") : collection(db, "plannerProjects", appState.activeProjectId, "sprints");
@@ -3263,7 +3257,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
             batch.update(taskReference(item.id), { userStoryId: storyId, piId: taskData.piId, pi: taskData.pi, featureId: taskData.featureId, feature: taskData.feature, updatedAt: serverTimestamp() });
           });
           batch.update(taskReference(appState.editingTaskId), taskData);
-          if (shouldCreateStoryRecord) { storyRecordData.code = await allocateBusinessCode(userStoryCollection(), "story"); batch.set(userStoryReference(storyId), storyRecordData); }
+          if (shouldCreateStoryRecord) { const storyCode = await allocateBusinessCode(userStoryCollection(), "story"); batch.set(userStoryReference(storyId), { ...storyRecordData, code: storyCode }); }
           await batch.commit();
         } else {
           await updateDoc(taskReference(appState.editingTaskId), taskData);
@@ -3282,8 +3276,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
             batch.update(taskReference(item.id), { userStoryId: storyId, piId: taskData.piId, pi: taskData.pi, featureId: taskData.featureId, feature: taskData.feature, updatedAt: serverTimestamp() });
           });
           if (shouldCreateStoryRecord) { storyRecordData.code = await allocateBusinessCode(userStoryCollection(), "story"); batch.set(userStoryReference(storyId), storyRecordData); }
-          newTaskData.code = await allocateBusinessCode(taskCollection(), "task");
-          batch.set(doc(taskCollection()), newTaskData);
+          const taskCode = await allocateBusinessCode(taskCollection(), "task");
+          batch.set(doc(taskCollection()), { ...newTaskData, code: taskCode });
           await batch.commit();
         } else {
           await createRecordWithBusinessCode(taskCollection(), "task", newTaskData);
