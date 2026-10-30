@@ -30,3 +30,8 @@ Any user authenticated with Firebase Authentication and a verified email address
 - Each sprint stores `name`, `goal`, `startDate`, `endDate`, `capacity`, `status`, `archived`, `createdBy`, `createdAt`, and `updatedAt`.
 - Deploy updated Firestore rules before using sprint create/edit/archive. Project members can read project sprints; project owners/editors can write them. Default-project sprint writes are limited to verified users and updates are restricted to the creator.
 - Task assignments still store sprint names in the existing task `sprint` field. The UI prevents renaming a sprint while active tasks are assigned to it. Archiving preserves task assignments and does not delete tasks.
+
+
+## Sprint analytics and daily history
+
+Daily progress is stored at `plannerSprints/{sprintId}/dailySnapshots/{YYYY-MM-DD}` for the Default Project and `plannerProjects/{projectId}/sprints/{sprintId}/dailySnapshots/{YYYY-MM-DD}` for named projects. The app upserts one snapshot per sprint per local calendar day when it is open and sprint/task data refreshes; days with no app activity may have no snapshot. Historical actuals begin after deployment and are not backfilled. Deploy updated Firestore rules before enabling this feature.
