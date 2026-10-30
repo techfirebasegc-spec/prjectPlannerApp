@@ -345,42 +345,39 @@
         </div></div></section>
         <section class="knowledge-section" id="kc-examples"><span class="knowledge-step">09</span><div><h2>Worked example: from idea to delivery</h2><div class="knowledge-example"><p><b>Feature:</b> Account security</p><p><b>User Story:</b> As a user, I want to reset my password so I can regain access securely.</p><p><b>Acceptance criteria:</b> A valid reset request sends a time-limited link; invalid/expired links are rejected; success confirms the password was changed.</p><p><b>Tasks:</b> Build reset-request screen (3 points); implement reset-token validation (5 points); add tests and review (2 points).</p><p><b>Total task-estimated points:</b> 10, if your team uses task-level estimates consistently.</p><p><b>Sprint:</b> Sprint 04. <b>PI:</b> PI 2026-Q4. <b>Owner:</b> assigned team member. <b>Status:</b> tasks move To Do → In Progress → Done; story moves through its own lifecycle to Accepted after verification.</p></div></div></section>
       </section>
-      <section id="insightsView" class="insights-view is-hidden" aria-label="Agile insights">
+      <section id="insightsView" class="insights-view is-hidden" aria-label="Delivery reports">
         <div class="insights-header">
-          <h2>Sprint Calendar & Delivery Insights</h2>
-          <select id="calendarMonth" class="filter-select"></select>
+          <div><span class="brand-kicker">PROJECT ANALYTICS</span><h2>Delivery report</h2><p>See current workload, sprint outcomes and delivery risks for the selected project.</p></div>
+          <label class="report-period">Calendar month<select id="calendarMonth" class="filter-select"></select></label>
         </div>
-
         <div id="sprintLegend" class="sprint-legend"></div>
-        <div id="sprintCalendar" class="sprint-calendar"></div>
-
-        <div class="agile-metrics">
-          <article class="metric-card">
-            <p>Committed Points</p>
-            <strong id="committedPoints">0</strong>
-          </article>
-          <article class="metric-card">
-            <p>Completed Points</p>
-            <strong id="completedPoints">0</strong>
-          </article>
-          <article class="metric-card">
-            <p>Spillover Tasks</p>
-            <strong id="spilloverTasks">0</strong>
-          </article>
-          <article class="metric-card">
-            <p>Overdue Open</p>
-            <strong id="overdueOpen">0</strong>
-          </article>
+        <section class="report-focus">
+          <div class="report-focus-copy"><span class="report-eyebrow">SELECTED SPRINT</span><h3 id="reportSprintTitle">No sprint selected</h3><p id="reportSprintSubtitle">Assign sprint dates to tasks to generate sprint reporting.</p></div>
+          <div class="report-progress-wrap"><div class="report-progress-label"><span>Task completion</span><strong id="reportCompletion">0%</strong></div><div class="report-progress-track"><span id="reportCompletionBar" style="width:0%"></span></div><small id="reportProgressSummary">0 of 0 tasks complete</small></div>
+        </section>
+        <div class="agile-metrics report-metrics">
+          <article class="metric-card"><p>Committed points</p><strong id="committedPoints">0</strong><small>Estimated effort in selected sprint</small></article>
+          <article class="metric-card"><p>Completed points</p><strong id="completedPoints">0</strong><small>Effort in completed tasks</small></article>
+          <article class="metric-card"><p>Remaining points</p><strong id="remainingPoints">0</strong><small>Work not yet completed</small></article>
+          <article class="metric-card"><p>Overdue tasks</p><strong id="overdueOpen">0</strong><small>Open tasks past their due date</small></article>
         </div>
-
-        <div class="chart-grid">
-          <section class="chart-card">
-            <header>
-              <h3>Burndown Chart</h3>
-              <p id="burndownSubtitle">Current sprint trend</p>
-            </header>
-            <canvas id="burndownChart" height="140"></canvas>
+        <div class="report-analysis-grid">
+          <section class="report-panel">
+            <header><div><h3>Current sprint workload</h3><p>Task distribution by status</p></div></header>
+            <div id="reportStatusBreakdown" class="report-status-breakdown"></div>
+            <div class="report-effort-line"><span>Completed effort</span><strong id="reportEffortCompletion">0 / 0 points</strong></div>
           </section>
+          <section class="report-panel">
+            <header><div><h3>Sprint performance</h3><p>Completed effort across dated sprints</p></div></header>
+            <div class="report-chart-wrap"><canvas id="velocityChart" height="170"></canvas></div>
+            <p id="velocityEmpty" class="report-empty-hint" hidden>Not enough dated sprint data yet. Add start and end dates to sprint tasks.</p>
+          </section>
+        </div>
+        <section class="report-panel report-calendar-panel">
+          <header><div><h3>Sprint calendar</h3><p>Planning view of sprint date ranges</p></div></header>
+          <div id="sprintCalendar" class="sprint-calendar"></div>
+        </section>
+      </section>
 
           <section class="chart-card">
             <header>
