@@ -882,6 +882,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.storyEditorModal.addEventListener("click", (event) => { if (event.target === els.storyEditorModal) closeStoryEditor(); });
     els.profileViewBtn.addEventListener("click", () => setActiveView("profile"));
     els.planningSprintSelect?.addEventListener("change", renderSprintPlanning);
+    [els.planningBacklogList, els.planningSprintList].forEach((list) => list?.addEventListener("change", (event) => {
+      const select = event.target.closest("[data-task-sprint]");
+      if (select) updateSprintAssignment(select.dataset.taskSprint, select.value);
+    }));
     els.profileForm.addEventListener("submit", saveProfile);
     els.calendarMonth.addEventListener("change", onCalendarMonthChange);
 
@@ -2259,34 +2263,80 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   function renderSprintPlanning() {
     if (!els.planningSprintSelect || !els.planningSprintStats) return;
     const previous = els.planningSprintSelect.value || "all";
-    const sprintNames = [...new Set(appState.allTasks.map(t => String(t.sprint || "").trim()).filter(Boolean))].sort();
-    els.planningSprintSelect.innerHTML = '<option value="all">All sprint work</option>' + sprintNames.map(name => '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>').join("");
+    const sprintNames = [...new Set(appState.allTasks
+      .map((task) => String(task.raw?.sprint ?? task.raw?.Sprint ?? "").trim())
+      .filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    els.planningSprintSelect.replaceChildren(new Option("All sprint work", "all"));
+    sprintNames.forEach((name) => els.planningSprintSelect.add(new Option(name, name)));
     els.planningSprintSelect.value = sprintNames.includes(previous) || previous === "all" ? previous : "all";
+
     const selected = els.planningSprintSelect.value;
-    const projectTasks = appState.filteredTasks || [];
-    const sprintTasks = projectTasks.filter(t => String(t.sprint || "").trim() && (selected === "all" || String(t.sprint).trim() === selected));
-    const backlog = projectTasks.filter(t => !String(t.sprint || "").trim());
-    const done = sprintTasks.filter(t => ["done","complete","completed"].includes(String(t.statusKey || t.status || "").toLowerCase())).length;
-    const points = list => list.reduce((sum,t) => sum + (Number(t.storyPoints ?? t.points ?? t.estimate) || 0),0);
-    const capacity = Number(sprintTasks[0]?.sprintCapacity || sprintTasks[0]?.capacity || 0);
+    const projectTasks = (appState.filteredTasks || []).filter((task) => !task.archived);
+    const sprintOf = (task) => String(task.raw?.sprint ?? task.raw?.Sprint ?? "").trim();
+    const sprintTasks = projectTasks.filter((task) => sprintOf(task) && (selected === "all" || sprintOf(task) === selected));
+    const backlog = projectTasks.filter((task) => !sprintOf(task) || (selected !== "all" && sprintOf(task) !== selected));
+    const done = sprintTasks.filter((task) => task.statusKey === "done").length;
+    const points = (list) => list.reduce((sum, task) => sum + (Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0), 0);
+    const capacity = Number(sprintTasks.find((task) => Number(task.raw?.sprintCapacity ?? task.raw?.capacity ?? task.raw?.Capacity) > 0)?.raw?.sprintCapacity
+      ?? sprintTasks.find((task) => Number(task.raw?.sprintCapacity ?? task.raw?.capacity ?? task.raw?.Capacity) > 0)?.raw?.capacity
+      ?? sprintTasks.find((task) => Number(task.raw?.Capacity) > 0)?.raw?.Capacity ?? 0);
     els.planningSprintStats.innerHTML = [
-      ['Committed tasks', sprintTasks.length, selected === "all" ? "Across named sprints" : selected],
-      ['Story points', points(sprintTasks), 'Based on available task estimates'],
-      ['Completed', done, sprintTasks.length ? Math.round(done / sprintTasks.length * 100) + '% of committed tasks' : 'No sprint tasks yet'],
-      ['Capacity', capacity || 'Not set', capacity ? (points(sprintTasks) > capacity ? 'Over capacity by ' + (points(sprintTasks)-capacity) + ' points' : Math.max(0,capacity-points(sprintTasks)) + ' points remaining') : 'Capacity data is not configured']
-    ].map(([label,value,note]) => '<article class="planning-metric"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value)) + '</strong><small>' + escapeHtml(note) + '</small></article>').join('');
-    const card = t => '<article class="planning-task-card"><div class="planning-task-card-top"><span class="planning-task-id">' + escapeHtml(t.id || t.taskId || 'TASK') + '</span><span class="planning-status">' + escapeHtml(t.statusLabel || t.status || 'To Do') + '</span></div><h4>' + escapeHtml(t.task || t.title || 'Untitled task') + '</h4><div class="planning-task-meta"><span>' + escapeHtml(t.assignee || 'Unassigned') + '</span><span>' + escapeHtml(t.story || t.userStory || 'No linked story') + '</span><span>' + escapeHtml(String(Number(t.storyPoints ?? t.points ?? t.estimate) || 0) + ' pts') + '</span></div></article>';
-    els.planningBacklogCount.textContent = backlog.length;
-    els.planningSprintCount.textContent = sprintTasks.length;
-    els.planningBacklogList.innerHTML = backlog.length ? backlog.map(card).join('') : '<div class="planning-empty">No unassigned backlog tasks for the current filters.</div>';
-    els.planningSprintList.innerHTML = sprintTasks.length ? sprintTasks.map(card).join('') : '<div class="planning-empty">No tasks assigned to ' + escapeHtml(selected === "all" ? "a sprint" : selected) + ' yet.</div>';
+      ["Committed tasks", sprintTasks.length, selected === "all" ? "Across named sprints" : selected],
+      ["Story points", points(sprintTasks), "Based on available task estimates"],
+      ["Completed", done, sprintTasks.length ? Math.round(done / sprintTasks.length * 100) + "% of committed tasks" : "No sprint tasks yet"],
+      ["Capacity", capacity || "Not set", capacity ? (points(sprintTasks) > capacity ? "Over capacity by " + (points(sprintTasks) - capacity) + " points" : Math.max(0, capacity - points(sprintTasks)) + " points remaining") : "Capacity data is not configured"]
+    ].map(([label, value, note]) => '<article class="planning-metric"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value)) + '</strong><small>' + escapeHtml(note) + '</small></article>').join("");
+
+    const canEdit = planningCanEdit();
+    const card = (task) => {
+      const currentSprint = sprintOf(task);
+      const options = ['<option value="">Backlog</option>', ...sprintNames.map((name) =>
+        '<option value="' + escapeHtml(name) + '"' + (name === currentSprint ? " selected" : "") + '>' + escapeHtml(name) + '</option>')].join("");
+      return '<article class="planning-task-card"><div class="planning-task-card-top"><span class="planning-task-id">' + escapeHtml(task.id || task.taskId || "TASK") + '</span><span class="planning-status">' + escapeHtml(task.statusLabel || task.status || "To Do") + '</span></div><h4>' + escapeHtml(task.task || task.title || "Untitled task") + '</h4><div class="planning-task-meta"><span>' + escapeHtml(task.assignee || "Unassigned") + '</span><span>' + escapeHtml(task.story || task.userStory || "No linked story") + '</span><span>' + escapeHtml(String(Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0) + " pts") + '</span></div><label class="planning-assignment"><span>Sprint assignment</span><select data-task-sprint="' + escapeHtml(task.id) + '"' + (canEdit ? "" : " disabled") + ' aria-label="Sprint assignment for ' + escapeHtml(task.task || task.title || task.id) + '">' + options + '</select></label></article>';
+    };
+    els.planningBacklogCount.textContent = String(backlog.length);
+    els.planningSprintCount.textContent = String(sprintTasks.length);
+    els.planningBacklogList.innerHTML = backlog.length ? backlog.map(card).join("") : '<div class="planning-empty">No backlog tasks for the current filters.</div>';
+    els.planningSprintList.innerHTML = sprintTasks.length ? sprintTasks.map(card).join("") : '<div class="planning-empty">No tasks assigned to ' + escapeHtml(selected === "all" ? "a sprint" : selected) + ' yet.</div>';
+
     const risks = [];
-    const unassigned = sprintTasks.filter(t => !String(t.assigneeUid || t.assignee || "").trim()).length;
-    const undated = sprintTasks.filter(t => !t.dueDate && !t.endDate).length;
-    if (capacity && points(sprintTasks) > capacity) risks.push(['Capacity exceeded', (points(sprintTasks)-capacity) + ' story points above the configured capacity.']);
-    if (unassigned) risks.push(['Unassigned work', unassigned + ' sprint task(s) have no identifiable assignee.']);
-    if (undated) risks.push(['Missing target dates', undated + ' sprint task(s) have no due/end date.']);
-    els.planningRiskPanel.innerHTML = risks.length ? risks.map(([title,body]) => '<div class="planning-risk"><span aria-hidden="true">!</span><div><strong>' + escapeHtml(title) + '</strong>' + escapeHtml(body) + '</div></div>').join('') : '<div class="planning-risk is-clear"><span aria-hidden="true">✓</span><div><strong>No obvious planning warnings</strong>Based on the fields currently available in task records.</div></div>';
+    const unassigned = sprintTasks.filter((task) => !String(task.raw?.assigneeUid || task.raw?.assignee || task.raw?.Assignee || "").trim()).length;
+    const undated = sprintTasks.filter((task) => !task.raw?.dueDate && !task.raw?.endDate && !task.raw?.["End Date"]).length;
+    if (capacity && points(sprintTasks) > capacity) risks.push(["Capacity exceeded", (points(sprintTasks) - capacity) + " story points above the configured capacity."]);
+    if (unassigned) risks.push(["Unassigned work", unassigned + " sprint task(s) have no identifiable assignee."]);
+    if (undated) risks.push(["Missing target dates", undated + " sprint task(s) have no due/end date."]);
+    if (!canEdit) risks.push(["Read-only access", "You can review sprint assignments, but only project owners and editors can change them."]);
+    els.planningRiskPanel.innerHTML = risks.length ? risks.map(([title, body]) => '<div class="planning-risk"><span aria-hidden="true">!</span><div><strong>' + escapeHtml(title) + '</strong>' + escapeHtml(body) + '</div></div>').join("") : '<div class="planning-risk is-clear"><span aria-hidden="true">✓</span><div><strong>No obvious planning warnings</strong>Based on the fields currently available in task records.</div></div>';
+  }
+
+  async function updateSprintAssignment(taskId, sprintName) {
+    if (!planningCanEdit()) {
+      window.alert("Your project role does not allow sprint planning changes.");
+      renderSprintPlanning();
+      return;
+    }
+    const task = appState.allTasks.find((item) => item.id === taskId);
+    if (!task) {
+      window.alert("This task is no longer available. Refresh and try again.");
+      return;
+    }
+    const nextSprint = String(sprintName || "").trim();
+    const patch = { sprint: nextSprint, updatedAt: serverTimestamp() };
+    const controls = [...document.querySelectorAll('[data-task-sprint="' + CSS.escape(taskId) + '"]')];
+    controls.forEach((control) => { control.disabled = true; });
+    try {
+      await updateDoc(taskReference(taskId), patch);
+      task.raw = { ...task.raw, sprint: nextSprint };
+      refreshNormalizedTasksFromCatalog();
+      applyFiltersAndRender();
+      renderSprintPlanning();
+    } catch (error) {
+      console.error("Could not update sprint assignment", error);
+      window.alert("Could not save the sprint assignment. Check your project permissions and try again.");
+      renderSprintPlanning();
+    } finally {
+      controls.forEach((control) => { control.disabled = false; });
+    }
   }
 
   function renderProfile() {
