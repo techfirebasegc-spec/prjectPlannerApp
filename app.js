@@ -1092,6 +1092,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       sprint.tasks.push(task);
       if (!sprint.startDate && task.sprintStartDate) sprint.startDate = task.sprintStartDate;
       if (!sprint.endDate && task.sprintEndDate) sprint.endDate = task.sprintEndDate;
+      // Keep the sprint's range usable even when only one task carries the dates.
+      if (sprint.startDate && sprint.endDate && sprint.startDate > sprint.endDate) {
+        const earlier = sprint.endDate;
+        sprint.endDate = sprint.startDate;
+        sprint.startDate = earlier;
+      }
     });
 
     return [...map.values()].sort((a, b) => {
@@ -1155,18 +1161,31 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function populateCalendarMonthOptions() {
+    if (!els.calendarMonth) return;
+    const now = new Date();
     const monthMap = new Map();
-    appState.sprintCatalog.forEach((sprint) => {
-      if (sprint.startDate) monthMap.set(monthKey(sprint.startDate), sprint.startDate);
-      if (sprint.endDate) monthMap.set(monthKey(sprint.endDate), sprint.endDate);
-    });
-    if (monthMap.size === 0) {
-      const now = new Date();
-      monthMap.set(monthKey(now), now);
+    const addMonth = (date) => {
+      const first = new Date(date.getFullYear(), date.getMonth(), 1);
+      monthMap.set(monthKey(first), first);
+    };
+
+    // Always allow navigation around the current month, even when no sprint has dates.
+    for (let offset = -6; offset <= 12; offset += 1) {
+      addMonth(new Date(now.getFullYear(), now.getMonth() + offset, 1));
     }
 
-    const sorted = [...monthMap.entries()].sort((a, b) => a[1].getTime() - b[1].getTime());
-    els.calendarMonth.innerHTML = "";
+    // Include every month spanned by a sprint, not just its start and end months.
+    appState.sprintCatalog.forEach((sprint) => {
+      if (!sprint.startDate || !sprint.endDate) return;
+      const start = new Date(sprint.startDate.getFullYear(), sprint.startDate.getMonth(), 1);
+      const end = new Date(sprint.endDate.getFullYear(), sprint.endDate.getMonth(), 1);
+      if (end < start) return;
+      for (let cursor = new Date(start); cursor <= end; cursor.setMonth(cursor.getMonth() + 1)) addMonth(cursor);
+    });
+
+    const selected = appState.calendarMonth || monthKey(now);
+    const sorted = [...monthMap.entries()].sort((a, b) => a[1] - b[1]);
+    els.calendarMonth.replaceChildren();
     sorted.forEach(([key, date]) => {
       const option = document.createElement("option");
       option.value = key;
@@ -1174,7 +1193,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       els.calendarMonth.appendChild(option);
     });
 
-    appState.calendarMonth = appState.calendarMonth || sorted[sorted.length - 1][0];
+    appState.calendarMonth = monthMap.has(selected) ? selected : monthKey(now);
+    els.calendarMonth.value = appState.calendarMonth;
   }
 
   function resetFilters() {
