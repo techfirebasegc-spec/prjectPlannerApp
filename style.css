@@ -4796,24 +4796,17 @@ textarea:focus-visible {
 .planning-record-code{display:inline-flex;align-items:center;width:max-content;max-width:100%;padding:4px 8px;border:1px solid #c7d8f0;border-radius:6px;background:#edf4ff;color:#244d83;font:750 .72rem/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.02em;white-space:nowrap}.planning-record-title{flex-wrap:wrap}
 
 
-/* Mobile navigation: keep the workspace full-width and slide filters in from the left. */
+/* Mobile navigation: hide sidebar controls from the main flow and show them only in a slide-in drawer. */
 .mobile-nav-toggle { display:none; }
 @media (max-width:680px) {
   .app-shell { display:block; width:100%; min-width:0; overflow-x:clip; }
-  .workspace { width:100%; min-width:0; padding-top:54px; }
-  .mobile-nav-toggle {
-    position:fixed; top:10px; left:12px; z-index:1002;
-    display:inline-flex; align-items:center; justify-content:center; gap:8px;
-    min-height:40px; padding:0 14px; border:1px solid #cbd8e7; border-radius:11px;
-    background:#fff; color:#173451; box-shadow:0 4px 16px rgba(16,35,59,.15);
-    font:700 .84rem/1 system-ui,-apple-system,"Segoe UI",sans-serif; cursor:pointer;
-  }
-  .mobile-nav-toggle:focus-visible { outline:3px solid #8bc5bd; outline-offset:2px; }
   .app-shell > .sidebar {
-    position:fixed; top:0; bottom:0; left:0; z-index:1001;
-    width:min(86vw,320px); height:100dvh; max-height:100dvh;
-    overflow-y:auto; overscroll-behavior:contain;
-    padding:64px 14px 20px; gap:12px;
+    position:fixed; inset:0 auto 0 0; z-index:1001;
+    display:flex; flex-direction:column; align-items:stretch;
+    width:min(88vw,340px); height:100vh; height:100dvh; max-height:100dvh;
+    min-height:0; box-sizing:border-box; overflow-y:auto; overflow-x:hidden;
+    padding:64px 14px 22px; gap:14px; margin:0;
+    background:#102a45; border-right:1px solid rgba(255,255,255,.12);
     transform:translateX(-105%); visibility:hidden; pointer-events:none;
     transition:transform .24s ease,visibility .24s ease;
     box-shadow:12px 0 32px rgba(9,25,44,.25);
@@ -4823,23 +4816,36 @@ textarea:focus-visible {
   }
   .app-shell.mobile-sidebar-open::before {
     content:""; position:fixed; inset:0; z-index:1000;
-    background:rgba(10,24,41,.48); backdrop-filter:blur(2px);
+    background:rgba(10,24,41,.5); backdrop-filter:blur(2px);
   }
-  .app-shell.mobile-sidebar-open { overflow:visible; }
-  .app-shell .sidebar::after { display:none; }
-  .app-shell .sidebar-toggle { position:absolute; top:12px; right:12px; }
-  .app-shell .brand-block { padding:4px 44px 14px 4px; }
-  .app-shell.sidebar-collapsed > .sidebar { flex-direction:column; min-height:0; }
-  .app-shell.sidebar-collapsed .sidebar > :not(.sidebar-toggle) { display:flex; }
-  .app-shell.sidebar-collapsed .sidebar .brand-block,
-  .app-shell.sidebar-collapsed .sidebar .filter-panel,
-  .app-shell.sidebar-collapsed .sidebar .controls-panel { display:flex; }
-  .app-shell.sidebar-collapsed .sidebar .sidebar-shortcuts { display:none; }
+  .app-shell > .sidebar .brand-block,
+  .app-shell > .sidebar .filter-panel,
+  .app-shell > .sidebar .controls-panel { display:flex; width:100%; min-width:0; box-sizing:border-box; }
+  .app-shell > .sidebar .brand-block { flex-direction:column; padding:4px 44px 14px 4px; }
+  .app-shell > .sidebar .filter-panel,
+  .app-shell > .sidebar .controls-panel { flex-direction:column; align-items:stretch; gap:12px; padding:14px; }
+  .app-shell > .sidebar .filter-panel > *,
+  .app-shell > .sidebar .controls-panel > * { max-width:100%; min-width:0; }
+  .app-shell > .sidebar .filter-panel select,
+  .app-shell > .sidebar .controls-panel select,
+  .app-shell > .sidebar .filter-panel input,
+  .app-shell > .sidebar .controls-panel input { width:100%; box-sizing:border-box; }
+  .app-shell > .sidebar .sidebar-toggle { position:absolute; top:12px; right:12px; }
+  .app-shell > .sidebar .sidebar-shortcuts { display:none !important; }
+  .app-shell .workspace { width:100%; max-width:100%; min-width:0; padding:58px 12px 24px; box-sizing:border-box; }
+  .mobile-nav-toggle {
+    position:fixed; top:10px; left:12px; z-index:1002;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    min-height:40px; padding:0 14px; border:1px solid #cbd8e7; border-radius:11px;
+    background:#fff; color:#173451; box-shadow:0 4px 16px rgba(16,35,59,.15);
+    font:700 .84rem/1 system-ui,-apple-system,"Segoe UI",sans-serif; cursor:pointer;
+  }
+  .mobile-nav-toggle:focus-visible { outline:3px solid #8bc5bd; outline-offset:2px; }
   .app-shell .topbar { min-width:0; }
   .app-shell .topbar .search-wrap { min-width:0; width:100%; }
   .app-shell .topbar input[type="search"] { min-width:0; width:100%; }
   .app-shell .view-switch { max-width:100%; }
-  body, html { max-width:100%; overflow-x:clip; }
+  html, body { max-width:100%; overflow-x:hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
   .app-shell > .sidebar { transition:none; }
