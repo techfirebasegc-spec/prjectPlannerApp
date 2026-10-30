@@ -881,6 +881,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (appState.unsubscribeTasks) appState.unsubscribeTasks();
     if (appState.unsubscribeStories) appState.unsubscribeStories();
     loadPlanningRecords();
+    loadSprints();
     appState.unsubscribeStories = onSnapshot(userStoryCollection(), (snapshot) => {
       appState.userStories = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       fetchAssignableMembers().then(() => applyFiltersAndRender()).catch((error) => { console.error("Could not resolve User Story owners", error); applyFiltersAndRender(); });
