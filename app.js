@@ -96,6 +96,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     logoutBtn: document.getElementById("logoutBtn"),
     appShell: document.querySelector(".app-shell"),
     sidebarToggleBtn: document.getElementById("sidebarToggleBtn"),
+    mobileNavToggle: document.getElementById("mobileNavToggle"),
     currentUserName: document.getElementById("currentUserName"),
     accountMenuBtn: document.getElementById("accountMenuBtn"),
     accountMenu: document.getElementById("accountMenu"),
@@ -987,6 +988,30 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.doneLimit.addEventListener("input", onWipLimitChange);
     els.logoutBtn.addEventListener("click", onLogoutClick);
     els.sidebarToggleBtn.addEventListener("click", () => setSidebarCollapsed(!els.appShell.classList.contains("sidebar-collapsed")));
+    els.mobileNavToggle?.addEventListener("click", () => {
+      const opening = !els.appShell.classList.contains("mobile-sidebar-open");
+      els.appShell.classList.toggle("mobile-sidebar-open", opening);
+      els.mobileNavToggle.setAttribute("aria-expanded", String(opening));
+      els.mobileNavToggle.setAttribute("aria-label", opening ? "Close navigation and filters" : "Open navigation and filters");
+      els.mobileNavToggle.innerHTML = opening ? "× <span>Close</span>" : "☰ <span>Menu</span>";
+    });
+    document.querySelectorAll(".sidebar a, .sidebar [data-sidebar-expand], #sidebarStoriesBtn").forEach((control) => {
+      control.addEventListener("click", () => {
+        if (window.matchMedia("(max-width: 680px)").matches) {
+          els.appShell.classList.remove("mobile-sidebar-open");
+          els.mobileNavToggle?.setAttribute("aria-expanded", "false");
+          if (els.mobileNavToggle) els.mobileNavToggle.innerHTML = "☰ <span>Menu</span>";
+        }
+      });
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && els.appShell.classList.contains("mobile-sidebar-open")) {
+        els.appShell.classList.remove("mobile-sidebar-open");
+        els.mobileNavToggle?.setAttribute("aria-expanded", "false");
+        if (els.mobileNavToggle) els.mobileNavToggle.innerHTML = "☰ <span>Menu</span>";
+      }
+    });
+
     document.querySelectorAll("[data-sidebar-expand]").forEach((button) => {
       button.addEventListener("click", () => setSidebarCollapsed(false));
     });
