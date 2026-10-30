@@ -192,12 +192,19 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     calendarMonth: document.getElementById("calendarMonth"),
     sprintLegend: document.getElementById("sprintLegend"),
     sprintCalendar: document.getElementById("sprintCalendar"),
+    reportSprintTitle: document.getElementById("reportSprintTitle"),
+    reportSprintSubtitle: document.getElementById("reportSprintSubtitle"),
+    reportCompletion: document.getElementById("reportCompletion"),
+    reportCompletionBar: document.getElementById("reportCompletionBar"),
+    reportProgressSummary: document.getElementById("reportProgressSummary"),
+    remainingPoints: document.getElementById("remainingPoints"),
+    reportStatusBreakdown: document.getElementById("reportStatusBreakdown"),
+    reportEffortCompletion: document.getElementById("reportEffortCompletion"),
+    velocityEmpty: document.getElementById("velocityEmpty"),
     committedPoints: document.getElementById("committedPoints"),
     completedPoints: document.getElementById("completedPoints"),
     spilloverTasks: document.getElementById("spilloverTasks"),
     overdueOpen: document.getElementById("overdueOpen"),
-    burndownSubtitle: document.getElementById("burndownSubtitle"),
-    burndownChart: document.getElementById("burndownChart"),
     velocityChart: document.getElementById("velocityChart"),
     piViewBtn: document.getElementById("piViewBtn"),
     featuresViewBtn: document.getElementById("featuresViewBtn"),
@@ -1986,8 +1993,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     renderSprintCalendar();
     const activeSprint = getActiveSprintMeta();
     const sprintTasks = activeSprint ? activeSprint.tasks : [];
-    updateAgileMetrics(sprintTasks);
-    renderBurndown(activeSprint, sprintTasks);
+    updateAgileMetrics(sprintTasks, activeSprint);
+    renderSprintWorkload(sprintTasks);
     renderVelocity();
   }
 
@@ -1995,122 +2002,70 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     let pool = [...appState.sprintCatalog];
     if (appState.filters.pi !== "all") pool = pool.filter((s) => s.pi === appState.filters.pi);
     if (appState.filters.sprint !== "all") pool = pool.filter((s) => s.sprint === appState.filters.sprint);
-    if (pool.length === 0) return null;
-    return pool[pool.length - 1];
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dated = pool.filter((s) => s.startDate && s.endDate);
+    const active = dated.find((s) => today >= s.startDate && today <= s.endDate);
+    return active || [...dated].sort((a,b) => (a.startDate?.getTime() || 0) - (b.startDate?.getTime() || 0)).at(-1) || pool.at(-1) || null;
   }
 
-  function updateAgileMetrics(sprintTasks) {
+  function updateAgileMetrics(sprintTasks, sprintMeta) {
     const committed = sprintTasks.reduce((sum, task) => sum + pointsOf(task), 0);
-    const completed = sprintTasks.filter((task) => task.statusKey === "done").reduce((sum, task) => sum + pointsOf(task), 0);
-    const now = new Date();
-    const spillover = sprintTasks.filter((task) => task.sprintEndDate && task.sprintEndDate < now && task.statusKey !== "done").length;
+    const completedTasks = sprintTasks.filter((task) => task.statusKey === "done");
+    const completed = completedTasks.reduce((sum, task) => sum + pointsOf(task), 0);
+    const remaining = Math.max(0, committed - completed);
     const overdue = sprintTasks.filter((task) => task.overdue && task.statusKey !== "done").length;
-
+    const doneCount = completedTasks.length;
+    const progress = sprintTasks.length ? Math.round(doneCount / sprintTasks.length * 100) : 0;
+    const fmt = (date) => date ? formatDate(date) : "Dates not set";
     els.committedPoints.textContent = String(committed);
     els.completedPoints.textContent = String(completed);
-    els.spilloverTasks.textContent = String(spillover);
+    els.remainingPoints.textContent = String(remaining);
     els.overdueOpen.textContent = String(overdue);
+    els.reportSprintTitle.textContent = sprintMeta ? `${sprintMeta.sprint} · ${sprintMeta.pi}` : "No sprint selected";
+    els.reportSprintSubtitle.textContent = sprintMeta
+      ? `${fmt(sprintMeta.startDate)} – ${fmt(sprintMeta.endDate)} · ${sprintTasks.length} tasks in scope`
+      : "Assign sprint dates to tasks to generate sprint reporting.";
+    els.reportCompletion.textContent = `${progress}%`;
+    els.reportCompletionBar.style.width = `${progress}%`;
+    els.reportProgressSummary.textContent = `${doneCount} of ${sprintTasks.length} tasks complete`;
+    els.reportEffortCompletion.textContent = `${completed} / ${committed} points`;
   }
 
-  function renderBurndown(sprintMeta, sprintTasks) {
-    if (!els.burndownChart || typeof window.Chart === "undefined") return;
-    if (appState.charts.burndown) {
-      appState.charts.burndown.destroy();
-      appState.charts.burndown = null;
-    }
-
-    const chartCard = els.burndownChart.closest(".chart-card");
-    chartCard?.classList.remove("is-empty");
-    chartCard?.querySelector(".chart-empty-state")?.remove();
-
-    if (!sprintMeta || !sprintMeta.startDate || !sprintMeta.endDate) {
-      els.burndownSubtitle.textContent = "Sprint dates are needed to plot a burndown";
-      if (chartCard) {
-        chartCard.classList.add("is-empty");
-        const emptyState = document.createElement("div");
-        emptyState.className = "chart-empty-state";
-        emptyState.innerHTML = '<span class="chart-empty-icon" aria-hidden="true">↗</span><strong>No burndown data yet</strong><span>Add a sprint start and end date to tasks in this sprint. The chart will appear here.</span>';
-        chartCard.appendChild(emptyState);
-      }
-      return;
-    }
-
-    const dates = getDateRange(sprintMeta.startDate, sprintMeta.endDate);
-    const labels = dates.map((d) => `${d.getDate()}/${d.getMonth() + 1}`);
-    const total = sprintTasks.reduce((sum, task) => sum + pointsOf(task), 0);
-    const completed = sprintTasks.filter((task) => task.statusKey === "done").reduce((sum, task) => sum + pointsOf(task), 0);
-    const ideal = labels.map((_, i) => (labels.length === 1 ? 0 : Number((total - (total * i) / (labels.length - 1)).toFixed(2))));
-    const elapsed = getElapsedDaysInSprint(sprintMeta.startDate, sprintMeta.endDate);
-    const remainingNow = Math.max(total - completed, 0);
-
-    // Historical daily snapshots are not stored, so do not fabricate an "actual" burn curve.
-    // Display the current remaining-work snapshot as a flat reference across the sprint.
-    const remainingSnapshot = labels.map(() => remainingNow);
-
-    els.burndownSubtitle.textContent = `${sprintMeta.sprint} (${formatDate(sprintMeta.startDate)} - ${formatDate(sprintMeta.endDate)})`;
-
-    appState.charts.burndown = new window.Chart(els.burndownChart, {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          { label: "Ideal Remaining", data: ideal, borderColor: "#8aa2bf", borderDash: [6, 4], tension: 0.2 },
-          { label: "Current Remaining (snapshot)", data: remainingSnapshot, borderColor: "#0f5bd8", backgroundColor: "rgba(15, 91, 216, 0.08)", fill: false, tension: 0 }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: { y: { beginAtZero: true, title: { display: true, text: "Story Points" } } }
-      }
-    });
-  }
-
-  function getDateRange(start, end) {
-    const result = [];
-    const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-    while (cursor <= last) {
-      result.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return result;
-  }
-
-  function getElapsedDaysInSprint(start, end) {
-    const today = new Date();
-    const startOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    const endOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    if (todayOnly <= startOnly) return 1;
-    if (todayOnly >= endOnly) return getDateRange(startOnly, endOnly).length;
-    return getDateRange(startOnly, todayOnly).length;
+  function renderSprintWorkload(tasks) {
+    const groups = [
+      { key: "todo", label: "To do", color: "todo" },
+      { key: "inprogress", label: "In progress", color: "progress" },
+      { key: "done", label: "Done", color: "done" }
+    ];
+    const total = tasks.length;
+    els.reportStatusBreakdown.innerHTML = groups.map((group) => {
+      const count = tasks.filter((task) => task.statusKey === group.key).length;
+      const percentage = total ? Math.round(count / total * 100) : 0;
+      return `<div class="report-status-row"><div class="report-status-copy"><span><i class="report-dot ${group.color}"></i>${group.label}</span><strong>${count} <small>(${percentage}%)</small></strong></div><div class="report-status-track"><span class="${group.color}" style="width:${percentage}%"></span></div></div>`;
+    }).join("");
+    if (!total) els.reportStatusBreakdown.innerHTML = '<p class="report-empty-hint">No tasks are assigned to the selected sprint.</p>';
   }
 
   function renderVelocity() {
     if (!els.velocityChart || typeof window.Chart === "undefined") return;
-    if (appState.charts.velocity) appState.charts.velocity.destroy();
-
-    let eligibleSprints = [...appState.sprintCatalog];
-    if (appState.filters.pi !== "all") eligibleSprints = eligibleSprints.filter((s) => s.pi === appState.filters.pi);
-    const sprints = eligibleSprints.slice(-8);
-    const labels = sprints.map((s) => `${s.pi} · ${s.sprint}`);
-    const committed = sprints.map((s) => s.tasks.reduce((sum, t) => sum + pointsOf(t), 0));
-    const completed = sprints.map((s) => s.tasks.filter((t) => t.statusKey === "done").reduce((sum, t) => sum + pointsOf(t), 0));
-
+    if (appState.charts.velocity) { appState.charts.velocity.destroy(); appState.charts.velocity = null; }
+    let sprints = [...appState.sprintCatalog].filter((s) => s.startDate && s.endDate);
+    if (appState.filters.pi !== "all") sprints = sprints.filter((s) => s.pi === appState.filters.pi);
+    sprints = sprints.filter((s) => s.tasks.length > 0).slice(-8);
+    els.velocityEmpty.hidden = sprints.length > 0;
+    els.velocityChart.closest(".report-chart-wrap").classList.toggle("is-empty", sprints.length === 0);
+    const labels = sprints.map((s) => `${s.sprint}`);
+    const committed = sprints.map((s) => s.tasks.reduce((sum,t) => sum + pointsOf(t),0));
+    const completed = sprints.map((s) => s.tasks.filter((t) => t.statusKey === "done").reduce((sum,t) => sum + pointsOf(t),0));
     appState.charts.velocity = new window.Chart(els.velocityChart, {
       type: "bar",
-      data: {
-        labels,
-        datasets: [
-          { label: "Committed", data: committed, backgroundColor: "#b8d4fb" },
-          { label: "Completed", data: completed, backgroundColor: "#2c78df" }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: { y: { beginAtZero: true, title: { display: true, text: "Story Points" } } }
+      data: { labels, datasets: [
+        { label: "Total scope (points)", data: committed, backgroundColor: "#c9dafa", borderRadius: 5 },
+        { label: "Completed (points)", data: completed, backgroundColor: "#2365c8", borderRadius: 5 }
+      ]},
+      options: { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:"bottom",labels:{usePointStyle:true,boxWidth:8}}, tooltip:{callbacks:{afterBody:(items)=>{const sprint=sprints[items[0]?.dataIndex];return sprint?[ `PI: ${sprint.pi}`,`Dates: ${sprint.startDate.toLocaleDateString()} – ${sprint.endDate.toLocaleDateString()}`,`Tasks: ${sprint.tasks.length}`]:[];}}}},
+        scales:{y:{beginAtZero:true,title:{display:true,text:"Story points"},ticks:{precision:0}},x:{grid:{display:false}}}
       }
     });
   }
