@@ -1584,7 +1584,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const detailsOpen = appState.expandedStoryTaskIds.has(story.id);
       return `<article class="story-card story-row${story.archived ? " is-archived" : ""}${detailsOpen ? " is-expanded" : ""}">
         <div class="story-row-main">
-          <div class="story-row-title"><span class="story-card-label">${story.archived ? "ARCHIVED" : "USER STORY"}</span><h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p></div>
+          <div class="story-row-title"><span class="story-card-label">${story.archived ? "ARCHIVED" : "USER STORY"}</span><h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p><div class="entity-id-line"><span>STORY ID</span><code>${escapeHtml(story.id || "Legacy / not assigned")}</code></div></div>
           <div class="story-row-status"><span class="story-lifecycle-pill">${escapeHtml(story.lifecycle)}</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
           <div class="story-row-progress"><div class="story-progress-copy"><span>Task progress</span><strong>${completion}%</strong></div><div class="story-progress-track"><span style="width:${completion}%"></span></div><small>${counts.done} of ${story.tasks.length} done</small></div>
           <div class="story-row-points"><small>Points</small><strong>${storyPoints}</strong></div>
@@ -1596,7 +1596,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
           <div class="story-detail-layout">
             <div class="story-detail-column">
               <section class="story-detail-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">◎</span><div><h5>Overview</h5><p>Lifecycle and delivery summary</p></div></div>
-                <div class="story-detail-stats"><div><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></div><div><small>Owner</small><strong>${escapeHtml(story.owner || appState.memberDirectory.find((member) => member.uid === story.ownerUid)?.displayName || (story.ownerUid ? "Assigned member" : "Unassigned"))}</strong></div><div><small>Total tasks</small><strong>${story.tasks.length}</strong></div><div><small>Completed</small><strong>${counts.done} / ${story.tasks.length}</strong></div><div><small>Story points</small><strong>${storyPoints}</strong></div></div>
+                <div class="story-detail-stats"><div><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></div><div><small>Owner</small><strong>${escapeHtml(story.owner || appState.memberDirectory.find((member) => member.uid === story.ownerUid)?.displayName || (story.ownerUid ? "Assigned member" : "Unassigned"))}</strong></div><div><small>Owner User ID</small><code>${escapeHtml(story.ownerUid || "—")}</code></div><div><small>Feature ID</small><code>${escapeHtml(story.featureId || "—")}</code></div><div><small>PI ID</small><code>${escapeHtml(story.piId || "—")}</code></div><div><small>Total tasks</small><strong>${story.tasks.length}</strong></div><div><small>Completed</small><strong>${counts.done} / ${story.tasks.length}</strong></div><div><small>Story points</small><strong>${storyPoints}</strong></div></div>
                 <div class="story-detail-status-line"><span class="story-status-dot todo"></span>To do <strong>${counts.todo}</strong><span class="story-status-dot progress"></span>In progress <strong>${counts.inprogress}</strong><span class="story-status-dot done"></span>Done <strong>${counts.done}</strong></div>
               </section>
               <section class="story-detail-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">✓</span><div><h5>Acceptance criteria</h5><p>Conditions for considering this story complete</p></div><span class="story-detail-count">${story.acceptanceCriteria.length}</span></div>
@@ -1604,7 +1604,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
               </section>
             </div>
             <section class="story-detail-panel story-linked-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">☷</span><div><h5>Linked tasks</h5><p>Tasks contributing to this story's progress</p></div><span class="story-detail-count">${story.tasks.length}</span><button type="button" class="story-add-task story-detail-add" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}" ${story.archived ? "disabled" : ""}>+ Add task</button></div>
-              ${story.tasks.length ? `<div class="story-linked-task-list">${story.tasks.map((task,index) => `<button type="button" class="story-linked-task" data-story-task="${escapeHtml(task.id)}"><span class="story-task-index">${index+1}</span><span class="story-linked-task-name">${escapeHtml(task.task)}<small>${Number(task.storyPoints)||0} points</small></span><span class="story-linked-status status-${escapeHtml(String(task.statusKey||"todo").toLowerCase())}">${escapeHtml(task.statusLabel)}</span><span class="story-linked-assignee" title="Task owner"><span class="story-assignee-avatar">${escapeHtml((task.assignee && task.assignee !== "Unassigned" ? task.assignee : "U").split(/\\s+/).map(part => part[0]).join("").slice(0,2).toUpperCase())}</span><span>${escapeHtml(task.assignee || "Unassigned")}</span></span><span class="story-linked-open" aria-hidden="true">›</span></button>`).join("")}</div>` : '<div class="story-detail-empty-box"><strong>No linked tasks</strong><p>Break this story into tasks to start tracking delivery.</p></div>'}
+              ${story.tasks.length ? `<div class="story-linked-task-list">${story.tasks.map((task,index) => `<button type="button" class="story-linked-task" data-story-task="${escapeHtml(task.id)}"><span class="story-task-index">${index+1}</span><span class="story-linked-task-name">${escapeHtml(task.task)}<small>TASK ID · ${escapeHtml(task.id)} · ${Number(task.storyPoints)||0} points</small></span><span class="story-linked-status status-${escapeHtml(String(task.statusKey||"todo").toLowerCase())}">${escapeHtml(task.statusLabel)}</span><span class="story-linked-assignee" title="Task owner"><span class="story-assignee-avatar">${escapeHtml((task.assignee && task.assignee !== "Unassigned" ? task.assignee : "U").split(/\\s+/).map(part => part[0]).join("").slice(0,2).toUpperCase())}</span><span>${escapeHtml(task.assignee || "Unassigned")}</span></span><span class="story-linked-open" aria-hidden="true">›</span></button>`).join("")}</div>` : '<div class="story-detail-empty-box"><strong>No linked tasks</strong><p>Break this story into tasks to start tracking delivery.</p></div>'}
             </section>
           </div>
         </div></article>`;
@@ -1834,6 +1834,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const taskName = document.createElement("strong");
       taskName.textContent = task.task;
       taskText.appendChild(taskName);
+      const taskId = document.createElement("code");
+      taskId.className = "task-identity-inline";
+      taskId.textContent = "TASK ID · " + task.id;
+      taskId.title = task.id;
+      taskText.appendChild(taskId);
       if (task.story && task.story !== "-") {
         const story = document.createElement("span");
         story.textContent = task.story;
@@ -2040,6 +2045,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const overdueBadge = task.overdue ? '<span class="overdue-badge">Overdue</span>' : "";
 
     card.innerHTML = `
+      <div class="task-card-identity"><span>TASK ID</span><code>${escapeHtml(task.id)}</code></div>
       <h4 class="card-title">${escapeHtml(task.task)}</h4>
       <p class="card-story">${escapeHtml(task.story)}</p>
       <div class="card-grid">
@@ -2605,6 +2611,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.profileEmail.textContent = appState.user.email || "No email available";
     els.profileUid.textContent = appState.user.uid;
     els.profileProject.textContent = project?.name || "Default Project";
+    const projectIdCard = document.getElementById("profileProjectId");
+    if (projectIdCard) projectIdCard.textContent = appState.activeProjectId || "default";
     els.profileRole.textContent = project?.role ? project.role[0].toUpperCase() + project.role.slice(1) : "Shared member";
     els.profileFirstNameInput.value = parts[0] || "";
     els.profileLastNameInput.value = parts.slice(1).join(" ");
@@ -2693,7 +2701,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.modalTitle.textContent = task.task;
     els.modalBody.innerHTML = `
       <section class="task-detail-grid" aria-label="Task information">
+        ${modalRow("Task ID", task.id)}
+        ${modalRow("Project ID", appState.activeProjectId)}
+        ${modalRow("Created by User ID", task.raw.createdBy || "—")}
+        ${modalRow("Assignee User ID", task.raw.assigneeUid || task.raw.assigneeId || task.raw.ownerUid || "—")}
         ${modalRow("PI", task.pi)}
+        ${modalRow("PI ID", task.raw.piId || "—")}
         ${modalRow("Sprint", task.sprint)}
         ${modalRow("Feature", `${task.feature} (${task.featureId})`)}
         ${modalRow("Story", `${task.storyId} - ${task.story}`)}
