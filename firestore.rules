@@ -141,6 +141,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /plannerSprints/{sprintId} {
+      allow get, list: if isVerifiedUser();
+      allow create: if isVerifiedUser()
+        && request.resource.data.keys().hasOnly(["name", "goal", "startDate", "endDate", "capacity", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.goal is string && request.resource.data.goal.size() <= 1200
+        && request.resource.data.startDate is string && request.resource.data.endDate is string && request.resource.data.endDate >= request.resource.data.startDate
+        && request.resource.data.capacity is number && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+        && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"] && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser() && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "goal", "startDate", "endDate", "capacity", "status", "archived", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.goal is string && request.resource.data.goal.size() <= 1200
+        && request.resource.data.startDate is string && request.resource.data.endDate is string && request.resource.data.endDate >= request.resource.data.startDate
+        && request.resource.data.capacity is number && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+        && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"] && request.resource.data.archived is bool;
+      allow delete: if false;
+    }
+
     // Standalone User Stories in the shared Default Project.
     match /plannerUserStories/{storyId} {
       allow get, list: if isVerifiedUser();
