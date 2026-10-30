@@ -20,6 +20,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     memberDirectory: [],
     filteredTasks: [],
     sprintCatalog: [],
+    sprints: [],
+    unsubscribeSprints: null,
+    editingSprintId: null,
     filters: {
       pi: "all",
       sprint: "all",
@@ -147,6 +150,20 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     sprintPlanningViewBtn: document.getElementById("sprintPlanningViewBtn"),
     sprintPlanningView: document.getElementById("sprintPlanningView"),
     planningSprintSelect: document.getElementById("planningSprintSelect"),
+    sprintForm: document.getElementById("sprintForm"),
+    sprintRecordId: document.getElementById("sprintRecordId"),
+    sprintNameInput: document.getElementById("sprintNameInput"),
+    sprintGoalInput: document.getElementById("sprintGoalInput"),
+    sprintStartInput: document.getElementById("sprintStartInput"),
+    sprintEndInput: document.getElementById("sprintEndInput"),
+    sprintCapacityInput: document.getElementById("sprintCapacityInput"),
+    sprintStatusInput: document.getElementById("sprintStatusInput"),
+    sprintFormTitle: document.getElementById("sprintFormTitle"),
+    sprintFormError: document.getElementById("sprintFormError"),
+    sprintSaveBtn: document.getElementById("sprintSaveBtn"),
+    sprintCancelBtn: document.getElementById("sprintCancelBtn"),
+    sprintRecords: document.getElementById("sprintRecords"),
+    sprintCount: document.getElementById("sprintCount"),
     planningSprintStats: document.getElementById("planningSprintStats"),
     planningBacklogCount: document.getElementById("planningBacklogCount"),
     planningSprintCount: document.getElementById("planningSprintCount"),
@@ -265,6 +282,78 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   function planningReference(kind, id) {
     return doc(planningCollection(kind), id);
+  }
+
+
+  function sprintCollection() {
+    return appState.activeProjectId === "default" ? collection(db, "plannerSprints") : collection(db, "plannerProjects", appState.activeProjectId, "sprints");
+  }
+  function sprintReference(id) { return doc(sprintCollection(), id); }
+  function loadSprints() {
+    if (appState.unsubscribeSprints) appState.unsubscribeSprints();
+    appState.sprints = [];
+    appState.unsubscribeSprints = onSnapshot(sprintCollection(), (snapshot) => {
+      appState.sprints = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
+        .sort((a,b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+      renderSprintRecords(); renderSprintPlanning();
+    }, (error) => {
+      console.error("Could not load sprints", error); appState.sprints = [];
+      renderSprintRecords("Unable to load sprint metadata. Check Firestore rules and project membership."); renderSprintPlanning();
+    });
+  }
+  function renderSprintRecords(errorMessage = "") {
+    if (!els.sprintRecords) return;
+    if (els.sprintCount) els.sprintCount.textContent = appState.sprints.length + " sprint" + (appState.sprints.length === 1 ? "" : "s");
+    if (errorMessage || !appState.sprints.length) {
+      els.sprintRecords.innerHTML = '<div class="planning-empty"><strong>' + (errorMessage ? "Sprints unavailable" : "No sprints configured") + '</strong>' + escapeHtml(errorMessage || "Create a sprint to set its goal, dates, and capacity.") + '</div>'; return;
+    }
+    els.sprintRecords.innerHTML = appState.sprints.map((sprint) => {
+      const tasks = appState.allTasks.filter((task) => String(task.raw?.sprint || task.raw?.Sprint || "").trim() === sprint.name && !task.archived);
+      const points = tasks.reduce((sum, task) => sum + (Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0), 0);
+      return '<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><h4>' + escapeHtml(sprint.name) + '</h4><span class="planning-status ' + escapeHtml(statusClass(sprint.status)) + '">' + escapeHtml(String(sprint.status || "PLANNED").replaceAll("_", " ")) + '</span></div><p class="planning-record-description">' + escapeHtml(sprint.goal || "No sprint goal added.") + '</p><div class="planning-record-meta"><span>Dates: <strong>' + escapeHtml(sprint.startDate || "—") + ' → ' + escapeHtml(sprint.endDate || "—") + '</strong></span><span>Capacity: <strong>' + escapeHtml(String(sprint.capacity || 0)) + ' points</strong></span><span><strong>' + tasks.length + '</strong> tasks</span><span><strong>' + points + '</strong> points committed</span></div></div><div class="planning-record-actions"><button type="button" data-edit-sprint="' + escapeHtml(sprint.id) + '">Edit</button><button type="button" data-archive-sprint="' + escapeHtml(sprint.id) + '">Archive</button></div></article>';
+    }).join("");
+    els.sprintRecords.querySelectorAll("[data-edit-sprint]").forEach((b) => b.addEventListener("click", () => editSprint(b.dataset.editSprint)));
+    els.sprintRecords.querySelectorAll("[data-archive-sprint]").forEach((b) => b.addEventListener("click", () => archiveSprint(b.dataset.archiveSprint)));
+  }
+  function resetSprintForm() {
+    appState.editingSprintId = null; if (!els.sprintForm) return; els.sprintForm.reset(); els.sprintRecordId.value = "";
+    els.sprintStatusInput.value = "PLANNED"; els.sprintFormTitle.textContent = "Create a sprint"; els.sprintSaveBtn.textContent = "Create sprint"; els.sprintFormError.textContent = "";
+  }
+  function editSprint(id) {
+    if (!planningCanEdit()) return; const s = appState.sprints.find((item) => item.id === id); if (!s) return;
+    appState.editingSprintId = id; els.sprintRecordId.value = id; els.sprintNameInput.value = s.name || ""; els.sprintGoalInput.value = s.goal || "";
+    els.sprintStartInput.value = s.startDate || ""; els.sprintEndInput.value = s.endDate || ""; els.sprintCapacityInput.value = s.capacity ?? 0; els.sprintStatusInput.value = s.status || "PLANNED";
+    els.sprintFormTitle.textContent = "Edit sprint"; els.sprintSaveBtn.textContent = "Save changes"; els.sprintFormError.textContent = "";
+    els.sprintForm.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  async function saveSprint(event) {
+    event.preventDefault(); if (!planningCanEdit()) { els.sprintFormError.textContent = "Your project role does not allow sprint changes."; return; }
+    const name = String(els.sprintNameInput.value || "").trim(), goal = String(els.sprintGoalInput.value || "").trim();
+    const startDate = els.sprintStartInput.value, endDate = els.sprintEndInput.value, capacity = Number(els.sprintCapacityInput.value), status = els.sprintStatusInput.value;
+    if (!name || name.length > 100) { els.sprintFormError.textContent = "Sprint name must be between 1 and 100 characters."; return; }
+    if (!startDate || !endDate || endDate < startDate) { els.sprintFormError.textContent = "Choose valid dates; the end date must not precede the start date."; return; }
+    if (!Number.isFinite(capacity) || capacity < 0 || capacity > 10000) { els.sprintFormError.textContent = "Capacity must be between 0 and 10,000 points."; return; }
+    if (appState.sprints.some((s) => s.id !== appState.editingSprintId && s.name.toLocaleLowerCase() === name.toLocaleLowerCase())) { els.sprintFormError.textContent = "A sprint with that name already exists."; return; }
+    const existing = appState.sprints.find((s) => s.id === appState.editingSprintId);
+    if (existing && existing.name !== name && appState.allTasks.some((task) => String(task.raw?.sprint || task.raw?.Sprint || "").trim() === existing.name && !task.archived)) {
+      els.sprintFormError.textContent = "This sprint has assigned tasks. Reassign those tasks before renaming it."; return;
+    }
+    const data = {name,goal,startDate,endDate,capacity,status,archived:false,updatedAt:serverTimestamp()};
+    els.sprintSaveBtn.disabled = true; els.sprintFormError.textContent = "";
+    try {
+      if (existing) await updateDoc(sprintReference(existing.id), data);
+      else await addDoc(sprintCollection(), {...data,createdBy:appState.user.uid,createdAt:serverTimestamp()});
+      resetSprintForm();
+    } catch (error) { console.error("Could not save sprint",error); els.sprintFormError.textContent = "Could not save this sprint. Check your permissions and try again."; }
+    finally { els.sprintSaveBtn.disabled = !planningCanEdit(); }
+  }
+  async function archiveSprint(id) {
+    if (!planningCanEdit()) return; const s = appState.sprints.find((item) => item.id === id); if (!s) return;
+    const assigned = appState.allTasks.filter((task) => String(task.raw?.sprint || task.raw?.Sprint || "").trim() === s.name && !task.archived);
+    const msg = assigned.length ? s.name + " has " + assigned.length + " assigned task(s). Archiving hides it from the active catalogue but preserves task assignments. Continue?" : "Archive sprint " + s.name + "?";
+    if (!window.confirm(msg)) return;
+    try { await updateDoc(sprintReference(id), {archived:true,updatedAt:serverTimestamp()}); if (appState.editingSprintId === id) resetSprintForm(); }
+    catch (error) { console.error("Could not archive sprint",error); window.alert("Could not archive this sprint. Check your permissions and try again."); }
   }
 
   function planningCanEdit() {
@@ -652,6 +741,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.piViewBtn?.addEventListener("click", () => setActiveView("pis"));
     els.featuresViewBtn?.addEventListener("click", () => setActiveView("features"));
     els.piForm?.addEventListener("submit", saveProgramIncrement);
+    els.sprintForm?.addEventListener("submit", saveSprint);
+    els.sprintCancelBtn?.addEventListener("click", resetSprintForm);
     els.featureForm?.addEventListener("submit", saveFeature);
     els.piCancelBtn?.addEventListener("click", resetPIForm);
     els.featureCancelBtn?.addEventListener("click", resetFeatureForm);
@@ -961,6 +1052,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     persistPreferences();
     updateMembersControl();
     loadPlanningRecords();
+    loadSprints();
     loadData();
   }
 
@@ -2263,9 +2355,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   function renderSprintPlanning() {
     if (!els.planningSprintSelect || !els.planningSprintStats) return;
     const previous = els.planningSprintSelect.value || "all";
-    const sprintNames = [...new Set(appState.allTasks
-      .map((task) => String(task.raw?.sprint ?? task.raw?.Sprint ?? "").trim())
-      .filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const sprintNames = [...new Set([...appState.sprints.map((s) => String(s.name || "").trim()), ...appState.allTasks.map((task) => String(task.raw?.sprint ?? task.raw?.Sprint ?? "").trim())].filter(Boolean))].sort((a, b) => a.localeCompare(b));
     els.planningSprintSelect.replaceChildren(new Option("All sprint work", "all"));
     sprintNames.forEach((name) => els.planningSprintSelect.add(new Option(name, name)));
     els.planningSprintSelect.value = sprintNames.includes(previous) || previous === "all" ? previous : "all";
@@ -2277,14 +2367,17 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const backlog = projectTasks.filter((task) => !sprintOf(task) || (selected !== "all" && sprintOf(task) !== selected));
     const done = sprintTasks.filter((task) => task.statusKey === "done").length;
     const points = (list) => list.reduce((sum, task) => sum + (Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0), 0);
-    const capacity = Number(sprintTasks.find((task) => Number(task.raw?.sprintCapacity ?? task.raw?.capacity ?? task.raw?.Capacity) > 0)?.raw?.sprintCapacity
-      ?? sprintTasks.find((task) => Number(task.raw?.sprintCapacity ?? task.raw?.capacity ?? task.raw?.Capacity) > 0)?.raw?.capacity
-      ?? sprintTasks.find((task) => Number(task.raw?.Capacity) > 0)?.raw?.Capacity ?? 0);
+    const sprintMetadata = appState.sprints.find((s) => s.name === selected);
+    const capacity = selected !== "all" && sprintMetadata ? (Number(sprintMetadata.capacity) || 0)
+      : Number(sprintTasks.find((task) => Number(task.raw?.sprintCapacity ?? task.raw?.capacity ?? task.raw?.Capacity) > 0)?.raw?.sprintCapacity
+        ?? sprintTasks.find((task) => Number(task.raw?.sprintCapacity ?? task.raw?.capacity ?? task.raw?.Capacity) > 0)?.raw?.capacity
+        ?? sprintTasks.find((task) => Number(task.raw?.Capacity) > 0)?.raw?.Capacity ?? 0);
     els.planningSprintStats.innerHTML = [
       ["Committed tasks", sprintTasks.length, selected === "all" ? "Across named sprints" : selected],
       ["Story points", points(sprintTasks), "Based on available task estimates"],
       ["Completed", done, sprintTasks.length ? Math.round(done / sprintTasks.length * 100) + "% of committed tasks" : "No sprint tasks yet"],
-      ["Capacity", capacity || "Not set", capacity ? (points(sprintTasks) > capacity ? "Over capacity by " + (points(sprintTasks) - capacity) + " points" : Math.max(0, capacity - points(sprintTasks)) + " points remaining") : "Capacity data is not configured"]
+      ["Capacity", capacity || "Not set", capacity ? (points(sprintTasks) > capacity ? "Over capacity by " + (points(sprintTasks) - capacity) + " points" : Math.max(0, capacity - points(sprintTasks)) + " points remaining") : "Capacity data is not configured"],
+      ["Sprint dates", sprintMetadata ? (sprintMetadata.startDate + " → " + sprintMetadata.endDate) : "Not set", sprintMetadata ? (String(sprintMetadata.status || "PLANNED").replaceAll("_", " ") + (sprintMetadata.goal ? " · " + sprintMetadata.goal : "")) : "Create sprint metadata below"]
     ].map(([label, value, note]) => '<article class="planning-metric"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value)) + '</strong><small>' + escapeHtml(note) + '</small></article>').join("");
 
     const canEdit = planningCanEdit();
