@@ -2145,6 +2145,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     updateAgileMetrics(sprintTasks, activeSprint);
     renderSprintWorkload(sprintTasks);
     renderVelocity();
+    renderSprintAnalytics();
   }
 
   function getActiveSprintMeta() {
@@ -2217,6 +2218,60 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         scales:{y:{beginAtZero:true,title:{display:true,text:"Story points"},ticks:{precision:0}},x:{grid:{display:false}}}
       }
     });
+  }
+
+  function renderSprintAnalytics() {
+    const root = document.getElementById("sprintAnalytics");
+    if (!root) return;
+    const sprints = [...appState.sprints].filter((s) => s.startDate && s.endDate)
+      .sort((a, b) => String(a.endDate).localeCompare(String(b.endDate)));
+    sprints.forEach((sprint) => loadSprintSnapshots(sprint.id));
+    const rows = sprints.map((sprint) => {
+      const history = appState.sprintSnapshots[sprint.id] || [];
+      const finalSnapshot = history.filter((item) => String(item.date || "") <= String(sprint.endDate))
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0] || null;
+      const completedStatus = /^(completed|complete|closed|done)$/i.test(String(sprint.status || "").replaceAll("_", " ").trim());
+      const tasks = appState.allTasks.filter((task) => !task.archived &&
+        String(task.raw?.sprint || task.raw?.Sprint || "").trim() === sprint.name);
+      const currentPoints = tasks.reduce((sum, task) => sum + pointsOf(task), 0);
+      const currentCompleted = tasks.filter((task) => task.statusKey === "done")
+        .reduce((sum, task) => sum + pointsOf(task), 0);
+      return { sprint, history, finalSnapshot, completedStatus, tasks, currentPoints, currentCompleted };
+    });
+    const completed = rows.filter((row) => row.completedStatus);
+    const measurable = completed.filter((row) => row.finalSnapshot && Number.isFinite(Number(row.finalSnapshot.totalPoints)) && Number.isFinite(Number(row.finalSnapshot.completedPoints)));
+    const average = measurable.length ? measurable.reduce((sum, row) => sum + Number(row.finalSnapshot.completedPoints), 0) / measurable.length : null;
+    const averageRate = measurable.length ? measurable.reduce((sum, row) => {
+      const total = Number(row.finalSnapshot.totalPoints) || 0;
+      return sum + (total > 0 ? Number(row.finalSnapshot.completedPoints) / total * 100 : 0);
+    }, 0) / measurable.length : null;
+    const trend = rows.filter((row) => row.finalSnapshot).slice(-6);
+    const metric = (label, value, note) => '<article class="sprint-analytics-kpi"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong><small>' + escapeHtml(note) + '</small></article>';
+    const fmtPoints = (value) => Number(value).toLocaleString(undefined, {maximumFractionDigits: 1});
+    const kpis = [
+      metric("Average velocity", average === null ? "—" : fmtPoints(average) + " pts", measurable.length ? "Completed points per completed sprint · " + measurable.length + " measured" : "Needs completed sprints with a saved snapshot"),
+      metric("Average completion", averageRate === null ? "—" : Math.round(averageRate) + "%", measurable.length ? "Mean points completed ÷ points committed" : "No measurable completed sprint history"),
+      metric("Completed sprints", String(completed.length), measurable.length + " with final snapshot data"),
+      metric("Latest measured delivery", trend.length ? fmtPoints(Number(trend[trend.length - 1].finalSnapshot.completedPoints) || 0) + " pts" : "—", trend.length ? trend[trend.length - 1].sprint.name : "Daily snapshots build history from now on")
+    ].join("");
+    const maxDone = Math.max(1, ...trend.map((item) => Number(item.finalSnapshot.completedPoints) || 0));
+    const chart = trend.length ? '<div class="sprint-analytics-bars" role="img" aria-label="Completed points by sprint">' + trend.map((row) => {
+      const snapshot = row.finalSnapshot;
+      const total = Math.max(0, Number(snapshot.totalPoints) || 0);
+      const done = Math.max(0, Number(snapshot.completedPoints) || 0);
+      const height = Math.max(3, Math.round(done / maxDone * 100));
+      const rate = total > 0 ? Math.round(done / total * 100) : 0;
+      return '<div class="sprint-analytics-bar-item"><div class="sprint-analytics-bar-value">' + fmtPoints(done) + '</div><div class="sprint-analytics-bar-track"><span style="height:' + height + '%"></span></div><strong>' + escapeHtml(row.sprint.name) + '</strong><small>' + rate + '% of scope</small></div>';
+    }).join("") + '</div>' : '<div class="sprint-analytics-empty">No daily sprint snapshots are available yet. Keep the planner open during sprint activity; it records one snapshot per sprint per local calendar day.</div>';
+    const tableRows = rows.slice(-8).reverse().map((row) => {
+      const snap = row.finalSnapshot;
+      const total = snap ? Number(snap.totalPoints) || 0 : null;
+      const done = snap ? Number(snap.completedPoints) || 0 : null;
+      const rate = total > 0 ? Math.round(done / total * 100) + "%" : total === 0 ? "0%" : "—";
+      const label = row.completedStatus ? (snap ? "Measured" : "No final snapshot") : (snap ? "Snapshot available" : "In progress");
+      return '<tr><td><strong>' + escapeHtml(row.sprint.name) + '</strong><small>' + escapeHtml(row.sprint.startDate + " – " + row.sprint.endDate) + '</small></td><td>' + (total === null ? "—" : fmtPoints(total)) + '</td><td>' + (done === null ? "—" : fmtPoints(done)) + '</td><td>' + rate + '</td><td><span class="sprint-analytics-status ' + (snap ? "is-measured" : "") + '">' + escapeHtml(label) + '</span></td></tr>';
+    }).join("");
+    root.innerHTML = '<div class="sprint-analytics-kpis">' + kpis + '</div><section class="sprint-analytics-chart-panel"><header><div><h3>Delivery trend</h3><p>Completed points at the latest recorded snapshot on or before each sprint end date</p></div><span class="sprint-analytics-chart-unit">STORY POINTS</span></header>' + chart + '</section><section class="sprint-analytics-table-panel"><header><div><h3>Sprint outcomes</h3><p>Up to eight most recent dated sprints · missing history stays unavailable</p></div></header><div class="sprint-analytics-table-scroll"><table><thead><tr><th>Sprint</th><th>Committed</th><th>Completed</th><th>Completion</th><th>Data quality</th></tr></thead><tbody>' + (tableRows || '<tr><td colspan="5">Add sprint metadata with start and end dates to begin tracking outcomes.</td></tr>') + '</tbody></table></div></section><p class="sprint-analytics-footnote">Velocity uses saved daily snapshots, not current task status retroactively. Average velocity includes only sprints marked Completed/Closed/Done that have a snapshot on or before the sprint end date. Existing history is not backfilled.</p>';
   }
 
   function renderSprintLegend() {
@@ -2415,6 +2470,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       appState.sprintSnapshots[sprintId] = snapshot.docs.map((item) => ({id:item.id,...item.data()}))
         .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
       renderSprintPlanning();
+      renderSprintAnalytics();
     }).catch((error) => {
       delete appState.sprintSnapshotLoads[sprintId];
       console.error("Could not load sprint history", error);
