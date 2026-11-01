@@ -77,7 +77,7 @@ for (const userDoc of userDocs.docs) {
 
 console.log(`Found ${pointers.length} plannerUserProjects access pointer(s).`);
 console.log("Deleting nested project data...");
-const deletedNestedDocuments = await db.recursiveDelete(projectRef);
+await db.recursiveDelete(projectRef);
 
 let deletedPointers = 0;
 for (const pointerRef of pointers) {
