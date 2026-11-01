@@ -3162,7 +3162,18 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   async function fetchAssignableMembers() {
     let members = [];
     if (appState.activeProjectId === "default") {
-      // Default Project uses the same directory from which task assignment choices are built.
+      // Ensure the signed-in user has a directory entry so they can at least assign work to themselves.
+      // Firestore rules only allow each user to write their own directory record.
+      if (appState.user?.uid) {
+        const displayName = String(appState.user.displayName || appState.user.email || "").trim();
+        if (displayName) {
+          await setDoc(doc(db, "plannerDirectory", appState.user.uid), {
+            uid: appState.user.uid,
+            displayName,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        }
+      }
       const snapshot = await getDocs(query(collection(db, "plannerDirectory"), orderBy("displayName")));
       members = snapshot.docs.map((item) => item.data()).filter((user) => user.uid && user.displayName);
     } else {
