@@ -295,6 +295,13 @@ service cloud.firestore {
         && memberId != get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId;
     }
 
+    // Collection-group queries for the signed-in user's project memberships.
+    // The query must constrain uid == request.auth.uid; this does not grant access
+    // to other users' membership documents.
+    match /{path=**}/members/{memberId} {
+      allow get, list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+    }
+
     match /plannerUserProjects/{uid}/projects/{projectId} {
       allow get, list: if isVerifiedUser() && request.auth.uid == uid;
       allow create: if isVerifiedUser() && request.resource.data.keys().hasOnly(["role", "addedAt"])
