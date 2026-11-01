@@ -3178,7 +3178,16 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       members = snapshot.docs.map((item) => item.data()).filter((user) => user.uid && user.displayName);
     } else {
       const snapshot = await getDocs(collection(db, "plannerProjects", appState.activeProjectId, "members"));
-      members = snapshot.docs.map((item) => item.data()).filter((member) => member.uid && member.displayName);
+      // Older membership documents may omit uid even though their document ID is the user's UID.
+      // Normalize them here so valid project members are available to owner/assignee dropdowns.
+      members = snapshot.docs.map((item) => {
+        const member = item.data() || {};
+        return {
+          ...member,
+          uid: String(member.uid || item.id || "").trim(),
+          displayName: String(member.displayName || "").trim()
+        };
+      }).filter((member) => member.uid && member.displayName);
     }
     // Always return a predictable array of assignable identities.
     const uniqueMembers = [...new Map((Array.isArray(members) ? members : [])
@@ -3587,16 +3596,29 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         collection(db, "plannerDirectory"),
         orderBy("displayName")
       ));
+      const active = appState.projects.find((project) => project.id === appState.activeProjectId);
+      const currentMembers = active
+        ? await getDocs(collection(db, "plannerProjects", active.id, "members"))
+        : null;
+      const existingUids = new Set((currentMembers?.docs || []).map((item) => {
+        const member = item.data() || {};
+        return String(member.uid || item.id || "");
+      }));
       els.memberSelect.innerHTML = '<option value="">Choose a user</option>';
+      let availableCount = 0;
       results.docs.forEach((item) => {
-        const user = item.data();
+        const user = item.data() || {};
+        const uid = String(user.uid || item.id || "").trim();
+        const displayName = String(user.displayName || "").trim();
+        if (!uid || !displayName || existingUids.has(uid)) return;
         const option = document.createElement("option");
-        option.value = user.uid;
-        option.textContent = user.displayName;
-        option.dataset.displayName = user.displayName;
+        option.value = uid;
+        option.textContent = displayName;
+        option.dataset.displayName = displayName;
         els.memberSelect.appendChild(option);
+        availableCount += 1;
       });
-      if (results.empty) els.memberSelect.innerHTML = '<option value="">No signed-in users available</option>';
+      if (availableCount === 0) els.memberSelect.innerHTML = '<option value="">No new users available to add</option>';
     } catch (error) {
       console.error("Could not load users", error);
       els.memberSelect.innerHTML = '<option value="">Could not load users</option>';
