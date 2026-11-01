@@ -7,12 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "test": "node --test business-ids.test.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "delete:project": "node scripts/delete-project.mjs"
   },
   "dependencies": {
     "firebase": "^12.18.0"
   },
   "devDependencies": {
-    "vite": "^7.1.7"
+    "vite": "^7.1.7",
+    "firebase-admin": "^13.5.0"
   }
 }
