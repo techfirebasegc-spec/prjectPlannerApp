@@ -620,6 +620,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     }
   }
 
+  let featureOwnerLoadToken = 0;
+  let featureOwnersReady = Promise.resolve();
   function resetFeatureForm() {
     els.featureForm.reset();
     els.featureRecordId.value = "";
@@ -627,7 +629,15 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.featureSaveBtn.textContent = "Create Feature";
     els.featureFormError.textContent = "";
     refreshPlanningSelectors();
-    populateFeatureOwners().catch((error) => { console.error("Could not load Feature owners", error); });
+    const token = ++featureOwnerLoadToken;
+    els.featureSaveBtn.disabled = true;
+    featureOwnersReady = populateFeatureOwners().catch((error) => {
+      console.error("Could not load Feature owners", error);
+      if (token === featureOwnerLoadToken) els.featureFormError.textContent = "Could not load owners. Check project membership permissions and try again.";
+      return false;
+    }).finally(() => {
+      if (token === featureOwnerLoadToken) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
+    });
   }
 
   function editFeature(id) {
@@ -637,18 +647,27 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.featureNameInput.value = feature.name || "";
     els.featurePIInput.value = feature.piId || "";
     els.featureDescriptionInput.value = feature.description || "";
-    populateFeatureOwners(feature).catch((error) => { console.error("Could not load Feature owners", error); });
     els.featurePriorityInput.value = feature.priority || "MEDIUM";
     els.featureStatusInput.value = feature.status || "PLANNED";
     els.featureFormTitle.textContent = "Edit Feature";
     els.featureSaveBtn.textContent = "Save Feature";
     els.featureFormError.textContent = "";
+    const token = ++featureOwnerLoadToken;
+    els.featureSaveBtn.disabled = true;
+    featureOwnersReady = populateFeatureOwners(feature).catch((error) => {
+      console.error("Could not load Feature owners", error);
+      if (token === featureOwnerLoadToken) els.featureFormError.textContent = "Could not load owners. Check project membership permissions and try again.";
+      return false;
+    }).finally(() => {
+      if (token === featureOwnerLoadToken) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
+    });
     els.featureNameInput.focus();
   }
 
   async function saveFeature(event) {
     event.preventDefault();
     if (!planningCanEdit()) { els.featureFormError.textContent = "You have read-only access to this project."; return; }
+    if (await featureOwnersReady === false) return;
     const id = els.featureRecordId.value;
     const name = els.featureNameInput.value.trim();
     const piId = els.featurePIInput.value;
@@ -1752,13 +1771,23 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     }
   }
 
+  let storyOwnerLoadToken = 0;
+  let storyOwnersReady = Promise.resolve();
   function openStoryEditor(story = null) {
     appState.editingStoryId = story?.id || null;
     els.storyEditorForm.reset();
     els.storyEditorTitle.textContent = story ? "Edit User Story" : "Create User Story";
     els.saveStoryBtn.textContent = story ? "Save Changes" : "Create User Story";
     els.storyTitleInput.value = story?.title || "";
-    populateStoryOwners(story).catch((error) => { console.error("Could not load User Story owners", error); });
+    const token = ++storyOwnerLoadToken;
+    els.saveStoryBtn.disabled = true;
+    storyOwnersReady = populateStoryOwners(story).catch((error) => {
+      console.error("Could not load User Story owners", error);
+      if (token === storyOwnerLoadToken) els.storyEditorError.textContent = "Could not load owners. Check project membership permissions and try again.";
+      return false;
+    }).finally(() => {
+      if (token === storyOwnerLoadToken) els.saveStoryBtn.disabled = !planningCanEdit();
+    });
     els.storyDescriptionInput.value = story?.description || "";
     els.storyCriteriaInput.value = Array.isArray(story?.acceptanceCriteria) ? story.acceptanceCriteria.join("\n") : "";
     refreshPlanningSelectors();
@@ -1783,6 +1812,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   async function saveUserStory(event) {
     event.preventDefault();
+    if (await storyOwnersReady === false) return;
     const title = els.storyTitleInput.value.trim();
     const description = els.storyDescriptionInput.value.trim();
     const criteria = els.storyCriteriaInput.value.split("\n").map(value => value.trim()).filter(Boolean);
@@ -1844,7 +1874,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       console.error("Could not save User Story", error);
       els.storyEditorError.textContent = "Could not save the User Story. Check project permissions and try again.";
     } finally {
-      els.saveStoryBtn.disabled = false;
+      els.saveStoryBtn.disabled = !planningCanEdit();
       els.saveStoryBtn.textContent = appState.editingStoryId ? "Save Changes" : "Create User Story";
     }
   }
@@ -3080,12 +3110,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       option.dataset.displayName = legacyName;
       select.appendChild(option);
     } else if (!previousUid && legacyName) {
-      const matchingMember = members.find((member) => member.displayName === legacyName);
-      if (matchingMember) select.value = matchingMember.uid;
+      const matches = members.filter((member) => member.displayName.trim().toLocaleLowerCase() === legacyName.trim().toLocaleLowerCase());
+      if (matches.length === 1) select.value = matches[0].uid;
       else {
         const option = document.createElement("option");
         option.value = "";
-        option.textContent = `${legacyName} (legacy owner — not mapped)`;
+        option.textContent = matches.length > 1 ? `${legacyName} (duplicate name — select a member)` : `${legacyName} (legacy owner — not mapped)`;
         option.dataset.displayName = legacyName;
         option.selected = true;
         select.appendChild(option);
@@ -3116,12 +3146,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       option.dataset.displayName = legacyName;
       select.appendChild(option);
     } else if (!previousUid && legacyName) {
-      const match = members.find((member) => member.displayName === legacyName);
-      if (match) select.value = match.uid;
+      const matches = members.filter((member) => member.displayName.trim().toLocaleLowerCase() === legacyName.trim().toLocaleLowerCase());
+      if (matches.length === 1) select.value = matches[0].uid;
       else {
         const option = document.createElement("option");
         option.value = "";
-        option.textContent = `${legacyName} (legacy owner — not mapped)`;
+        option.textContent = matches.length > 1 ? `${legacyName} (duplicate name — select a member)` : `${legacyName} (legacy owner — not mapped)`;
         option.dataset.displayName = legacyName;
         option.selected = true;
         select.appendChild(option);
@@ -3165,18 +3195,21 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     // Older tasks stored only a display name. Keep that assignment visible until
     // a real directory identity is selected, rather than silently unassigning it.
     if (legacyName && !previousUid) {
-      const matchingMember = uniqueMembers.find((member) => member.displayName === legacyName);
-      if (matchingMember) {
-        select.value = matchingMember.uid;
+      const matchingMembers = uniqueMembers.filter((member) => member.displayName.trim().toLocaleLowerCase() === legacyName.trim().toLocaleLowerCase());
+      if (matchingMembers.length === 1) {
+        select.value = matchingMembers[0].uid;
       } else {
         const legacy = document.createElement("option");
         legacy.value = `__legacy__:${legacyName}`;
-        legacy.textContent = `${legacyName} (legacy assignment — reselect a member to link)`;
+        legacy.textContent = matchingMembers.length > 1
+          ? `${legacyName} (duplicate name — reselect a member)`
+          : `${legacyName} (legacy assignment — reselect a member to link)`;
         select.appendChild(legacy);
         select.value = legacy.value;
       }
+    } else {
+      select.value = previousUid;
     }
-    select.value = previousUid;
     if (previousUid && !uniqueMembers.some((member) => member.uid === previousUid)) {
       const missing = document.createElement("option");
       missing.value = previousUid;
