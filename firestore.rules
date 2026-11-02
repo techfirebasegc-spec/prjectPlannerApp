@@ -193,7 +193,9 @@ service cloud.firestore {
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.archived == false;
       allow get, list: if isVerifiedUser()
-        && (resource.data.ownerId == request.auth.uid || isProjectMember(projectId));
+        && (resource.data.ownerId == request.auth.uid
+          || exists(/databases/$(database)/documents/plannerProjects/$(projectId)/members/$(request.auth.uid))
+          || exists(/databases/$(database)/documents/plannerUserProjects/$(request.auth.uid)/projects/$(projectId)));
       allow update: if isVerifiedUser() && isProjectOwner(projectId)
         && request.resource.data.keys().hasOnly(["name", "description", "ownerId", "archived", "createdAt", "updatedAt"])
         && request.resource.data.ownerId == resource.data.ownerId
