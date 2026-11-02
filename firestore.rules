@@ -61,7 +61,8 @@ service cloud.firestore {
     function isProjectMember(projectId) {
       return get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.archived != true
         && (isProjectOwner(projectId)
-          || exists(/databases/$(database)/documents/plannerProjects/$(projectId)/members/$(request.auth.uid)));
+          || exists(/databases/$(database)/documents/plannerProjects/$(projectId)/members/$(request.auth.uid))
+          || exists(/databases/$(database)/documents/plannerUserProjects/$(request.auth.uid)/projects/$(projectId)));
     }
 
     function canEditProject(projectId) {
