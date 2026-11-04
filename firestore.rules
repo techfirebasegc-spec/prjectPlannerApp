@@ -186,19 +186,21 @@ service cloud.firestore {
         allow delete: if false;
       }
       allow create: if isVerifiedUser()
-        && request.resource.data.keys().hasOnly(["name", "code", "goal", "startDate", "endDate", "capacity", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["name", "code", "goal", "startDate", "endDate", "capacity", "memberCapacities", "status", "archived", "createdBy", "createdAt", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
         && request.resource.data.code is string && request.resource.data.code.matches("^SPR-[0-9]{3,}$")
         && request.resource.data.goal is string && request.resource.data.goal.size() <= 1200
         && request.resource.data.startDate is string && request.resource.data.endDate is string && request.resource.data.endDate >= request.resource.data.startDate
         && request.resource.data.capacity is number && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+        && (!request.resource.data.keys().hasAll(["memberCapacities"]) || (request.resource.data.memberCapacities is map && request.resource.data.memberCapacities.size() <= 100))
         && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"] && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
       allow update: if isVerifiedUser() && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "goal", "startDate", "endDate", "capacity", "status", "archived", "updatedAt"])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "goal", "startDate", "endDate", "capacity", "memberCapacities", "status", "archived", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
         && request.resource.data.goal is string && request.resource.data.goal.size() <= 1200
         && request.resource.data.startDate is string && request.resource.data.endDate is string && request.resource.data.endDate >= request.resource.data.startDate
         && request.resource.data.capacity is number && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+        && (!request.resource.data.keys().hasAll(["memberCapacities"]) || (request.resource.data.memberCapacities is map && request.resource.data.memberCapacities.size() <= 100))
         && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"] && request.resource.data.archived is bool;
       allow delete: if false;
     }
@@ -395,23 +397,25 @@ service cloud.firestore {
     match /plannerProjects/{projectId}/sprints/{sprintId} {
       allow get, list: if isVerifiedUser() && isProjectMember(projectId);
       allow create: if isVerifiedUser() && canEditProject(projectId)
-        && request.resource.data.keys().hasOnly(["name", "code", "goal", "startDate", "endDate", "capacity", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["name", "code", "goal", "startDate", "endDate", "capacity", "memberCapacities", "status", "archived", "createdBy", "createdAt", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
         && request.resource.data.code is string && request.resource.data.code.matches("^SPR-[0-9]{3,}$")
         && request.resource.data.goal is string && request.resource.data.goal.size() <= 1200
         && request.resource.data.startDate is string && request.resource.data.endDate is string && request.resource.data.endDate >= request.resource.data.startDate
         && request.resource.data.capacity is number && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+        && (!request.resource.data.keys().hasAll(["memberCapacities"]) || (request.resource.data.memberCapacities is map && request.resource.data.memberCapacities.size() <= 100))
         && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"]
         && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
       allow update: if isVerifiedUser() && canEditProject(projectId)
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.code == resource.data.code
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "goal", "startDate", "endDate", "capacity", "status", "archived", "updatedAt"])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "goal", "startDate", "endDate", "capacity", "memberCapacities", "status", "archived", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
         && request.resource.data.goal is string && request.resource.data.goal.size() <= 1200
         && request.resource.data.startDate is string && request.resource.data.endDate is string && request.resource.data.endDate >= request.resource.data.startDate
         && request.resource.data.capacity is number && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+        && (!request.resource.data.keys().hasAll(["memberCapacities"]) || (request.resource.data.memberCapacities is map && request.resource.data.memberCapacities.size() <= 100))
         && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"] && request.resource.data.archived is bool;
       allow delete: if false;
     }

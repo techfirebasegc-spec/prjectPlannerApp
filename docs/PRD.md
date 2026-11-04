@@ -1,112 +1,115 @@
-# Arcf​low Project Planner — Product Requirements Document
+# Arcflow Project Planner — Product Requirements Document
 
-**Status:** Active development  
-**Current focus:** Phase 1 — User Story stabilization  
-**Target:** Multi-user Agile project planning application
+**Status:** Proposed baseline from the 4 November 2026 source audit
 
-## Product vision
-Provide teams with a reliable, clear workspace to plan and deliver work through Projects, Program Increments (PIs), Features, User Stories, Sprints, Tasks, and dependencies.
+**Product:** Arcflow project planner
+**Scope:** This document specifies the desired product contract. It does not claim every requirement is already implemented.
+
+## Product outcome
+
+Teams need a dependable workspace to plan and track work from Program Increment (PI) through Feature, User Story, Sprint, and Task. The planner must make project scope, permissions, relationships, and delivery reporting trustworthy.
+
+## Users and access
+
+| User | Need | Required access |
+|---|---|---|
+| Verified Default Project user | Organise shared/default work | The current shared-default model must be explicitly approved and documented. |
+| Project owner | Govern a named project | Create/archive project; manage members; manage planning records. |
+| Project editor | Plan and maintain delivery work | Create/edit/archive project-scoped planning records and tasks. |
+| Project viewer | Observe work safely | Read project-scoped work only. |
+
+Authentication establishes identity. Firestore rules, rather than hidden controls, establish authorization.
 
 ## Product principles
-- A User Story is an independent planning record; creating one must not require a Task.
-- Stable IDs, not mutable titles, define relationships.
-- Project data is scoped and protected by explicit membership and roles.
-- UI, validation, Firestore rules, and reporting must agree.
-- Historical reporting must use recorded history, not fabricated estimates presented as actuals.
-- Preserve legacy data through staged migrations and provide a rollback path.
 
-## Target conceptual model
-```
-Project
- ├── Program Increments (PIs)
- │    ├── Features
- │    │    └── User Stories
- │    │         └── Tasks
- │    │              ├── Subtasks
- │    │              └── Dependencies
- │    └── Sprints (timeboxes; work is assigned to them)
- └── Project Members
-```
-Sprints are timeboxes and are not necessarily permanent parents of tasks.
+- Firestore document IDs and Firebase UIDs are canonical identities. Titles, labels, and display names are never relationship keys.
+- Each record belongs to either the Default Project or exactly one named project; data must not cross scope.
+- A User Story is an independent record and may have zero tasks.
+- Existing data remains usable through staged, reversible migration. Ambiguous legacy links are reported, never guessed.
+- A write either completes or exposes an actionable error. The UI must not report success after a failed persistence operation.
+- Reports distinguish recorded delivery history from projections and current snapshots.
 
-## Phase roadmap
-1. **Stabilize User Story Management (current, critical):** create/edit stories independently, preserve stable identity and task links, handle legacy records, validate permissions and persistence.
-2. **Canonical Agile data model (critical):** independent PI, Feature, Sprint, Story and Task entities with stable IDs, staged migration, validation and rollback.
-3. **UI/UX consistency (high):** accessible responsive cards, details panel, consistent forms, navigation and overflow fixes.
-4. **Lifecycle enforcement (high):** validated story/task transitions, explicit readiness rules, audit history and consistent progress calculations.
-5. **Sprint planning (high):** sprint goals/dates, backlog assignment, capacity, carryover and sprint reporting.
-6. **Agile Insights (high):** PI/Feature progress, velocity, burndown, aging, spillover, workload and cycle time backed by recorded history.
-7. **Collaboration (medium):** dependencies, blockers, comments, mentions, activity timeline and configurable notifications.
-8. **Production readiness (release gate):** automated tests, access controls, migration/rollback documentation, performance and end-to-end verification.
+## Functional requirements
 
-## Phase 1 requirements
+### Project access and membership
 
-### US-1 Create a User Story independently
-- Required: title (1–160 characters).
-- Optional: description (up to 1,500 characters), acceptance criteria (up to 50 entries, each up to 500 characters), PI, Feature, start date, target date.
-- Target date cannot precede start date.
-- Saving a story creates a stable-ID document even when no tasks exist.
-- New story lifecycle defaults to Draft.
-- Save button has a loading state and cannot submit twice; errors remain visible and actionable.
+- A verified user can create a named project and becomes its owner in the same atomic operation.
+- Owners can add/remove editors and viewers. Only owners manage membership and archive named projects.
+- Editors can change project work; viewers cannot write.
+- Removing a member removes membership references and future project queries no longer return that project.
+- Archived projects are unavailable for normal project reads/writes and no longer appear as active choices.
 
-### US-2 Edit a User Story
-- Update title, description, acceptance criteria, PI, Feature and dates without changing its stable ID.
-- Preserve creation metadata and lifecycle.
-- Editing one story must not modify another story merely because their titles match.
-- Linked tasks remain linked by story ID after a title change.
-- Legacy stories can be upgraded without linking unrelated tasks.
+### Planning hierarchy
 
-### US-3 Link tasks
-- Tasks may be added after story creation.
-- Story identity must be carried through task creation/editing by ID.
-- Title-based matching is permitted only for carefully constrained legacy migration; never use it to merge identified stories.
-- Stories with zero tasks remain visible and editable.
-- Duplicate story titles must not cause incorrect linking.
+- PIs, Features, Sprints, User Stories, and Tasks are separate, project-scoped records.
+- A Feature has one `piId`; a Story has a `featureId` and matching `piId`.
+- A Task may link through `userStoryId`, `featureId`, `piId`, `sprintId`, and `assigneeUid`. Display labels are compatibility snapshots only.
+- A Sprint is first-class, with name, goal, dates, capacity, lifecycle, and stable ID. Tasks are assigned by `sprintId`, not sprint name.
+- Links cannot reference another project, an archived parent, or an incompatible Feature/PI pair.
 
-### US-4 Legacy compatibility
-- Existing tasks and story associations remain intact.
-- Legacy story-only-on-task records remain discoverable.
-- Avoid duplicate cards when a legacy story is upgraded to a standalone record.
-- Do not perform destructive bulk migration without validation and rollback.
+### User Stories
 
-### US-5 Security and persistence
-- Default-project and project-scoped stories use the correct collection path.
-- Firestore rules validate allowed fields and values.
-- Only authorized users can write records; project-scoped access follows project membership/role.
-- Test create/read/update/delete permissions, refresh persistence, and sign-in behavior against the intended Firebase project.
+- Users can independently create, edit, archive, restore, and view Stories.
+- Title is required (1–160 characters); Feature is required. Description, owner, PI, dates, and acceptance criteria remain optional unless a selected Feature determines the PI.
+- Target date cannot precede start date; selected Feature and PI must be compatible.
+- Story lifecycle is persisted once on the Story record: Draft, Ready, In Progress, In Review, or Accepted.
+- A lifecycle change is reflected consistently in cards, lists, task detail, and reports. A legacy task display copy must not become a competing source of truth.
+- Changing a Story title preserves its ID and task links. Duplicate titles remain independent.
 
-### Additional User Story archive and card-density requirements
-- Users can archive a story without deleting its tasks.
-- Archived stories are hidden from the active story list and accessible through a Show archived filter.
-- Users can restore an archived story.
-- Archiving/restoring is persisted and protected by the same project authorization as story edits.
-- Story cards show at most two task previews by default and provide an explicit Show all / Show fewer control for remaining tasks.
-- Users can switch between Cards and List view; List view makes it easier to scan many stories and their tasks.
-- The list layout remains responsive and task lists are scrollable within the row so a story with many tasks does not make the whole page excessively tall.
+### Tasks, checklists, and dependencies
 
-## Phase 1 acceptance tests
-1. Create a story with a title and no task; it appears with zero tasks.
-2. Reload the page; the story persists.
-3. Create two stories with the same title; each remains independently editable.
-4. Edit a story title; its ID stays unchanged and its linked tasks remain linked.
-5. Add a task from a story card; the saved task references that exact story ID.
-6. Edit the task; the association remains unless the user explicitly changes it.
-7. Edit a legacy story; only the intended legacy tasks are upgraded/linked.
-8. Verify a non-member cannot read or write project-scoped story data and a viewer cannot write.
-9. Validate form fields and display understandable errors.
-10. Production build passes and browser console has no uncaught errors during the tested flow.
-11. Archive a story; it disappears from active stories but its tasks remain unchanged.
-12. Show archived stories, restore one, and verify it returns to the active list after refresh.
-13. Link at least 10 tasks to one story; Cards view initially shows two tasks and Show all reveals the remainder; Show fewer collapses the preview.
-14. Switch between Cards and List view; verify all linked tasks are reachable and layout remains usable on desktop and mobile.
+- Users can create, edit, copy, archive, delete (when authorized), assign, estimate, and move tasks through To Do, In Progress, and Done.
+- Validation includes a non-empty task name, non-negative story points, valid date order, known assignee where selected, and valid hierarchy links.
+- Subtasks, acceptance criteria, and dependencies have a documented bounded shape.
+- Dependencies must point to an accessible task in the same project, be unique, and be acyclic. Invalid/dangling links are reported, not silently ignored.
+- WIP limits are advisory unless the product owner explicitly makes them policy.
 
-## Definition of done
-A phase is complete only when code is committed, a production build passes, relevant automated/integration tests are run, and results are reported accurately. A code presence check alone is not a live integration test. Do not claim Firestore or browser verification without running it.
+### Sprint planning and reports
 
-## Phase 1 implementation sequence
-1. Audit current UI handlers, collection paths, rules and legacy grouping.
-2. Fix form parsing/validation and stable-ID association defects.
-3. Ensure edits preserve creation metadata and synchronize task links safely.
-4. Ensure legacy-to-standalone conversion does not merge duplicate-title stories.
-5. Add automated test coverage where supported; otherwise provide a reproducible manual test matrix.
-6. Build and test against the correct Firebase project before deploying rules.
+- Owners/editors can create, edit, archive, and plan sprints.
+- Sprint assignment persists an ID and, during compatibility support, a display name; joins and validation use the ID.
+- Capacity, missing assignees/dates, and over-capacity are explicitly surfaced.
+- Daily snapshots retain scope, source date, recorder, count, and points. Reports must label unavailable data rather than inventing history.
+
+### Usability and accessibility
+
+- Board, list, dashboard, story, planning, report, knowledge, and profile views remain responsive on mobile and desktop.
+- Controls are keyboard reachable, labelled, and offer loading, empty, error, and read-only states.
+- Dialogs trap focus, restore focus to the invoking control, and handle Escape/overlay interaction consistently.
+- Every HTML `id` is unique; charts and labels bind to the intended view.
+
+## Confirmed audit gaps and priorities
+
+| Priority | Confirmed gap | Required outcome |
+|---|---|---|
+| P0 | A lifecycle change in task detail updates task `userStoryStatus`, but can leave the independent Story `lifecycle` unchanged. | Make the Story document authoritative and test cross-view consistency. |
+| P0 | `index.html` has duplicate `velocityChart` and `inProgressCount` IDs; DOM lookup uses only the first. | Assign unique IDs and add a DOM uniqueness check. |
+| P0 | Rules limit checklist/dependency list size but not nested shape, dependency scope/existence, or cycle integrity. | Define and validate the record contract; detect legacy corruption. |
+| P1 | Named projects have roles; the Default Project is shared by verified users with different creator/status semantics. | Approve/document this policy or migrate it to equivalent role governance. |
+| P1 | Legacy name/title fallbacks can be ambiguous after rename or duplicate names. | Use ID-first writes/joins; map legacy data only when uniquely validated. |
+| P1 | Story edit writes the Story and then linked Tasks in independent batches. Later failure can leave partial propagation. | Make propagation resumable/idempotent and expose partial failure. |
+| P1 | The client loads all planning records and uses overlapping membership discovery paths. | Establish bounded/paginated queries and one authoritative discovery path before growth. |
+| P1 | Production build emits a 558.61 kB minified Firebase/auth chunk (166.23 kB gzip). | Profile and set a performance budget; split noncritical views after measurement. |
+| P2 | Dialog accessibility and real browser/device workflows were not verified by this audit. | Add automated accessibility checks and manual acceptance coverage. |
+| P2 | Deployment documentation includes stale task-field/access descriptions. | Keep one current operational and data-contract reference with every schema/rule change. |
+
+## Release order
+
+1. **P0 stability/data correctness:** unique IDs, Story lifecycle source of truth, and checklist/dependency contract with regression tests.
+2. **P1 access/compatibility:** Default Project governance decision, unsafe name-link removal, read-only inventory, and reviewed migration manifest.
+3. **P1 scale/quality:** Firestore emulator authorization coverage, error-recovery tests, pagination/query design, and performance profiling.
+4. **P2 experience:** dialog keyboard behaviour, mobile/browser verification, then targeted visual polish only where required.
+
+## Acceptance criteria
+
+- A Story with no tasks persists and retains ID after reload/title edit.
+- Lifecycle is identical in Story document, task views, cards, and reports after reload.
+- Duplicate Story/Feature/Sprint titles cannot link unrelated work.
+- Owner/editor/viewer/default-scope allowed and denied operations are tested.
+- Cross-project, cyclic, malformed, and dangling dependencies are prevented or reported predictably.
+- Multi-batch propagation cannot show a false complete success state.
+- Build, automated test, and manual browser/mobile results are recorded accurately.
+
+## Out of scope
+
+This PRD does not authorize chat, notifications, payments, new authentication methods, new Firebase services, or a UI redesign. A new collection, schema migration, role-model change, or dependency requires a separately approved implementation request.

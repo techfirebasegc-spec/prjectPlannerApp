@@ -5,6 +5,8 @@ import {
 import { db } from "./firebase.js";
 import { formatBusinessId, highestBusinessIdSequence } from "./business-ids.js";
 import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "./auth.js";
+import { validateTaskBreakdownPatch, wouldCreateDependencyCycle } from "./task-breakdown.js";
+import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./sprint-catalog.js";
 
 (() => {
   "use strict";
@@ -38,6 +40,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     selectedTaskIds: new Set(),
     activeView: "dashboard",
     calendarMonth: "",
+    planningSprintInitialized: false,
     wipLimits: { todo: null, inprogress: null, done: null },
     dragTaskId: null,
     hierarchy: {},
@@ -161,6 +164,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     sprintStartInput: document.getElementById("sprintStartInput"),
     sprintEndInput: document.getElementById("sprintEndInput"),
     sprintCapacityInput: document.getElementById("sprintCapacityInput"),
+    sprintMemberCapacityInputs: document.getElementById("sprintMemberCapacityInputs"),
     sprintStatusInput: document.getElementById("sprintStatusInput"),
     sprintFormTitle: document.getElementById("sprintFormTitle"),
     sprintFormError: document.getElementById("sprintFormError"),
@@ -174,6 +178,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     planningBacklogList: document.getElementById("planningBacklogList"),
     planningSprintList: document.getElementById("planningSprintList"),
     planningRiskPanel: document.getElementById("planningRiskPanel"),
+    sprintExecutionBoard: document.getElementById("sprintExecutionBoard"),
+    sprintBurndownSummary: document.getElementById("sprintBurndownSummary"),
+    sprintBurndownChart: document.getElementById("sprintBurndownChart"),
+    sprintBurndownNote: document.getElementById("sprintBurndownNote"),
     sidebarStoriesBtn: document.getElementById("sidebarStoriesBtn"),
     newStoryBtn: document.getElementById("newStoryBtn"),
     storyEditorModal: document.getElementById("storyEditorModal"),
@@ -330,14 +338,21 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (appState.unsubscribeSprints) appState.unsubscribeSprints();
     appState.sprints = [];
     appState.unsubscribeSprints = onSnapshot(sprintCollection(), (snapshot) => {
-      appState.sprints = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.archived !== true)
+      appState.sprints = snapshot.docs.map((item) => {
+        const data = item.data();
+        return { id: item.id, ...data, startDate: normalizeSprintDate(data.startDate), endDate: normalizeSprintDate(data.endDate) };
+      }).filter((item) => item.archived !== true)
         .sort((a,b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+      refreshNormalizedTasksFromCatalog();
+      populateCalendarMonthOptions();
       refreshPlanningSelectors();
       recordDailySprintSnapshots();
-      renderSprintRecords(); renderSprintPlanning();
+      renderSprintRecords(); renderSprintPlanning(); applyFiltersAndRender();
+      if (els.sprintMemberCapacityInputs && !els.sprintMemberCapacityInputs.children.length) renderSprintMemberCapacityInputs();
     }, (error) => {
       console.error("Could not load sprints", error); appState.sprints = [];
-      renderSprintRecords("Unable to load sprint metadata. Check Firestore rules and project membership."); renderSprintPlanning();
+      refreshNormalizedTasksFromCatalog(); populateCalendarMonthOptions();
+      renderSprintRecords("Unable to load sprint metadata. Check Firestore rules and project membership."); renderSprintPlanning(); applyFiltersAndRender();
     });
   }
   function renderSprintRecords(errorMessage = "") {
@@ -347,7 +362,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       els.sprintRecords.innerHTML = '<div class="planning-empty"><strong>' + (errorMessage ? "Sprints unavailable" : "No sprints configured") + '</strong>' + escapeHtml(errorMessage || "Create a sprint to set its goal, dates, and capacity.") + '</div>'; return;
     }
     els.sprintRecords.innerHTML = appState.sprints.map((sprint) => {
-      const tasks = appState.allTasks.filter((task) => String(task.raw?.sprint || task.raw?.Sprint || "").trim() === sprint.name && !task.archived);
+      const tasks = appState.allTasks.filter((task) => taskBelongsToSprint(task, sprint) && !task.archived);
       const points = tasks.reduce((sum, task) => sum + (Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0), 0);
       return '<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><span class="planning-record-code">' + escapeHtml(sprint.code || "ID pending") + '</span><h4>' + escapeHtml(sprint.name) + '</h4><span class="planning-status ' + escapeHtml(statusClass(sprint.status)) + '">' + escapeHtml(String(sprint.status || "PLANNED").replaceAll("_", " ")) + '</span></div><p class="planning-record-description">' + escapeHtml(sprint.goal || "No sprint goal added.") + '</p><div class="planning-record-meta"><span>Dates: <strong>' + escapeHtml(sprint.startDate || "—") + ' → ' + escapeHtml(sprint.endDate || "—") + '</strong></span><span>Capacity: <strong>' + escapeHtml(String(sprint.capacity || 0)) + ' points</strong></span><span><strong>' + tasks.length + '</strong> tasks</span><span><strong>' + points + '</strong> points committed</span></div></div><div class="planning-record-actions"><button type="button" data-edit-sprint="' + escapeHtml(sprint.id) + '">Edit</button><button type="button" data-archive-sprint="' + escapeHtml(sprint.id) + '">Archive</button></div></article>';
     }).join("");
@@ -357,11 +372,55 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   function resetSprintForm() {
     appState.editingSprintId = null; if (!els.sprintForm) return; els.sprintForm.reset(); els.sprintRecordId.value = "";
     els.sprintStatusInput.value = "PLANNED"; els.sprintFormTitle.textContent = "Create a sprint"; els.sprintSaveBtn.textContent = "Create sprint"; els.sprintFormError.textContent = "";
+    renderSprintMemberCapacityInputs();
   }
+  function collectSprintMemberCapacities() {
+    const fields = els.sprintMemberCapacityInputs?.querySelectorAll("[data-member-capacity]") || [];
+    const capacities = {};
+    for (const field of fields) {
+      const uid = String(field.dataset.memberCapacity || "").trim();
+      const value = String(field.value || "").trim();
+      if (!uid || !value) continue;
+      const points = Number(value);
+      if (!Number.isFinite(points) || points < 0 || points > 10000) return null;
+      capacities[uid] = points;
+    }
+    return capacities;
+  }
+
+  async function renderSprintMemberCapacityInputs(savedCapacities = {}) {
+    const root = els.sprintMemberCapacityInputs;
+    if (!root) return;
+    const token = String(appState.editingSprintId || "new");
+    root.dataset.capacityToken = token;
+    root.innerHTML = '<p class="sprint-member-capacity-empty">Loading project members…</p>';
+    try {
+      const members = await fetchAssignableMembers();
+      if (root.dataset.capacityToken !== token) return;
+      const existing = collectSprintMemberCapacities() || {};
+      const values = { ...savedCapacities, ...existing };
+      if (!members.length) {
+        root.innerHTML = '<p class="sprint-member-capacity-empty">No project members are available for individual capacity.</p>';
+        return;
+      }
+      root.innerHTML = members.map((member) => {
+        const uid = String(member.uid || "").trim();
+        const value = Number(values[uid]);
+        const capacity = Number.isFinite(value) ? String(value) : "";
+        const name = String(member.displayName || "Unnamed member");
+        return '<label class="sprint-member-capacity-row"><span title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span><input type="number" min="0" max="10000" step="0.5" inputmode="decimal" placeholder="Points" value="' + escapeHtml(capacity) + '" data-member-capacity="' + escapeHtml(uid) + '" aria-label="Individual capacity for ' + escapeHtml(name) + '"></label>';
+      }).join("");
+    } catch (error) {
+      console.error("Could not load project members for individual capacity", error);
+      if (root.dataset.capacityToken === token) root.innerHTML = '<p class="sprint-member-capacity-empty">Individual capacity is unavailable because project members could not be loaded.</p>';
+    }
+  }
+
   function editSprint(id) {
     if (!planningCanEdit()) return; const s = appState.sprints.find((item) => item.id === id); if (!s) return;
     appState.editingSprintId = id; els.sprintRecordId.value = id; els.sprintNameInput.value = s.name || ""; els.sprintGoalInput.value = s.goal || "";
     els.sprintStartInput.value = s.startDate || ""; els.sprintEndInput.value = s.endDate || ""; els.sprintCapacityInput.value = s.capacity ?? 0; els.sprintStatusInput.value = s.status || "PLANNED";
+    renderSprintMemberCapacityInputs(s.memberCapacities || {});
     els.sprintFormTitle.textContent = "Edit sprint"; els.sprintSaveBtn.textContent = "Save changes"; els.sprintFormError.textContent = "";
     els.sprintForm.scrollIntoView({behavior:"smooth",block:"start"});
   }
@@ -369,15 +428,17 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     event.preventDefault(); if (!planningCanEdit()) { els.sprintFormError.textContent = "Your project role does not allow sprint changes."; return; }
     const name = String(els.sprintNameInput.value || "").trim(), goal = String(els.sprintGoalInput.value || "").trim();
     const startDate = els.sprintStartInput.value, endDate = els.sprintEndInput.value, capacity = Number(els.sprintCapacityInput.value), status = els.sprintStatusInput.value;
+    const memberCapacities = collectSprintMemberCapacities();
     if (!name || name.length > 100) { els.sprintFormError.textContent = "Sprint name must be between 1 and 100 characters."; return; }
     if (!startDate || !endDate || endDate < startDate) { els.sprintFormError.textContent = "Choose valid dates; the end date must not precede the start date."; return; }
     if (!Number.isFinite(capacity) || capacity < 0 || capacity > 10000) { els.sprintFormError.textContent = "Capacity must be between 0 and 10,000 points."; return; }
     if (appState.sprints.some((s) => s.id !== appState.editingSprintId && s.name.toLocaleLowerCase() === name.toLocaleLowerCase())) { els.sprintFormError.textContent = "A sprint with that name already exists."; return; }
     const existing = appState.sprints.find((s) => s.id === appState.editingSprintId);
-    if (existing && existing.name !== name && appState.allTasks.some((task) => String(task.raw?.sprint || task.raw?.Sprint || "").trim() === existing.name && !task.archived)) {
+    if (existing && existing.name !== name && appState.allTasks.some((task) => taskBelongsToSprint(task, existing) && !task.archived)) {
       els.sprintFormError.textContent = "This sprint has assigned tasks. Reassign those tasks before renaming it."; return;
     }
-    const data = {name,goal,startDate,endDate,capacity,status,archived:false,updatedAt:serverTimestamp()};
+    if (!memberCapacities) { els.sprintFormError.textContent = "Individual capacity must be between 0 and 10,000 points for each member."; return; }
+    const data = {name,goal,startDate,endDate,capacity,memberCapacities,status,archived:false,updatedAt:serverTimestamp()};
     els.sprintSaveBtn.disabled = true; els.sprintFormError.textContent = "";
     try {
       if (existing) await updateDoc(sprintReference(existing.id), data);
@@ -388,7 +449,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
   async function archiveSprint(id) {
     if (!planningCanEdit()) return; const s = appState.sprints.find((item) => item.id === id); if (!s) return;
-    const assigned = appState.allTasks.filter((task) => String(task.raw?.sprint || task.raw?.Sprint || "").trim() === s.name && !task.archived);
+    const assigned = appState.allTasks.filter((task) => taskBelongsToSprint(task, s) && !task.archived);
     const msg = assigned.length ? s.name + " has " + assigned.length + " assigned task(s). Archiving hides it from the active catalogue but preserves task assignments. Continue?" : "Archive sprint " + s.name + "?";
     if (!window.confirm(msg)) return;
     try { await updateDoc(sprintReference(id), {archived:true,updatedAt:serverTimestamp()}); if (appState.editingSprintId === id) resetSprintForm(); }
@@ -483,10 +544,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function refreshNormalizedTasksFromCatalog() {
-    if (!appState.allTasks.length) return;
-    appState.allTasks = normalizeRecords(appState.allTasks.map((task) => ({ id: task.id, ...task.raw }))).filter((task) => task.archived !== true);
+    if (appState.allTasks.length) {
+      appState.allTasks = normalizeRecords(appState.allTasks.map((task) => ({ id: task.id, ...task.raw }))).filter((task) => task.archived !== true);
+    }
     appState.hierarchy = groupByHierarchy(appState.allTasks);
-    appState.sprintCatalog = buildSprintCatalog(appState.allTasks);
+    appState.sprintCatalog = buildSprintCatalog(appState.allTasks, appState.sprints);
   }
 
   function populatePlanningFilterOptions() {
@@ -972,7 +1034,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       appState.allTasks = normalizeRecords(raw).filter((task) => task.archived !== true);
       appState.selectedTaskIds = new Set([...appState.selectedTaskIds].filter((taskId) => appState.allTasks.some((task) => task.id === taskId)));
       appState.hierarchy = groupByHierarchy(appState.allTasks);
-      appState.sprintCatalog = buildSprintCatalog(appState.allTasks);
+      appState.sprintCatalog = buildSprintCatalog(appState.allTasks, appState.sprints);
       recordDailySprintSnapshots();
 
       populateCalendarMonthOptions();
@@ -1012,14 +1074,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       els.appShell.classList.toggle("mobile-sidebar-open", opening);
       els.mobileNavToggle.setAttribute("aria-expanded", String(opening));
       els.mobileNavToggle.setAttribute("aria-label", opening ? "Close navigation and filters" : "Open navigation and filters");
-      els.mobileNavToggle.innerHTML = opening ? "× <span>Close</span>" : "☰ <span>Menu</span>";
+      els.mobileNavToggle.textContent = "☰";
     });
     document.querySelectorAll(".sidebar a, .sidebar [data-sidebar-expand], #sidebarStoriesBtn").forEach((control) => {
       control.addEventListener("click", () => {
         if (window.matchMedia("(max-width: 680px)").matches) {
           els.appShell.classList.remove("mobile-sidebar-open");
           els.mobileNavToggle?.setAttribute("aria-expanded", "false");
-          if (els.mobileNavToggle) els.mobileNavToggle.innerHTML = "☰ <span>Menu</span>";
+          if (els.mobileNavToggle) els.mobileNavToggle.textContent = "☰";
         }
       });
     });
@@ -1027,7 +1089,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       if (event.key === "Escape" && els.appShell.classList.contains("mobile-sidebar-open")) {
         els.appShell.classList.remove("mobile-sidebar-open");
         els.mobileNavToggle?.setAttribute("aria-expanded", "false");
-        if (els.mobileNavToggle) els.mobileNavToggle.innerHTML = "☰ <span>Menu</span>";
+        if (els.mobileNavToggle) els.mobileNavToggle.textContent = "☰";
       }
     });
     document.addEventListener("click", (event) => {
@@ -1038,7 +1100,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       if (sidebar?.contains(target) || els.mobileNavToggle?.contains(target)) return;
       els.appShell.classList.remove("mobile-sidebar-open");
       els.mobileNavToggle?.setAttribute("aria-expanded", "false");
-      if (els.mobileNavToggle) els.mobileNavToggle.innerHTML = "☰ <span>Menu</span>";
+      if (els.mobileNavToggle) els.mobileNavToggle.textContent = "☰";
     });
 
 
@@ -1086,7 +1148,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.closeStoryEditor.addEventListener("click", closeStoryEditor);
     els.storyEditorModal.addEventListener("click", (event) => { if (event.target === els.storyEditorModal) closeStoryEditor(); });
     els.profileViewBtn.addEventListener("click", () => setActiveView("profile"));
-    els.planningSprintSelect?.addEventListener("change", renderSprintPlanning);
+    els.planningSprintSelect?.addEventListener("change", () => {
+      appState.planningSprintInitialized = true;
+      renderSprintPlanning();
+    });
     [els.planningBacklogList, els.planningSprintList].forEach((list) => list?.addEventListener("change", (event) => {
       const select = event.target.closest("[data-task-sprint]");
       if (select) updateSprintAssignment(select.dataset.taskSprint, select.value);
@@ -1276,6 +1341,16 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
+  function getDateRange(startDate, endDate) {
+    if (!(startDate instanceof Date) || !(endDate instanceof Date)) return [];
+    const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return [];
+    const dates = [];
+    for (const date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) dates.push(new Date(date));
+    return dates;
+  }
+
   function isPast(date) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1296,40 +1371,6 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       acc[task.pi][task.feature][task.story].push(task);
       return acc;
     }, {});
-  }
-
-  function buildSprintCatalog(tasks) {
-    const map = new Map();
-    tasks.forEach((task) => {
-      if (!map.has(task.sprintKey)) {
-        map.set(task.sprintKey, {
-          key: task.sprintKey,
-          sprint: task.sprint,
-          pi: task.pi,
-          startDate: task.sprintStartDate,
-          endDate: task.sprintEndDate,
-          tasks: []
-        });
-      }
-
-      const sprint = map.get(task.sprintKey);
-      sprint.tasks.push(task);
-      if (!sprint.startDate && task.sprintStartDate) sprint.startDate = task.sprintStartDate;
-      if (!sprint.endDate && task.sprintEndDate) sprint.endDate = task.sprintEndDate;
-      // Keep the sprint's range usable even when only one task carries the dates.
-      if (sprint.startDate && sprint.endDate && sprint.startDate > sprint.endDate) {
-        const earlier = sprint.endDate;
-        sprint.endDate = sprint.startDate;
-        sprint.startDate = earlier;
-      }
-    });
-
-    return [...map.values()].sort((a, b) => {
-      const at = a.startDate ? a.startDate.getTime() : Number.MAX_SAFE_INTEGER;
-      const bt = b.startDate ? b.startDate.getTime() : Number.MAX_SAFE_INTEGER;
-      if (at !== bt) return at - bt;
-      return a.sprint.localeCompare(b.sprint);
-    });
   }
 
   async function populateFilters(tasks) {
@@ -2348,8 +2389,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const finalSnapshot = history.filter((item) => String(item.date || "") <= String(sprint.endDate))
         .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0] || null;
       const completedStatus = /^(completed|complete|closed|done)$/i.test(String(sprint.status || "").replaceAll("_", " ").trim());
-      const tasks = appState.allTasks.filter((task) => !task.archived &&
-        String(task.raw?.sprint || task.raw?.Sprint || "").trim() === sprint.name);
+      const tasks = appState.allTasks.filter((task) => !task.archived && taskBelongsToSprint(task, sprint));
       const currentPoints = tasks.reduce((sum, task) => sum + pointsOf(task), 0);
       const currentCompleted = tasks.filter((task) => task.statusKey === "done")
         .reduce((sum, task) => sum + pointsOf(task), 0);
@@ -2555,7 +2595,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const date = [now.getFullYear(), String(now.getMonth()+1).padStart(2,"0"), String(now.getDate()).padStart(2,"0")].join("-");
     const projectId = appState.activeProjectId;
     for (const sprint of appState.sprints) {
-      const sprintTasks = appState.allTasks.filter((task) => String(task.raw?.sprint || task.raw?.Sprint || "").trim() === sprint.name && !task.archived);
+      const sprintTasks = appState.allTasks.filter((task) => taskBelongsToSprint(task, sprint) && !task.archived);
       if (!sprintTasks.length) continue;
       const points = (task) => Math.max(0, Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0);
       const status = (task) => task.statusKey || normalizeStatus(task.status || task.raw?.status || task.raw?.Status);
@@ -2603,15 +2643,21 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       chart.innerHTML = '<div class="execution-chart-empty">Select one sprint to view its planned burndown.</div>';
       return;
     }
-    loadSprintSnapshots(sprintMetadata?.id);
     const columns = [{key:"todo",title:"To do"},{key:"inprogress",title:"In progress"},{key:"done",title:"Done"}];
     const points = (task) => Math.max(0, Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0);
     const taskStatus = (task) => COLUMN_KEYS.includes(task.statusKey) ? task.statusKey : normalizeStatus(task.status || task.raw?.status || task.raw?.Status);
-    board.innerHTML = columns.map((column) => {
+    let boardMarkup;
+    try {
+      boardMarkup = columns.map((column) => {
       const items = sprintTasks.filter((task) => taskStatus(task) === column.key);
       return '<section class="execution-column"><header><h4>' + column.title + '</h4><span class="execution-column-count">' + items.length + '</span></header><div class="execution-column-meta">' + items.reduce((sum, task) => sum + points(task), 0) + ' story points</div>' +
         (items.length ? items.map((task) => '<article class="execution-task"><div class="execution-task-top"><span class="planning-task-id">' + escapeHtml(task.id || "TASK") + '</span><span class="execution-task-points">' + points(task) + ' pts</span></div><h5>' + escapeHtml(task.task || task.title || "Untitled task") + '</h5><p>' + escapeHtml(task.assignee || "Unassigned") + '</p><label class="execution-status-control"><span>Move to</span><select data-execution-status="' + escapeHtml(task.id) + '"' + (canEdit ? "" : " disabled") + '>' + columns.map((option) => '<option value="' + option.key + '"' + (option.key === column.key ? " selected" : "") + '>' + option.title + '</option>').join("") + '</select></label></article>').join("") : '<div class="execution-column-empty">No tasks in this stage</div>') + '</section>';
-    }).join("");
+      }).join("");
+    } catch (error) {
+      console.error("Could not render sprint execution board", error);
+      boardMarkup = '<div class="planning-empty execution-empty">Sprint tasks could not be grouped for the execution board.</div>';
+    }
+    board.innerHTML = boardMarkup;
     const total = sprintTasks.reduce((sum, task) => sum + points(task), 0);
     const remaining = sprintTasks.filter((task) => taskStatus(task) !== "done").reduce((sum, task) => sum + points(task), 0);
     const completed = total - remaining, capacity = Math.max(0, Number(sprintMetadata?.capacity) || 0);
@@ -2623,22 +2669,28 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const x=(d)=>l+(w-l-r)*d/days,y=(v)=>t+(h-t-b)*(1-v/max);
     const ideal=Array.from({length:days+1},(_,d)=>x(d).toFixed(1)+","+y(total*(1-d/days)).toFixed(1)).join(" ");
     const today=new Date();today.setHours(12,0,0,0);const elapsed=Math.max(0,Math.min(days,Math.round((today-start)/86400000)));
-    const history = (appState.sprintSnapshots[sprintMetadata.id] || []).filter((item) => item.date >= sprintMetadata.startDate && item.date <= sprintMetadata.endDate);
+    const history = (appState.sprintSnapshots?.[sprintMetadata?.id] || []).filter((item) => item.date >= sprintMetadata.startDate && item.date <= sprintMetadata.endDate);
     const actualPoints = history.map((item) => {
       const dayIndex = Math.max(0, Math.min(days, Math.round((new Date(item.date + "T12:00:00") - start) / 86400000)));
       return x(dayIndex).toFixed(1) + "," + y(Math.max(0, Number(item.remainingPoints) || 0)).toFixed(1);
     }).join(" ");
     chart.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" class="execution-burndown-svg" aria-hidden="true"><line x1="'+l+'" y1="'+(h-b)+'" x2="'+(w-r)+'" y2="'+(h-b)+'" class="execution-axis"/>'+[0,.5,1].map(v=>'<line x1="'+l+'" y1="'+y(max*v)+'" x2="'+(w-r)+'" y2="'+y(max*v)+'" class="execution-gridline"/><text x="'+(l-7)+'" y="'+(y(max*v)+4)+'" text-anchor="end" class="execution-chart-label">'+Math.round(max*v)+'</text>').join("")+'<polyline points="'+ideal+'" class="execution-planned-line"/>'+(actualPoints ? '<polyline points="'+actualPoints+'" class="execution-actual-line"/>' : '')+'<circle cx="'+x(elapsed)+'" cy="'+y(remaining)+'" r="5" class="execution-current-point"/></svg><div class="execution-chart-legend"><span><i class="execution-line-key"></i>Ideal pace</span>'+(actualPoints ? '<span><i class="execution-actual-key"></i>Daily recorded actuals</span>' : '')+'<span><i class="execution-point-key"></i>Current remaining: '+remaining+' pts</span></div>';
     if(els.sprintBurndownNote) { const delta=remaining-total*(1-elapsed/days); els.sprintBurndownNote.textContent=(delta>0.5?"Current remaining effort is "+Math.round(delta)+" points above ideal pace. ":delta<-.5?"Current remaining effort is "+Math.round(-delta)+" points ahead of ideal pace. ":"Current remaining effort is close to ideal pace. ")+(history.length ? history.length+" daily snapshot(s) are plotted; snapshots are captured while the planner is open and data refreshes." : "Daily actuals appear after the planner records its first daily snapshot."); }
+    try { loadSprintSnapshots(sprintMetadata?.id); }
+    catch (error) { console.error("Could not start loading sprint history", error); }
   }
 
   function renderSprintPlanning() {
     if (!els.planningSprintSelect || !els.planningSprintStats) return;
-    const previous = els.planningSprintSelect.value || "all";
+    const previous = appState.planningSprintInitialized ? els.planningSprintSelect.value : "";
     const sprintNames = [...new Set([...appState.sprints.map((s) => String(s.name || "").trim()), ...appState.allTasks.map((task) => String(task.raw?.sprint ?? task.raw?.Sprint ?? "").trim())].filter(Boolean))].sort((a, b) => a.localeCompare(b));
     els.planningSprintSelect.replaceChildren(new Option("All sprint work", "all"));
     sprintNames.forEach((name) => els.planningSprintSelect.add(new Option(name, name)));
-    els.planningSprintSelect.value = sprintNames.includes(previous) || previous === "all" ? previous : "all";
+    const activeSprintName = String(getActiveSprintMeta()?.sprint || "").trim();
+    els.planningSprintSelect.value = sprintNames.includes(previous) || previous === "all"
+      ? previous
+      : (sprintNames.includes(activeSprintName) ? activeSprintName : "all");
+    if (sprintNames.includes(activeSprintName)) appState.planningSprintInitialized = true;
 
     const selected = els.planningSprintSelect.value;
     const projectTasks = (appState.filteredTasks || []).filter((task) => !task.archived);
@@ -2899,7 +2951,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const dependencyId = String(new FormData(dependencyForm).get("dependencyId") || "");
       const dependencies = [...(task.raw.dependencies || [])];
       if (!dependencyId || dependencies.includes(dependencyId)) return;
-      if (wouldCreateDependencyCycle(task.id, dependencyId)) {
+      if (wouldCreateDependencyCycle(task.id, dependencyId, appState.allTasks, [...dependencies, dependencyId])) {
         window.alert("This link would create a dependency cycle. Choose a different prerequisite.");
         return;
       }
@@ -2911,19 +2963,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     }));
   }
 
-  function wouldCreateDependencyCycle(taskId, prerequisiteId) {
-    const visited = new Set();
-    const visit = (id) => {
-      if (id === taskId) return true;
-      if (visited.has(id)) return false;
-      visited.add(id);
-      const task = appState.allTasks.find((item) => item.id === id);
-      return (task?.raw.dependencies || []).some(visit);
-    };
-    return visit(prerequisiteId);
-  }
-
   async function saveTaskBreakdown(task, patch) {
+    const validationError = validateTaskBreakdownPatch(task, patch, appState.allTasks);
+    if (validationError) {
+      window.alert(validationError);
+      return;
+    }
     try {
       await updateDoc(taskReference(task.id), { ...patch, updatedAt: serverTimestamp() });
       task.raw = { ...task.raw, ...patch };
@@ -2970,15 +3015,33 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   const STORY_LIFECYCLE_STATES = ["Draft", "Ready", "In Progress", "In Review", "Accepted"];
 
+  function linkedUserStory(task) {
+    const storyId = String(task?.raw?.userStoryId || "").trim();
+    return storyId ? appState.userStories.find((story) => story.id === storyId) || null : null;
+  }
+
   function renderStoryLifecycle(task) {
-    const state = STORY_LIFECYCLE_STATES.includes(task.raw.userStoryStatus) ? task.raw.userStoryStatus : "Draft";
+    const story = linkedUserStory(task);
+    const legacyStoryTitle = String(task.raw.userStory || task.story || "").trim();
+    const hasLegacyStory = Boolean(legacyStoryTitle && legacyStoryTitle !== "-");
+    if (!story && !hasLegacyStory && !String(task.raw.userStoryId || "").trim()) return "";
+    const taskState = String(task.raw.userStoryStatus || "");
+    const state = STORY_LIFECYCLE_STATES.includes(story?.lifecycle)
+      ? story.lifecycle
+      : (STORY_LIFECYCLE_STATES.includes(taskState) ? taskState : "Draft");
+    const hasUnresolvedStoryLink = Boolean(String(task.raw.userStoryId || "").trim() && !story);
+    const note = story
+      ? "Changing this status updates the linked User Story. Task copies are not independently changed."
+      : (hasUnresolvedStoryLink
+        ? "The linked User Story is unavailable, so its lifecycle cannot be changed here."
+        : "This is a legacy task-only story. Changing this status updates matching legacy tasks by title.");
     return `
       <section class="task-breakdown story-lifecycle">
         <div class="breakdown-heading"><div><h3>User Story lifecycle</h3><p>Track the delivery state of the story linked to this task.</p></div></div>
         <label class="story-lifecycle-control" for="userStoryStatusSelect"><span>Story status</span>
-          <select id="userStoryStatusSelect">${STORY_LIFECYCLE_STATES.map((value) => `<option value="${value}" ${value === state ? "selected" : ""}>${value}</option>`).join("")}</select>
+          <select id="userStoryStatusSelect"${hasUnresolvedStoryLink ? " disabled" : ""}>${STORY_LIFECYCLE_STATES.map((value) => `<option value="${value}" ${value === state ? "selected" : ""}>${value}</option>`).join("")}</select>
         </label>
-        <p class="story-lifecycle-note">Changing this status updates tasks linked by stable User Story ID; legacy tasks without an ID are matched by title.</p>
+        <p class="story-lifecycle-note">${note}</p>
       </section>`;
   }
 
@@ -2988,13 +3051,31 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const nextState = select.value;
       if (!STORY_LIFECYCLE_STATES.includes(nextState)) return;
       select.disabled = true;
+      const story = linkedUserStory(task);
+      if (story) {
+        try {
+          await updateDoc(userStoryReference(story.id), {
+            lifecycle: nextState,
+            updatedAt: serverTimestamp()
+          });
+          story.lifecycle = nextState;
+          openTaskModal(appState.allTasks.find((item) => item.id === task.id) || task);
+        } catch (error) {
+          console.error("Could not update User Story lifecycle", error);
+          window.alert("Could not save the User Story lifecycle. Check project permissions and try again.");
+          select.disabled = false;
+        }
+        return;
+      }
       const storyTitle = String(task.raw.userStory || task.story || "").trim();
       const storyId = String(task.raw.userStoryId || "");
-      const linkedTasks = storyId
-        ? appState.allTasks.filter((item) => String(item.raw.userStoryId || "") === storyId)
-        : (storyTitle && storyTitle !== "-"
-          ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
-          : [task]);
+      if (storyId) {
+        select.disabled = true;
+        return;
+      }
+      const linkedTasks = storyTitle && storyTitle !== "-"
+        ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
+        : [task];
       if (linkedTasks.length > 500) {
         window.alert("This story is linked to more than 500 tasks. Status was not changed; split the update into smaller groups.");
         select.disabled = false;

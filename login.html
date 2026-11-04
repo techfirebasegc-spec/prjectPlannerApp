@@ -11,22 +11,31 @@
 </head>
 <body>
   <main class="login-shell">
-    <section class="login-card" aria-label="Login form">
-      <p class="login-kicker">Secure Access</p>
-      <h1>Arcflow</h1>
-      <p class="login-subtitle">Sign in with your verified Firebase account.</p>
-      <form id="loginForm" novalidate>
-        <label for="userId">Email address</label>
-        <input id="userId" name="userId" type="email" autocomplete="email" required>
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" required>
-        <button id="loginBtn" type="submit">Sign In</button>
-        <button id="createAccountBtn" class="secondary-btn" type="button">Create Email Account</button>
-        <button id="googleSignInBtn" class="google-btn" type="button">Continue with Google</button>
-        <button id="resendVerificationBtn" class="link-btn is-hidden" type="button">Resend verification email</button>
-        <p id="loginError" class="login-error" aria-live="polite"></p>
-      </form>
-    </section>
+    <div class="login-layout">
+      <section class="login-intro" aria-label="Arcflow overview">
+        <div class="login-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <p class="login-kicker">Project delivery workspace</p>
+        <h1>Make every sprint<br>move with clarity.</h1>
+        <p class="login-intro-copy">Arcflow brings planning, delivery health, and work ownership into one focused project view.</p>
+        <ul class="login-benefits"><li><span aria-hidden="true">✓</span> Plan work around real sprint capacity</li><li><span aria-hidden="true">✓</span> Keep delivery progress visible</li><li><span aria-hidden="true">✓</span> Work from one shared project space</li></ul>
+        <p class="login-security-note"><span aria-hidden="true">⌁</span> Secure access for verified accounts</p>
+      </section>
+      <section class="login-card" aria-label="Login form">
+        <div class="login-card-heading"><p class="login-kicker">Welcome back</p><h2>Sign in to Arcflow</h2><p class="login-subtitle">Use your verified Firebase account to continue.</p></div>
+        <form id="loginForm" novalidate>
+          <label for="userId">Email address</label>
+          <input id="userId" name="userId" type="email" autocomplete="email" placeholder="you@example.com" required>
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" placeholder="Enter your password" required>
+          <button id="loginBtn" type="submit">Sign In <span aria-hidden="true">→</span></button>
+          <div class="login-divider"><span>or</span></div>
+          <button id="googleSignInBtn" class="google-btn" type="button"><span class="google-mark" aria-hidden="true">G</span>Continue with Google</button>
+          <button id="createAccountBtn" class="secondary-btn" type="button">Create Email Account</button>
+          <button id="resendVerificationBtn" class="link-btn is-hidden" type="button">Resend verification email</button>
+          <p id="loginError" class="login-error" aria-live="polite"></p>
+        </form>
+      </section>
+    </div>
   </main>
   <script type="module" src="login.js"></script>
 </body>

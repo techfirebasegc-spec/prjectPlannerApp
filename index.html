@@ -86,7 +86,7 @@
       </section>
     </aside>
 
-    <button id="mobileNavToggle" class="mobile-nav-toggle" type="button" aria-label="Open navigation and filters" aria-expanded="false">☰ <span>Menu</span></button>
+    <button id="mobileNavToggle" class="mobile-nav-toggle" type="button" aria-label="Open navigation and filters" aria-expanded="false">☰</button>
     <div class="workspace">
       <header class="topbar">
         <span id="currentUserName" class="user-name nav-user-name"></span>
@@ -266,7 +266,8 @@
               <label>Sprint name<input id="sprintNameInput" maxlength="100" required placeholder="e.g. Sprint 24"></label>
               <label>Sprint goal<textarea id="sprintGoalInput" maxlength="1200" rows="3" placeholder="Outcome the team intends to deliver"></textarea></label>
               <div class="planning-form-row"><label>Start date<input id="sprintStartInput" type="date" required></label><label>End date<input id="sprintEndInput" type="date" required></label></div>
-              <label>Capacity (story points)<input id="sprintCapacityInput" type="number" min="0" max="10000" step="0.5" required value="0"></label>
+              <label>Team capacity (story points)<input id="sprintCapacityInput" type="number" min="0" max="10000" step="0.5" required value="0"></label>
+              <section class="sprint-member-capacity" aria-labelledby="sprintMemberCapacityTitle"><div class="sprint-member-capacity-heading"><div><h4 id="sprintMemberCapacityTitle">Individual capacity</h4><p>Optional available story points for each project member.</p></div></div><div id="sprintMemberCapacityInputs" class="sprint-member-capacity-list" aria-live="polite"></div></section>
               <label>Status<select id="sprintStatusInput"><option value="PLANNED">Planned</option><option value="ACTIVE">Active</option><option value="COMPLETED">Completed</option></select></label>
               <p id="sprintFormError" class="task-editor-error" aria-live="polite"></p>
               <div class="planning-form-actions"><button id="sprintCancelBtn" class="secondary-action" type="button">Clear</button><button id="sprintSaveBtn" class="save-task-btn" type="submit">Create sprint</button></div>
@@ -417,16 +418,6 @@
           <header><div><h3>Sprint calendar</h3><p>Planning view of sprint date ranges</p></div></header>
           <div id="sprintCalendar" class="sprint-calendar"></div>
         </section>
-      </section>
-
-          <section class="chart-card">
-            <header>
-              <h3>Velocity Chart</h3>
-              <p>Committed vs completed by sprint</p>
-            </header>
-            <canvas id="velocityChart" height="140"></canvas>
-          </section>
-        </div>
       </section>
 
       <section id="profileView" class="profile-view is-hidden" aria-label="Profile">
