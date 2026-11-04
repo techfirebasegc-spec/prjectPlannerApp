@@ -7,11 +7,13 @@ service cloud.firestore {
 
     function validTask(data) {
       return data.keys().hasOnly([
-          "task", "userStory", "userStoryId", "userStoryDescription", "pi", "piId", "sprint", "feature", "featureId", "assignee", "assigneeUid",
+          "task", "code", "userStory", "userStoryId", "userStoryDescription", "pi", "piId", "sprint", "sprintId", "feature", "featureId", "assignee", "assigneeUid",
           "storyPoints", "priority", "startDate", "endDate", "description",
           "status", "archived", "createdBy", "createdAt", "updatedAt", "subtasks", "dependencies", "acceptanceCriteria", "userStoryStatus"
         ])
         && data.task is string && data.task.size() > 0 && data.task.size() <= 160
+        && (!data.keys().hasAll(["code"]) || (data.code is string && data.code.matches("^TASK-[0-9]{3,}$")))
+        && (!data.keys().hasAll(["sprintId"]) || (data.sprintId is string && data.sprintId.size() <= 100))
         && data.userStory is string
         && (!data.keys().hasAll(["userStoryId"]) || (data.userStoryId is string && data.userStoryId.size() <= 100))
         && data.pi is string && data.sprint is string
@@ -32,10 +34,11 @@ service cloud.firestore {
 
     function validUserStory(data) {
       return data.keys().hasOnly([
-          "title", "description", "acceptanceCriteria", "pi", "piId", "feature", "featureId",
+          "title", "code", "description", "acceptanceCriteria", "owner", "ownerUid", "pi", "piId", "feature", "featureId",
           "startDate", "endDate", "lifecycle", "createdBy", "createdAt", "updatedAt", "archived"
         ])
         && data.title is string && data.title.size() > 0 && data.title.size() <= 160
+        && (!data.keys().hasAll(["code"]) || (data.code is string && data.code.matches("^US-[0-9]{3,}$")))
         && data.description is string && data.description.size() <= 1500
         && data.acceptanceCriteria is list && data.acceptanceCriteria.size() <= 50
         && data.pi is string && data.pi.size() <= 100
@@ -50,6 +53,8 @@ service cloud.firestore {
 
     function validNewTask(data) {
       return validTask(data)
+        && data.keys().hasAll(["code", "archived"])
+        && data.code.matches("^TASK-[0-9]{3,}$")
         && data.keys().hasAll(["archived"])
         && data.archived == false;
     }
@@ -103,17 +108,35 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /plannerSequences/{entityType} {
+      allow get: if isVerifiedUser();
+      allow list: if false;
+      allow create: if isVerifiedUser() && entityType in ["pi", "feature", "sprint", "story", "task"]
+        && request.resource.data.keys().hasOnly(["entityType", "lastAllocated", "updatedAt"])
+        && request.resource.data.entityType == entityType
+        && request.resource.data.lastAllocated is int && request.resource.data.lastAllocated > 0;
+      allow update: if isVerifiedUser() && request.resource.data.entityType == resource.data.entityType
+        && request.resource.data.lastAllocated is int
+        && request.resource.data.lastAllocated == resource.data.lastAllocated + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["lastAllocated", "updatedAt"]);
+      allow delete: if false;
+    }
+
     // Program Increment and Feature catalogue for the shared Default Project.
     match /plannerProgramIncrements/{piId} {
       allow get, list: if isVerifiedUser();
       allow create: if isVerifiedUser()
-        && request.resource.data.keys().hasOnly(["name", "description", "startDate", "endDate", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["name", "code", "description", "startDate", "endDate", "status", "archived", "createdBy", "createdAt", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.code is string && request.resource.data.code.matches("^PI-[0-9]{3,}$")
         && request.resource.data.description is string && request.resource.data.startDate is string && request.resource.data.endDate is string
         && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"]
         && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
       allow update: if isVerifiedUser()
         && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.code == resource.data.code
+        && (!resource.data.keys().hasAll(["code"]) || request.resource.data.code == resource.data.code)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "description", "startDate", "endDate", "status", "archived", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
         && request.resource.data.description is string && request.resource.data.startDate is string && request.resource.data.endDate is string
@@ -124,8 +147,9 @@ service cloud.firestore {
     match /plannerFeatures/{featureId} {
       allow get, list: if isVerifiedUser();
       allow create: if isVerifiedUser()
-        && request.resource.data.keys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["name", "code", "piId", "pi", "description", "owner", "ownerUid", "priority", "status", "archived", "createdBy", "createdAt", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+        && request.resource.data.code is string && request.resource.data.code.matches("^FEAT-[0-9]{3,}$")
         && request.resource.data.piId is string && exists(/databases/$(database)/documents/plannerProgramIncrements/$(request.resource.data.piId))
         && request.resource.data.pi is string && request.resource.data.description is string
         && request.resource.data.owner is string && request.resource.data.priority in ["HIGH", "MEDIUM", "LOW"]
@@ -133,7 +157,10 @@ service cloud.firestore {
         && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
       allow update: if isVerifiedUser()
         && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "updatedAt"])
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.code == resource.data.code
+        && (!resource.data.keys().hasAll(["code"]) || request.resource.data.code == resource.data.code)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "ownerUid", "priority", "status", "archived", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
         && request.resource.data.piId is string && exists(/databases/$(database)/documents/plannerProgramIncrements/$(request.resource.data.piId))
         && request.resource.data.pi is string && request.resource.data.description is string
@@ -142,10 +169,48 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /plannerSprints/{sprintId} {
+      allow get, list: if isVerifiedUser();
+      match /dailySnapshots/{snapshotDate} {
+        allow get, list: if isVerifiedUser();
+        allow create, update: if isVerifiedUser()
+          && request.resource.data.keys().hasOnly(["date", "sprintId", "sprintName", "projectId", "taskCount", "totalPoints", "completedPoints", "remainingPoints", "todoCount", "inProgressCount", "doneCount", "recordedBy", "recordedAt"])
+          && request.resource.data.date == snapshotDate
+          && request.resource.data.sprintId == sprintId
+          && request.resource.data.projectId == "default"
+          && request.resource.data.recordedBy == request.auth.uid
+          && request.resource.data.taskCount is int && request.resource.data.taskCount >= 0
+          && request.resource.data.totalPoints is number && request.resource.data.totalPoints >= 0
+          && request.resource.data.completedPoints is number && request.resource.data.completedPoints >= 0
+          && request.resource.data.remainingPoints is number && request.resource.data.remainingPoints >= 0
+          && request.resource.data.todoCount is int && request.resource.data.inProgressCount is int && request.resource.data.doneCount is int;
+        allow delete: if false;
+      }
+      allow create: if isVerifiedUser()
+        && request.resource.data.keys().hasOnly(["name", "code", "goal", "startDate", "endDate", "capacity", "memberCapacities", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.code is string && request.resource.data.code.matches("^SPR-[0-9]{3,}$")
+        && request.resource.data.goal is string && request.resource.data.goal.size() <= 1200
+        && request.resource.data.startDate is string && request.resource.data.endDate is string && request.resource.data.endDate >= request.resource.data.startDate
+        && request.resource.data.capacity is number && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+        && (!request.resource.data.keys().hasAll(["memberCapacities"]) || (request.resource.data.memberCapacities is map && request.resource.data.memberCapacities.size() <= 100))
+        && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"] && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser() && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "goal", "startDate", "endDate", "capacity", "memberCapacities", "status", "archived", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.goal is string && request.resource.data.goal.size() <= 1200
+        && request.resource.data.startDate is string && request.resource.data.endDate is string && request.resource.data.endDate >= request.resource.data.startDate
+        && request.resource.data.capacity is number && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+        && (!request.resource.data.keys().hasAll(["memberCapacities"]) || (request.resource.data.memberCapacities is map && request.resource.data.memberCapacities.size() <= 100))
+        && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"] && request.resource.data.archived is bool;
+      allow delete: if false;
+    }
+
     // Standalone User Stories in the shared Default Project.
     match /plannerUserStories/{storyId} {
       allow get, list: if isVerifiedUser();
       allow create: if isVerifiedUser() && validUserStory(request.resource.data)
+        && request.resource.data.code is string && request.resource.data.code.matches("^US-[0-9]{3,}$")
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.featureId is string
         && exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
@@ -153,6 +218,7 @@ service cloud.firestore {
       allow update: if isVerifiedUser() && resource.data.createdBy == request.auth.uid
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
+        && (!resource.data.keys().hasAll(["code"]) || request.resource.data.code == resource.data.code)
         && validUserStory(request.resource.data)
         && request.resource.data.featureId is string
         && exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
@@ -173,6 +239,7 @@ service cloud.firestore {
           && request.resource.data.status in ["To Do", "In Progress", "Done"])
         || (resource.data.createdBy == request.auth.uid
           && request.resource.data.createdBy == resource.data.createdBy
+          && (!resource.data.keys().hasAll(["code"]) || request.resource.data.code == resource.data.code)
           && validTask(request.resource.data)
           && (!request.resource.data.keys().hasAll(["featureId"]) || request.resource.data.featureId == ""
             || (exists(/databases/$(database)/documents/plannerFeatures/$(request.resource.data.featureId))
@@ -233,6 +300,13 @@ service cloud.firestore {
         && memberId != get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId;
     }
 
+    // Collection-group queries for the signed-in user's project memberships.
+    // The query must constrain uid == request.auth.uid; this does not grant access
+    // to other users' membership documents.
+    match /{path=**}/members/{memberId} {
+      allow get, list: if isVerifiedUser() && resource.data.uid == request.auth.uid;
+    }
+
     match /plannerUserProjects/{uid}/projects/{projectId} {
       allow get, list: if isVerifiedUser() && request.auth.uid == uid;
       allow create: if isVerifiedUser() && request.resource.data.keys().hasOnly(["role", "addedAt"])
@@ -250,12 +324,27 @@ service cloud.firestore {
         && (request.auth.uid == uid || isProjectOwner(projectId));
     }
 
+    match /plannerProjects/{projectId}/sequences/{entityType} {
+      allow get: if isVerifiedUser() && isProjectMember(projectId);
+      allow list: if false;
+      allow create: if isVerifiedUser() && canEditProject(projectId) && entityType in ["pi", "feature", "sprint", "story", "task"]
+        && request.resource.data.keys().hasOnly(["entityType", "lastAllocated", "updatedAt"])
+        && request.resource.data.entityType == entityType
+        && request.resource.data.lastAllocated is int && request.resource.data.lastAllocated > 0;
+      allow update: if isVerifiedUser() && canEditProject(projectId) && request.resource.data.entityType == resource.data.entityType
+        && request.resource.data.lastAllocated is int
+        && request.resource.data.lastAllocated == resource.data.lastAllocated + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["lastAllocated", "updatedAt"]);
+      allow delete: if false;
+    }
+
     // Project-scoped PI and Feature catalogue. Members may read; owners/editors may write.
     match /plannerProjects/{projectId}/programIncrements/{piId} {
       allow get, list: if isVerifiedUser() && isProjectMember(projectId);
       allow create: if isVerifiedUser() && canEditProject(projectId)
-        && request.resource.data.keys().hasOnly(["name", "description", "startDate", "endDate", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["name", "code", "description", "startDate", "endDate", "status", "archived", "createdBy", "createdAt", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.code is string && request.resource.data.code.matches("^PI-[0-9]{3,}$")
         && request.resource.data.description is string && request.resource.data.startDate is string && request.resource.data.endDate is string
         && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"]
         && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
@@ -270,15 +359,16 @@ service cloud.firestore {
     match /plannerProjects/{projectId}/features/{featureId} {
       allow get, list: if isVerifiedUser() && isProjectMember(projectId);
       allow create: if isVerifiedUser() && canEditProject(projectId)
-        && request.resource.data.keys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["name", "code", "piId", "pi", "description", "owner", "ownerUid", "priority", "status", "archived", "createdBy", "createdAt", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+        && request.resource.data.code is string && request.resource.data.code.matches("^FEAT-[0-9]{3,}$")
         && request.resource.data.piId is string
         && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/programIncrements/$(request.resource.data.piId))
         && request.resource.data.pi is string && request.resource.data.description is string && request.resource.data.owner is string
         && request.resource.data.priority in ["HIGH", "MEDIUM", "LOW"] && request.resource.data.status in ["PLANNED", "IN_PROGRESS", "COMPLETED"]
         && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
       allow update: if isVerifiedUser() && canEditProject(projectId)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "priority", "status", "archived", "updatedAt"])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "piId", "pi", "description", "owner", "ownerUid", "priority", "status", "archived", "updatedAt"])
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
         && request.resource.data.piId is string
         && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/programIncrements/$(request.resource.data.piId))
@@ -291,6 +381,7 @@ service cloud.firestore {
       allow get, list: if isVerifiedUser() && isProjectMember(projectId);
       allow create: if isVerifiedUser() && canEditProject(projectId)
         && validUserStory(request.resource.data)
+        && request.resource.data.code is string && request.resource.data.code.matches("^US-[0-9]{3,}$")
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.featureId is string
         && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
@@ -298,11 +389,54 @@ service cloud.firestore {
       allow update: if isVerifiedUser() && canEditProject(projectId)
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.createdAt == resource.data.createdAt
+        && (!resource.data.keys().hasAll(["code"]) || request.resource.data.code == resource.data.code)
         && validUserStory(request.resource.data)
         && request.resource.data.featureId is string
         && exists(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId))
         && get(/databases/$(database)/documents/plannerProjects/$(projectId)/features/$(request.resource.data.featureId)).data.piId == request.resource.data.piId;
       allow delete: if isVerifiedUser() && canEditProject(projectId);
+    }
+
+    match /plannerProjects/{projectId}/sprints/{sprintId} {
+      allow get, list: if isVerifiedUser() && isProjectMember(projectId);
+      allow create: if isVerifiedUser() && canEditProject(projectId)
+        && request.resource.data.keys().hasOnly(["name", "code", "goal", "startDate", "endDate", "capacity", "memberCapacities", "status", "archived", "createdBy", "createdAt", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.code is string && request.resource.data.code.matches("^SPR-[0-9]{3,}$")
+        && request.resource.data.goal is string && request.resource.data.goal.size() <= 1200
+        && request.resource.data.startDate is string && request.resource.data.endDate is string && request.resource.data.endDate >= request.resource.data.startDate
+        && request.resource.data.capacity is number && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+        && (!request.resource.data.keys().hasAll(["memberCapacities"]) || (request.resource.data.memberCapacities is map && request.resource.data.memberCapacities.size() <= 100))
+        && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"]
+        && request.resource.data.archived is bool && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isVerifiedUser() && canEditProject(projectId)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "goal", "startDate", "endDate", "capacity", "memberCapacities", "status", "archived", "updatedAt"])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.goal is string && request.resource.data.goal.size() <= 1200
+        && request.resource.data.startDate is string && request.resource.data.endDate is string && request.resource.data.endDate >= request.resource.data.startDate
+        && request.resource.data.capacity is number && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 10000
+        && (!request.resource.data.keys().hasAll(["memberCapacities"]) || (request.resource.data.memberCapacities is map && request.resource.data.memberCapacities.size() <= 100))
+        && request.resource.data.status in ["PLANNED", "ACTIVE", "COMPLETED"] && request.resource.data.archived is bool;
+      allow delete: if false;
+    }
+
+    match /plannerProjects/{projectId}/sprints/{sprintId}/dailySnapshots/{snapshotDate} {
+      allow get, list: if isVerifiedUser() && isProjectMember(projectId);
+      allow create, update: if isVerifiedUser() && canEditProject(projectId)
+        && request.resource.data.keys().hasOnly(["date", "sprintId", "sprintName", "projectId", "taskCount", "totalPoints", "completedPoints", "remainingPoints", "todoCount", "inProgressCount", "doneCount", "recordedBy", "recordedAt"])
+        && request.resource.data.date == snapshotDate
+        && request.resource.data.sprintId == sprintId
+        && request.resource.data.projectId == projectId
+        && request.resource.data.recordedBy == request.auth.uid
+        && request.resource.data.taskCount is int && request.resource.data.taskCount >= 0
+        && request.resource.data.totalPoints is number && request.resource.data.totalPoints >= 0
+        && request.resource.data.completedPoints is number && request.resource.data.completedPoints >= 0
+        && request.resource.data.remainingPoints is number && request.resource.data.remainingPoints >= 0
+        && request.resource.data.todoCount is int && request.resource.data.inProgressCount is int && request.resource.data.doneCount is int;
+      allow delete: if false;
     }
 
     match /plannerProjects/{projectId}/tasks/{taskId} {

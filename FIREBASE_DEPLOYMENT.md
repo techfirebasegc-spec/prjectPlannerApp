@@ -21,3 +21,27 @@ Any user authenticated with Firebase Authentication and a verified email address
 2. In Firebase Console, enable Google and Email/Password sign-in and configure email verification.
 3. Build with `npm run build`.
 4. Deploy Hosting and Firestore rules with `firebase deploy --only hosting,firestore:rules --project project-palnner`.
+
+
+## Sprint metadata
+
+- Shared Default Project: `plannerSprints/{sprintId}`
+- Named projects: `plannerProjects/{projectId}/sprints/{sprintId}`
+- Each sprint stores `name`, `goal`, `startDate`, `endDate`, `capacity`, `status`, `archived`, `createdBy`, `createdAt`, and `updatedAt`.
+- Deploy updated Firestore rules before using sprint create/edit/archive. Project members can read project sprints; project owners/editors can write them. Default-project sprint writes are limited to verified users and updates are restricted to the creator.
+- Task assignments still store sprint names in the existing task `sprint` field. The UI prevents renaming a sprint while active tasks are assigned to it. Archiving preserves task assignments and does not delete tasks.
+
+
+## Sprint analytics and daily history
+
+Daily progress is stored at `plannerSprints/{sprintId}/dailySnapshots/{YYYY-MM-DD}` for the Default Project and `plannerProjects/{projectId}/sprints/{sprintId}/dailySnapshots/{YYYY-MM-DD}` for named projects. The app upserts one snapshot per sprint per local calendar day when it is open and sprint/task data refreshes; days with no app activity may have no snapshot. Historical actuals begin after deployment and are not backfilled. Deploy updated Firestore rules before enabling this feature.
+
+
+## Sprint velocity and completion analytics
+
+The Reports view summarizes historical sprint delivery using the daily snapshots stored under each sprint's `dailySnapshots` subcollection. The trend uses the latest snapshot on or before the sprint end date; completion rate is completed points divided by committed points. Average velocity includes only sprints whose status is Completed, Complete, Closed, or Done and that have a measurable snapshot on or before the end date. Sprints without such a snapshot display unavailable metrics rather than estimating historical results from today's task state. Snapshots are recorded while the planner is open and sprint/task data refreshes; this is not a scheduled backend job and history is not backfilled.
+
+
+## Visible record identifiers in the UI
+
+Task cards and task lists display the saved Task ID. The task detail panel includes Task ID, Project ID, creator UID, assignee UID when present, PI ID, and User Story ID. User Story cards and details show their saved IDs plus owner UID and linked Feature/PI IDs. The profile displays the signed-in Firebase UID and selected Project ID. Legacy stories without a saved record ID are labeled accordingly; IDs are not fabricated.

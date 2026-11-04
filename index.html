@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="./sprint-execution.css">
 </head>
 <body>
   <a class="skip-link" href="#boardView">Skip to planner content</a>
@@ -28,7 +29,14 @@
       </div>
 
       <section class="filter-panel">
-        <h2>Filters</h2>
+        <div class="filter-panel-heading">
+          <h2>Filters</h2>
+          <button id="resetFiltersBtn" class="reset-filters-btn" type="button" title="Reset all filters" aria-label="Reset all filters">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3.5 11a8.5 8.5 0 1 1 2.2 6.8"/><path d="M3.5 4.8V11h6.2"/>
+            </svg>
+          </button>
+        </div>
         <label for="piFilter">PI</label>
         <select id="piFilter" class="filter-select">
           <option value="all">All PI</option>
@@ -78,6 +86,7 @@
       </section>
     </aside>
 
+    <button id="mobileNavToggle" class="mobile-nav-toggle" type="button" aria-label="Open navigation and filters" aria-expanded="false">☰</button>
     <div class="workspace">
       <header class="topbar">
         <span id="currentUserName" class="user-name nav-user-name"></span>
@@ -112,6 +121,7 @@
         <button id="listViewBtn" class="view-btn" type="button">Work Items</button>
         <button id="boardViewBtn" class="view-btn" type="button">Board</button>
         <button id="storiesViewBtn" class="view-btn" type="button">User Stories</button>
+        <button id="sprintPlanningViewBtn" class="view-btn" type="button">Sprint Planning</button>
         <button id="piViewBtn" class="view-btn" type="button">PIs</button>
         <button id="featuresViewBtn" class="view-btn" type="button">Features</button>
         <button id="insightsViewBtn" class="view-btn" type="button">Reports</button>
@@ -233,6 +243,40 @@
         </div>
       </section>
 
+      <section id="sprintPlanningView" class="sprint-planning-view is-hidden" aria-label="Sprint planning workspace">
+        <header class="planning-page-header">
+          <div><p class="brand-kicker">Delivery workspace</p><h2>Sprint Planning</h2><p>Review capacity, plan work, and spot delivery risks before committing.</p></div>
+          <div class="planning-header-actions"><label class="planning-sprint-picker">Sprint<select id="planningSprintSelect" class="filter-select"><option value="all">All sprint work</option></select></label><a class="planning-manage-link" href="#sprintManagement">Manage sprints ↓</a></div>
+        </header>
+        <div id="planningSprintStats" class="planning-metrics" aria-live="polite"></div>
+        <section class="sprint-execution" aria-label="Sprint execution">
+          <header class="sprint-execution-header"><div><p class="planning-eyebrow">DELIVERY CONTROL</p><h3>Sprint execution</h3><p>Move committed work through delivery and monitor remaining effort against planned pace.</p></div></header>
+          <div class="execution-layout"><section class="execution-board-panel"><div id="sprintExecutionBoard" class="execution-board"></div></section>
+          <aside class="execution-burndown-panel"><div class="execution-panel-heading"><div><p class="planning-eyebrow">SPRINT HEALTH</p><h4>Burndown</h4></div><span class="execution-badge">Plan vs current</span></div><div id="sprintBurndownSummary" class="execution-summary"></div><div id="sprintBurndownChart" class="execution-chart" role="img" aria-label="Planned remaining story points and current remaining effort"></div><p id="sprintBurndownNote" class="execution-chart-note">Historical actuals require daily snapshots; none are fabricated.</p></aside></div>
+        </section>
+        <div class="planning-content-grid">
+          <section class="planning-column"><header><div><p class="planning-eyebrow">Ready to plan</p><h3>Backlog</h3></div><span id="planningBacklogCount" class="planning-count">0</span></header><p class="planning-column-help">Tasks not currently assigned to the selected sprint.</p><div id="planningBacklogList" class="planning-task-list"></div></section>
+          <section class="planning-column planning-committed"><header><div><p class="planning-eyebrow">Sprint commitment</p><h3>Sprint work</h3></div><span id="planningSprintCount" class="planning-count">0</span></header><p class="planning-column-help">Tasks already assigned to the selected sprint.</p><div id="planningSprintList" class="planning-task-list"></div></section>
+        </div>
+        <aside id="planningRiskPanel" class="planning-risk-panel" aria-live="polite"></aside>
+        <section id="sprintManagement" class="sprint-management" aria-label="Sprint management">
+          <header class="sprint-management-header"><div><p class="planning-eyebrow">SPRINT CONFIGURATION</p><h3>Manage sprints</h3><p>Set sprint goals, dates, capacity, and lifecycle status. Existing task assignments continue to use the sprint name field.</p></div><span id="sprintCount" class="planning-count">0 sprints</span></header>
+          <div class="sprint-management-grid">
+            <form id="sprintForm" class="planning-form"><input id="sprintRecordId" type="hidden"><h3 id="sprintFormTitle">Create a sprint</h3>
+              <label>Sprint name<input id="sprintNameInput" maxlength="100" required placeholder="e.g. Sprint 24"></label>
+              <label>Sprint goal<textarea id="sprintGoalInput" maxlength="1200" rows="3" placeholder="Outcome the team intends to deliver"></textarea></label>
+              <div class="planning-form-row"><label>Start date<input id="sprintStartInput" type="date" required></label><label>End date<input id="sprintEndInput" type="date" required></label></div>
+              <label>Team capacity (story points)<input id="sprintCapacityInput" type="number" min="0" max="10000" step="0.5" required value="0"></label>
+              <section class="sprint-member-capacity" aria-labelledby="sprintMemberCapacityTitle"><div class="sprint-member-capacity-heading"><div><h4 id="sprintMemberCapacityTitle">Individual capacity</h4><p>Optional available story points for each project member.</p></div></div><div id="sprintMemberCapacityInputs" class="sprint-member-capacity-list" aria-live="polite"></div></section>
+              <label>Status<select id="sprintStatusInput"><option value="PLANNED">Planned</option><option value="ACTIVE">Active</option><option value="COMPLETED">Completed</option></select></label>
+              <p id="sprintFormError" class="task-editor-error" aria-live="polite"></p>
+              <div class="planning-form-actions"><button id="sprintCancelBtn" class="secondary-action" type="button">Clear</button><button id="sprintSaveBtn" class="save-task-btn" type="submit">Create sprint</button></div>
+            </form>
+            <section class="planning-records-panel"><div class="planning-records-heading"><div><h3>Sprint catalogue</h3><p>Capacity and delivery windows for this project</p></div></div><div id="sprintRecords" class="planning-record-list"></div></section>
+          </div>
+        </section>
+      </section>
+
       <section id="storiesView" class="stories-view is-hidden" aria-label="User stories">
         <div class="stories-toolbar"><div><h2>User Stories</h2><p>Browse stories and the tasks linked to each one.</p></div><button id="newStoryBtn" class="save-task-btn" type="button">+ Create User Story</button></div>
         <div class="stories-list-controls"><div id="storiesSummary" class="stories-summary" aria-live="polite"></div><div class="stories-toolbar-actions"><span class="stories-layout-label" aria-label="Current layout">☷ List view</span><button id="toggleArchivedStoriesBtn" class="story-archive-toggle" type="button" aria-pressed="false">Show archived</button></div></div><div id="storiesGrid" class="stories-grid"></div>
@@ -269,7 +313,7 @@
             <label>Feature name<input id="featureNameInput" maxlength="120" required placeholder="e.g. Secure account recovery"></label>
             <label>Program Increment<select id="featurePIInput" required><option value="">Select a PI</option></select></label>
             <label>Description<textarea id="featureDescriptionInput" maxlength="1500" rows="3" placeholder="Capability and expected value"></textarea></label>
-            <div class="planning-form-row"><label>Owner<input id="featureOwnerInput" maxlength="120" placeholder="Feature owner"></label><label>Priority<select id="featurePriorityInput"><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="LOW">Low</option></select></label></div>
+            <div class="planning-form-row"><label>Owner<select id="featureOwnerInput"><option value="">Unassigned</option></select></label><label>Priority<select id="featurePriorityInput"><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="LOW">Low</option></select></label></div>
             <label>Status<select id="featureStatusInput"><option value="PLANNED">Planned</option><option value="IN_PROGRESS">In progress</option><option value="COMPLETED">Completed</option></select></label>
             <p id="featureFormError" class="task-editor-error" aria-live="polite"></p>
             <div class="planning-form-actions"><button id="featureCancelBtn" class="secondary-action" type="button">Clear</button><button id="featureSaveBtn" class="save-task-btn" type="submit">Create Feature</button></div>
@@ -338,51 +382,42 @@
         </div></div></section>
         <section class="knowledge-section" id="kc-examples"><span class="knowledge-step">09</span><div><h2>Worked example: from idea to delivery</h2><div class="knowledge-example"><p><b>Feature:</b> Account security</p><p><b>User Story:</b> As a user, I want to reset my password so I can regain access securely.</p><p><b>Acceptance criteria:</b> A valid reset request sends a time-limited link; invalid/expired links are rejected; success confirms the password was changed.</p><p><b>Tasks:</b> Build reset-request screen (3 points); implement reset-token validation (5 points); add tests and review (2 points).</p><p><b>Total task-estimated points:</b> 10, if your team uses task-level estimates consistently.</p><p><b>Sprint:</b> Sprint 04. <b>PI:</b> PI 2026-Q4. <b>Owner:</b> assigned team member. <b>Status:</b> tasks move To Do → In Progress → Done; story moves through its own lifecycle to Accepted after verification.</p></div></div></section>
       </section>
-      <section id="insightsView" class="insights-view is-hidden" aria-label="Agile insights">
+      <section id="insightsView" class="insights-view is-hidden" aria-label="Delivery reports">
         <div class="insights-header">
-          <h2>Sprint Calendar & Delivery Insights</h2>
-          <select id="calendarMonth" class="filter-select"></select>
+          <div><span class="brand-kicker">PROJECT ANALYTICS</span><h2>Delivery report</h2><p>See current workload, sprint outcomes and delivery risks for the selected project.</p></div>
+          <label class="report-period">Calendar month<select id="calendarMonth" class="filter-select"></select></label>
         </div>
-
         <div id="sprintLegend" class="sprint-legend"></div>
-        <div id="sprintCalendar" class="sprint-calendar"></div>
-
-        <div class="agile-metrics">
-          <article class="metric-card">
-            <p>Committed Points</p>
-            <strong id="committedPoints">0</strong>
-          </article>
-          <article class="metric-card">
-            <p>Completed Points</p>
-            <strong id="completedPoints">0</strong>
-          </article>
-          <article class="metric-card">
-            <p>Spillover Tasks</p>
-            <strong id="spilloverTasks">0</strong>
-          </article>
-          <article class="metric-card">
-            <p>Overdue Open</p>
-            <strong id="overdueOpen">0</strong>
-          </article>
+        <section class="report-focus">
+          <div class="report-focus-copy"><span class="report-eyebrow">SELECTED SPRINT</span><h3 id="reportSprintTitle">No sprint selected</h3><p id="reportSprintSubtitle">Assign sprint dates to tasks to generate sprint reporting.</p></div>
+          <div class="report-progress-wrap"><div class="report-progress-label"><span>Task completion</span><strong id="reportCompletion">0%</strong></div><div class="report-progress-track"><span id="reportCompletionBar" style="width:0%"></span></div><small id="reportProgressSummary">0 of 0 tasks complete</small></div>
+        </section>
+        <div class="agile-metrics report-metrics">
+          <article class="metric-card"><p>Committed points</p><strong id="committedPoints">0</strong><small>Estimated effort in selected sprint</small></article>
+          <article class="metric-card"><p>Completed points</p><strong id="completedPoints">0</strong><small>Effort in completed tasks</small></article>
+          <article class="metric-card"><p>Remaining points</p><strong id="remainingPoints">0</strong><small>Work not yet completed</small></article>
+          <article class="metric-card"><p>Overdue tasks</p><strong id="overdueOpen">0</strong><small>Open tasks past their due date</small></article>
         </div>
-
-        <div class="chart-grid">
-          <section class="chart-card">
-            <header>
-              <h3>Burndown Chart</h3>
-              <p id="burndownSubtitle">Current sprint trend</p>
-            </header>
-            <canvas id="burndownChart" height="140"></canvas>
+        <div class="report-analysis-grid">
+          <section class="report-panel">
+            <header><div><h3>Current sprint workload</h3><p>Task distribution by status</p></div></header>
+            <div id="reportStatusBreakdown" class="report-status-breakdown"></div>
+            <div class="report-effort-line"><span>Completed effort</span><strong id="reportEffortCompletion">0 / 0 points</strong></div>
           </section>
-
-          <section class="chart-card">
-            <header>
-              <h3>Velocity Chart</h3>
-              <p>Committed vs completed by sprint</p>
-            </header>
-            <canvas id="velocityChart" height="140"></canvas>
+          <section class="report-panel">
+            <header><div><h3>Sprint performance</h3><p>Completed effort across dated sprints</p></div></header>
+            <div class="report-chart-wrap"><canvas id="velocityChart" height="170"></canvas></div>
+            <p id="velocityEmpty" class="report-empty-hint" hidden>Not enough dated sprint data yet. Add start and end dates to sprint tasks.</p>
           </section>
         </div>
+        <section class="report-panel sprint-analytics-panel">
+          <header><div><h3>Sprint velocity &amp; completion</h3><p>Historical delivery performance based on recorded sprint snapshots.</p></div><span class="sprint-analytics-header-tag">TEAM DELIVERY</span></header>
+          <div id="sprintAnalytics" class="sprint-analytics-content"><div class="sprint-analytics-empty">Loading sprint history…</div></div>
+        </section>
+        <section class="report-panel report-calendar-panel">
+          <header><div><h3>Sprint calendar</h3><p>Planning view of sprint date ranges</p></div></header>
+          <div id="sprintCalendar" class="sprint-calendar"></div>
+        </section>
       </section>
 
       <section id="profileView" class="profile-view is-hidden" aria-label="Profile">
@@ -397,6 +432,7 @@
           <article class="profile-card"><p>Email</p><strong id="profileEmail">-</strong></article>
           <article class="profile-card profile-card-wide"><p>Firebase UID</p><code id="profileUid">-</code></article>
           <article class="profile-card"><p>Selected project</p><strong id="profileProject">-</strong></article>
+          <article class="profile-card profile-card-wide"><p>Project ID</p><code id="profileProjectId">-</code></article>
           <article class="profile-card"><p>Your role</p><strong id="profileRole">-</strong></article>
         </div>
         <form id="profileForm" class="profile-form" novalidate>
@@ -496,6 +532,7 @@
         <label class="task-form-wide">Acceptance criteria <span class="field-optional">Optional · one per line</span>
           <textarea id="storyCriteriaInput" name="acceptanceCriteria" rows="4" placeholder="User can search available doctors&#10;User can select an available time slot"></textarea>
         </label>
+        <label>Owner <span class="field-optional">Optional</span><select id="storyOwnerInput"><option value="">Unassigned</option></select></label>
         <label>Program Increment <span class="field-optional">Optional</span><select id="storyPiInput" name="pi"><option value="">Select a PI</option></select></label>
         <label>Feature <span class="field-optional">Required</span><select id="storyFeatureInput" name="feature" required><option value="">Select a Feature</option></select></label>
         <label>Start date <input id="storyStartDateInput" name="startDate" type="date"></label>
@@ -547,7 +584,7 @@
               <div class="task-advanced-grid">
                 <label>Program Increment<select name="pi" id="taskPIInput"><option value="">Select a PI</option></select></label>
                 <label>Feature<select name="feature" id="taskFeatureInput"><option value="">Select a Feature</option></select></label>
-                <label>Sprint<input name="sprint" maxlength="100" autocomplete="off"></label>
+                <label>Sprint<select id="taskSprintInput" name="sprint"><option value="">Backlog — no Sprint</option></select></label>
                 <label>Story points<input name="storyPoints" type="number" min="0" step="0.5" value="0"></label>
                 <label>Start date<input name="startDate" type="date"></label>
                 <label>End date<input name="endDate" type="date"></label>

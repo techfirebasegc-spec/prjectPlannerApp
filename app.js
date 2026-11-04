@@ -1,9 +1,12 @@
 import {
   addDoc, collection, collectionGroup, deleteDoc, doc, getDocs, getDoc, onSnapshot,
-  orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch
+  orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch
 } from "firebase/firestore";
 import { db } from "./firebase.js";
+import { formatBusinessId, highestBusinessIdSequence } from "./business-ids.js";
 import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "./auth.js";
+import { validateTaskBreakdownPatch, wouldCreateDependencyCycle } from "./task-breakdown.js";
+import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./sprint-catalog.js";
 
 (() => {
   "use strict";
@@ -17,8 +20,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   const appState = {
     allTasks: [],
     userStories: [],
+    memberDirectory: [],
     filteredTasks: [],
     sprintCatalog: [],
+    sprints: [],
+    sprintSnapshots: {},
+    sprintSnapshotLoads: {},
+    unsubscribeSprints: null,
+    editingSprintId: null,
     filters: {
       pi: "all",
       sprint: "all",
@@ -31,6 +40,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     selectedTaskIds: new Set(),
     activeView: "dashboard",
     calendarMonth: "",
+    planningSprintInitialized: false,
     wipLimits: { todo: null, inprogress: null, done: null },
     dragTaskId: null,
     hierarchy: {},
@@ -65,6 +75,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     sprintFilter: document.getElementById("sprintFilter"),
     featureFilter: document.getElementById("featureFilter"),
     assigneeFilter: document.getElementById("assigneeFilter"),
+    resetFiltersBtn: document.getElementById("resetFiltersBtn"),
     sortBy: document.getElementById("sortBy"),
     todoLimit: document.getElementById("todoLimit"),
     inprogressLimit: document.getElementById("inprogressLimit"),
@@ -88,6 +99,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     logoutBtn: document.getElementById("logoutBtn"),
     appShell: document.querySelector(".app-shell"),
     sidebarToggleBtn: document.getElementById("sidebarToggleBtn"),
+    mobileNavToggle: document.getElementById("mobileNavToggle"),
     currentUserName: document.getElementById("currentUserName"),
     accountMenuBtn: document.getElementById("accountMenuBtn"),
     accountMenu: document.getElementById("accountMenu"),
@@ -142,6 +154,34 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     knowledgeViewBtn: document.getElementById("knowledgeViewBtn"),
     knowledgeView: document.getElementById("knowledgeView"),
     storiesViewBtn: document.getElementById("storiesViewBtn"),
+    sprintPlanningViewBtn: document.getElementById("sprintPlanningViewBtn"),
+    sprintPlanningView: document.getElementById("sprintPlanningView"),
+    planningSprintSelect: document.getElementById("planningSprintSelect"),
+    sprintForm: document.getElementById("sprintForm"),
+    sprintRecordId: document.getElementById("sprintRecordId"),
+    sprintNameInput: document.getElementById("sprintNameInput"),
+    sprintGoalInput: document.getElementById("sprintGoalInput"),
+    sprintStartInput: document.getElementById("sprintStartInput"),
+    sprintEndInput: document.getElementById("sprintEndInput"),
+    sprintCapacityInput: document.getElementById("sprintCapacityInput"),
+    sprintMemberCapacityInputs: document.getElementById("sprintMemberCapacityInputs"),
+    sprintStatusInput: document.getElementById("sprintStatusInput"),
+    sprintFormTitle: document.getElementById("sprintFormTitle"),
+    sprintFormError: document.getElementById("sprintFormError"),
+    sprintSaveBtn: document.getElementById("sprintSaveBtn"),
+    sprintCancelBtn: document.getElementById("sprintCancelBtn"),
+    sprintRecords: document.getElementById("sprintRecords"),
+    sprintCount: document.getElementById("sprintCount"),
+    planningSprintStats: document.getElementById("planningSprintStats"),
+    planningBacklogCount: document.getElementById("planningBacklogCount"),
+    planningSprintCount: document.getElementById("planningSprintCount"),
+    planningBacklogList: document.getElementById("planningBacklogList"),
+    planningSprintList: document.getElementById("planningSprintList"),
+    planningRiskPanel: document.getElementById("planningRiskPanel"),
+    sprintExecutionBoard: document.getElementById("sprintExecutionBoard"),
+    sprintBurndownSummary: document.getElementById("sprintBurndownSummary"),
+    sprintBurndownChart: document.getElementById("sprintBurndownChart"),
+    sprintBurndownNote: document.getElementById("sprintBurndownNote"),
     sidebarStoriesBtn: document.getElementById("sidebarStoriesBtn"),
     newStoryBtn: document.getElementById("newStoryBtn"),
     storyEditorModal: document.getElementById("storyEditorModal"),
@@ -150,6 +190,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     storyTitleInput: document.getElementById("storyTitleInput"),
     storyDescriptionInput: document.getElementById("storyDescriptionInput"),
     storyCriteriaInput: document.getElementById("storyCriteriaInput"),
+    storyOwnerInput: document.getElementById("storyOwnerInput"),
     storyPiInput: document.getElementById("storyPiInput"),
     storyFeatureInput: document.getElementById("storyFeatureInput"),
     storyStartDateInput: document.getElementById("storyStartDateInput"),
@@ -189,12 +230,19 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     calendarMonth: document.getElementById("calendarMonth"),
     sprintLegend: document.getElementById("sprintLegend"),
     sprintCalendar: document.getElementById("sprintCalendar"),
+    reportSprintTitle: document.getElementById("reportSprintTitle"),
+    reportSprintSubtitle: document.getElementById("reportSprintSubtitle"),
+    reportCompletion: document.getElementById("reportCompletion"),
+    reportCompletionBar: document.getElementById("reportCompletionBar"),
+    reportProgressSummary: document.getElementById("reportProgressSummary"),
+    remainingPoints: document.getElementById("remainingPoints"),
+    reportStatusBreakdown: document.getElementById("reportStatusBreakdown"),
+    reportEffortCompletion: document.getElementById("reportEffortCompletion"),
+    velocityEmpty: document.getElementById("velocityEmpty"),
     committedPoints: document.getElementById("committedPoints"),
     completedPoints: document.getElementById("completedPoints"),
     spilloverTasks: document.getElementById("spilloverTasks"),
     overdueOpen: document.getElementById("overdueOpen"),
-    burndownSubtitle: document.getElementById("burndownSubtitle"),
-    burndownChart: document.getElementById("burndownChart"),
     velocityChart: document.getElementById("velocityChart"),
     piViewBtn: document.getElementById("piViewBtn"),
     featuresViewBtn: document.getElementById("featuresViewBtn"),
@@ -232,7 +280,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     featurePIFilter: document.getElementById("featurePIFilter"),
     reconcilePlanningBtn: document.getElementById("reconcilePlanningBtn"),
     taskPIInput: document.getElementById("taskPIInput"),
-    taskFeatureInput: document.getElementById("taskFeatureInput")
+    taskFeatureInput: document.getElementById("taskFeatureInput"),
+    taskSprintInput: document.getElementById("taskSprintInput")
   };
 
 
@@ -246,6 +295,165 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   function planningReference(kind, id) {
     return doc(planningCollection(kind), id);
+  }
+  async function allocateBusinessCode(collectionRef, entityType) {
+    const sequenceRef = appState.activeProjectId === "default"
+      ? doc(db, "plannerSequences", entityType)
+      : doc(db, "plannerProjects", appState.activeProjectId, "sequences", entityType);
+    const sequenceSnapshot = await getDoc(sequenceRef);
+    let initialHighWater = 0;
+    if (!sequenceSnapshot.exists()) {
+      // Web SDK transactions cannot read a CollectionReference. Inspect legacy
+      // records before the transaction; concurrent initial writers are serialized
+      // by the sequence document transaction below.
+      const existing = await getDocs(collectionRef);
+      initialHighWater = highestBusinessIdSequence(entityType, existing.docs.map((item) => item.data()));
+    }
+    let code = "";
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(sequenceRef);
+      const lastAllocated = Math.max(
+        Number(snapshot.exists() ? snapshot.data().lastAllocated : 0) || 0,
+        initialHighWater
+      );
+      const next = lastAllocated + 1;
+      code = formatBusinessId(entityType, next);
+      transaction.set(sequenceRef, { entityType, lastAllocated: next, updatedAt: serverTimestamp() }, { merge: true });
+    });
+    return code;
+  }
+
+  async function createRecordWithBusinessCode(collectionRef, entityType, data, documentId = null) {
+    const recordRef = documentId ? doc(collectionRef, documentId) : doc(collectionRef);
+    const code = await allocateBusinessCode(collectionRef, entityType);
+    await setDoc(recordRef, { ...data, code });
+    return { id: recordRef.id, code };
+  }
+
+  function sprintCollection() {
+    return appState.activeProjectId === "default" ? collection(db, "plannerSprints") : collection(db, "plannerProjects", appState.activeProjectId, "sprints");
+  }
+  function sprintReference(id) { return doc(sprintCollection(), id); }
+  function loadSprints() {
+    if (appState.unsubscribeSprints) appState.unsubscribeSprints();
+    appState.sprints = [];
+    appState.unsubscribeSprints = onSnapshot(sprintCollection(), (snapshot) => {
+      appState.sprints = snapshot.docs.map((item) => {
+        const data = item.data();
+        return { id: item.id, ...data, startDate: normalizeSprintDate(data.startDate), endDate: normalizeSprintDate(data.endDate) };
+      }).filter((item) => item.archived !== true)
+        .sort((a,b) => String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+      refreshNormalizedTasksFromCatalog();
+      populateCalendarMonthOptions();
+      refreshPlanningSelectors();
+      recordDailySprintSnapshots();
+      renderSprintRecords(); renderSprintPlanning(); applyFiltersAndRender();
+      if (els.sprintMemberCapacityInputs && !els.sprintMemberCapacityInputs.children.length) renderSprintMemberCapacityInputs();
+    }, (error) => {
+      console.error("Could not load sprints", error); appState.sprints = [];
+      refreshNormalizedTasksFromCatalog(); populateCalendarMonthOptions();
+      renderSprintRecords("Unable to load sprint metadata. Check Firestore rules and project membership."); renderSprintPlanning(); applyFiltersAndRender();
+    });
+  }
+  function renderSprintRecords(errorMessage = "") {
+    if (!els.sprintRecords) return;
+    if (els.sprintCount) els.sprintCount.textContent = appState.sprints.length + " sprint" + (appState.sprints.length === 1 ? "" : "s");
+    if (errorMessage || !appState.sprints.length) {
+      els.sprintRecords.innerHTML = '<div class="planning-empty"><strong>' + (errorMessage ? "Sprints unavailable" : "No sprints configured") + '</strong>' + escapeHtml(errorMessage || "Create a sprint to set its goal, dates, and capacity.") + '</div>'; return;
+    }
+    els.sprintRecords.innerHTML = appState.sprints.map((sprint) => {
+      const tasks = appState.allTasks.filter((task) => taskBelongsToSprint(task, sprint) && !task.archived);
+      const points = tasks.reduce((sum, task) => sum + (Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0), 0);
+      return '<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><span class="planning-record-code">' + escapeHtml(sprint.code || "ID pending") + '</span><h4>' + escapeHtml(sprint.name) + '</h4><span class="planning-status ' + escapeHtml(statusClass(sprint.status)) + '">' + escapeHtml(String(sprint.status || "PLANNED").replaceAll("_", " ")) + '</span></div><p class="planning-record-description">' + escapeHtml(sprint.goal || "No sprint goal added.") + '</p><div class="planning-record-meta"><span>Dates: <strong>' + escapeHtml(sprint.startDate || "—") + ' → ' + escapeHtml(sprint.endDate || "—") + '</strong></span><span>Capacity: <strong>' + escapeHtml(String(sprint.capacity || 0)) + ' points</strong></span><span><strong>' + tasks.length + '</strong> tasks</span><span><strong>' + points + '</strong> points committed</span></div></div><div class="planning-record-actions"><button type="button" data-edit-sprint="' + escapeHtml(sprint.id) + '">Edit</button><button type="button" data-archive-sprint="' + escapeHtml(sprint.id) + '">Archive</button></div></article>';
+    }).join("");
+    els.sprintRecords.querySelectorAll("[data-edit-sprint]").forEach((b) => b.addEventListener("click", () => editSprint(b.dataset.editSprint)));
+    els.sprintRecords.querySelectorAll("[data-archive-sprint]").forEach((b) => b.addEventListener("click", () => archiveSprint(b.dataset.archiveSprint)));
+  }
+  function resetSprintForm() {
+    appState.editingSprintId = null; if (!els.sprintForm) return; els.sprintForm.reset(); els.sprintRecordId.value = "";
+    els.sprintStatusInput.value = "PLANNED"; els.sprintFormTitle.textContent = "Create a sprint"; els.sprintSaveBtn.textContent = "Create sprint"; els.sprintFormError.textContent = "";
+    renderSprintMemberCapacityInputs();
+  }
+  function collectSprintMemberCapacities() {
+    const fields = els.sprintMemberCapacityInputs?.querySelectorAll("[data-member-capacity]") || [];
+    const capacities = {};
+    for (const field of fields) {
+      const uid = String(field.dataset.memberCapacity || "").trim();
+      const value = String(field.value || "").trim();
+      if (!uid || !value) continue;
+      const points = Number(value);
+      if (!Number.isFinite(points) || points < 0 || points > 10000) return null;
+      capacities[uid] = points;
+    }
+    return capacities;
+  }
+
+  async function renderSprintMemberCapacityInputs(savedCapacities = {}) {
+    const root = els.sprintMemberCapacityInputs;
+    if (!root) return;
+    const token = String(appState.editingSprintId || "new");
+    root.dataset.capacityToken = token;
+    root.innerHTML = '<p class="sprint-member-capacity-empty">Loading project members…</p>';
+    try {
+      const members = await fetchAssignableMembers();
+      if (root.dataset.capacityToken !== token) return;
+      const existing = collectSprintMemberCapacities() || {};
+      const values = { ...savedCapacities, ...existing };
+      if (!members.length) {
+        root.innerHTML = '<p class="sprint-member-capacity-empty">No project members are available for individual capacity.</p>';
+        return;
+      }
+      root.innerHTML = members.map((member) => {
+        const uid = String(member.uid || "").trim();
+        const value = Number(values[uid]);
+        const capacity = Number.isFinite(value) ? String(value) : "";
+        const name = String(member.displayName || "Unnamed member");
+        return '<label class="sprint-member-capacity-row"><span title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span><input type="number" min="0" max="10000" step="0.5" inputmode="decimal" placeholder="Points" value="' + escapeHtml(capacity) + '" data-member-capacity="' + escapeHtml(uid) + '" aria-label="Individual capacity for ' + escapeHtml(name) + '"></label>';
+      }).join("");
+    } catch (error) {
+      console.error("Could not load project members for individual capacity", error);
+      if (root.dataset.capacityToken === token) root.innerHTML = '<p class="sprint-member-capacity-empty">Individual capacity is unavailable because project members could not be loaded.</p>';
+    }
+  }
+
+  function editSprint(id) {
+    if (!planningCanEdit()) return; const s = appState.sprints.find((item) => item.id === id); if (!s) return;
+    appState.editingSprintId = id; els.sprintRecordId.value = id; els.sprintNameInput.value = s.name || ""; els.sprintGoalInput.value = s.goal || "";
+    els.sprintStartInput.value = s.startDate || ""; els.sprintEndInput.value = s.endDate || ""; els.sprintCapacityInput.value = s.capacity ?? 0; els.sprintStatusInput.value = s.status || "PLANNED";
+    renderSprintMemberCapacityInputs(s.memberCapacities || {});
+    els.sprintFormTitle.textContent = "Edit sprint"; els.sprintSaveBtn.textContent = "Save changes"; els.sprintFormError.textContent = "";
+    els.sprintForm.scrollIntoView({behavior:"smooth",block:"start"});
+  }
+  async function saveSprint(event) {
+    event.preventDefault(); if (!planningCanEdit()) { els.sprintFormError.textContent = "Your project role does not allow sprint changes."; return; }
+    const name = String(els.sprintNameInput.value || "").trim(), goal = String(els.sprintGoalInput.value || "").trim();
+    const startDate = els.sprintStartInput.value, endDate = els.sprintEndInput.value, capacity = Number(els.sprintCapacityInput.value), status = els.sprintStatusInput.value;
+    const memberCapacities = collectSprintMemberCapacities();
+    if (!name || name.length > 100) { els.sprintFormError.textContent = "Sprint name must be between 1 and 100 characters."; return; }
+    if (!startDate || !endDate || endDate < startDate) { els.sprintFormError.textContent = "Choose valid dates; the end date must not precede the start date."; return; }
+    if (!Number.isFinite(capacity) || capacity < 0 || capacity > 10000) { els.sprintFormError.textContent = "Capacity must be between 0 and 10,000 points."; return; }
+    if (appState.sprints.some((s) => s.id !== appState.editingSprintId && s.name.toLocaleLowerCase() === name.toLocaleLowerCase())) { els.sprintFormError.textContent = "A sprint with that name already exists."; return; }
+    const existing = appState.sprints.find((s) => s.id === appState.editingSprintId);
+    if (existing && existing.name !== name && appState.allTasks.some((task) => taskBelongsToSprint(task, existing) && !task.archived)) {
+      els.sprintFormError.textContent = "This sprint has assigned tasks. Reassign those tasks before renaming it."; return;
+    }
+    if (!memberCapacities) { els.sprintFormError.textContent = "Individual capacity must be between 0 and 10,000 points for each member."; return; }
+    const data = {name,goal,startDate,endDate,capacity,memberCapacities,status,archived:false,updatedAt:serverTimestamp()};
+    els.sprintSaveBtn.disabled = true; els.sprintFormError.textContent = "";
+    try {
+      if (existing) await updateDoc(sprintReference(existing.id), data);
+      else await createRecordWithBusinessCode(sprintCollection(), "sprint", {...data,createdBy:appState.user.uid,createdAt:serverTimestamp()});
+      resetSprintForm();
+    } catch (error) { console.error("Could not save sprint",error); els.sprintFormError.textContent = "Could not save this sprint. Check your permissions and try again."; }
+    finally { els.sprintSaveBtn.disabled = !planningCanEdit(); }
+  }
+  async function archiveSprint(id) {
+    if (!planningCanEdit()) return; const s = appState.sprints.find((item) => item.id === id); if (!s) return;
+    const assigned = appState.allTasks.filter((task) => taskBelongsToSprint(task, s) && !task.archived);
+    const msg = assigned.length ? s.name + " has " + assigned.length + " assigned task(s). Archiving hides it from the active catalogue but preserves task assignments. Continue?" : "Archive sprint " + s.name + "?";
+    if (!window.confirm(msg)) return;
+    try { await updateDoc(sprintReference(id), {archived:true,updatedAt:serverTimestamp()}); if (appState.editingSprintId === id) resetSprintForm(); }
+    catch (error) { console.error("Could not archive sprint",error); window.alert("Could not archive this sprint. Check your permissions and try again."); }
   }
 
   function planningCanEdit() {
@@ -294,7 +502,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const previous = selectedValue || select.value;
     select.replaceChildren(new Option(placeholder, ""));
     items.forEach((item) => {
-      const option = new Option(item.name, item.id);
+      const option = new Option((item.code ? item.code + " · " : "") + item.name, item.id);
       select.add(option);
     });
     if (previous && [...select.options].some((option) => option.value === previous)) select.value = previous;
@@ -312,7 +520,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (els.featurePIFilter) {
       const previousPI = els.featurePIFilter.value || "all";
       els.featurePIFilter.replaceChildren(new Option("All PIs", "all"));
-      appState.programIncrements.forEach((pi) => els.featurePIFilter.add(new Option(pi.name, pi.id)));
+      appState.programIncrements.forEach((pi) => els.featurePIFilter.add(new Option((pi.code ? pi.code + " · " : "") + pi.name, pi.id)));
       els.featurePIFilter.value = previousPI === "all" || appState.programIncrements.some((pi) => pi.id === previousPI) ? previousPI : "all";
     }
     const featureOptions = appState.features.filter((feature) => !selectedTaskPI || feature.piId === selectedTaskPI);
@@ -323,16 +531,24 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (els.storyPiInput) els.storyPiInput.disabled = !appState.programIncrements.length;
     if (els.featurePIInput) els.featurePIInput.disabled = !appState.programIncrements.length;
     if (els.taskFeatureInput) els.taskFeatureInput.disabled = !featureOptions.length;
+    if (els.taskSprintInput) {
+      const previous = els.taskSprintInput.value;
+      els.taskSprintInput.replaceChildren(new Option("Backlog — no Sprint", ""));
+      appState.sprints.forEach((sprint) => els.taskSprintInput.add(new Option((sprint.code ? sprint.code + " · " : "") + sprint.name, sprint.id)));
+      if ([...els.taskSprintInput.options].some((option) => option.value === previous)) els.taskSprintInput.value = previous;
+      else els.taskSprintInput.value = "";
+    }
     if (els.storyFeatureInput) els.storyFeatureInput.disabled = !storyFeatureOptions.length;
     if (els.featureSaveBtn) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
     if (els.piSaveBtn) els.piSaveBtn.disabled = !planningCanEdit();
   }
 
   function refreshNormalizedTasksFromCatalog() {
-    if (!appState.allTasks.length) return;
-    appState.allTasks = normalizeRecords(appState.allTasks.map((task) => ({ id: task.id, ...task.raw }))).filter((task) => task.archived !== true);
+    if (appState.allTasks.length) {
+      appState.allTasks = normalizeRecords(appState.allTasks.map((task) => ({ id: task.id, ...task.raw }))).filter((task) => task.archived !== true);
+    }
     appState.hierarchy = groupByHierarchy(appState.allTasks);
-    appState.sprintCatalog = buildSprintCatalog(appState.allTasks);
+    appState.sprintCatalog = buildSprintCatalog(appState.allTasks, appState.sprints);
   }
 
   function populatePlanningFilterOptions() {
@@ -361,7 +577,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   function renderProgramIncrements(errorMessage = "") {
     if (!els.piRecords) return;
     const queryText = String(els.piSearchInput?.value || "").trim().toLowerCase();
-    const records = appState.programIncrements.filter((pi) => [pi.name, pi.description, pi.status].join(" ").toLowerCase().includes(queryText));
+    const records = appState.programIncrements.filter((pi) => [pi.code, pi.name, pi.description, pi.status].join(" ").toLowerCase().includes(queryText));
     els.piCount.textContent = `${appState.programIncrements.length} PI${appState.programIncrements.length === 1 ? "" : "s"}`;
     if (errorMessage || !records.length) {
       els.piRecords.innerHTML = `<div class="planning-empty"><strong>${errorMessage ? "Unable to load PIs" : (queryText ? "No matching PIs" : "No Program Increments yet")}</strong>${escapeHtml(errorMessage || (queryText ? "Try another search term." : "Create a PI to establish the planning horizon for your Features."))}</div>`;
@@ -371,7 +587,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const features = appState.features.filter((feature) => feature.piId === pi.id);
       const storyCount = appState.userStories.filter((story) => story.piId === pi.id || story.pi === pi.name).length;
       const taskCount = appState.allTasks.filter((task) => task.raw.piId === pi.id || task.pi === pi.name).length;
-      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><h4>${escapeHtml(pi.name)}</h4><span class="planning-status ${statusClass(pi.status)}">${escapeHtml(String(pi.status || "PLANNED").replaceAll("_", " "))}</span></div><p class="planning-record-description">${escapeHtml(pi.description || "No description added.")}</p><div class="planning-record-meta"><span>${escapeHtml(formatPlanningDate(pi.startDate))} – ${escapeHtml(formatPlanningDate(pi.endDate))}</span><span><strong>${features.length}</strong> Features</span><span><strong>${storyCount}</strong> Stories</span><span><strong>${taskCount}</strong> Tasks</span></div></div><div class="planning-record-actions"><button type="button" data-edit-pi="${escapeHtml(pi.id)}">Edit</button><button type="button" data-delete-pi="${escapeHtml(pi.id)}" data-delete-name="${escapeHtml(pi.name)}">Archive</button></div></article>`;
+      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><span class="planning-record-code">${escapeHtml(pi.code || "ID pending")}</span><h4>${escapeHtml(pi.name)}</h4><span class="planning-status ${statusClass(pi.status)}">${escapeHtml(String(pi.status || "PLANNED").replaceAll("_", " "))}</span></div><p class="planning-record-description">${escapeHtml(pi.description || "No description added.")}</p><div class="planning-record-meta"><span>${escapeHtml(formatPlanningDate(pi.startDate))} – ${escapeHtml(formatPlanningDate(pi.endDate))}</span><span><strong>${features.length}</strong> Features</span><span><strong>${storyCount}</strong> Stories</span><span><strong>${taskCount}</strong> Tasks</span></div></div><div class="planning-record-actions"><button type="button" data-edit-pi="${escapeHtml(pi.id)}">Edit</button><button type="button" data-delete-pi="${escapeHtml(pi.id)}" data-delete-name="${escapeHtml(pi.name)}">Archive</button></div></article>`;
     }).join("");
     els.piRecords.querySelectorAll("[data-edit-pi]").forEach((button) => button.addEventListener("click", () => editProgramIncrement(button.dataset.editPi)));
     els.piRecords.querySelectorAll("[data-delete-pi]").forEach((button) => button.addEventListener("click", () => archiveProgramIncrement(button.dataset.deletePi, button.dataset.deleteName)));
@@ -383,7 +599,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const piFilter = els.featurePIFilter?.value || "all";
     const records = appState.features.filter((feature) =>
       (piFilter === "all" || feature.piId === piFilter)
-      && [feature.name, feature.description, feature.owner, feature.status].join(" ").toLowerCase().includes(queryText));
+      && [feature.code, feature.name, feature.description, feature.owner, feature.status].join(" ").toLowerCase().includes(queryText));
     els.featureCount.textContent = `${appState.features.length} Feature${appState.features.length === 1 ? "" : "s"}`;
     if (errorMessage || !records.length) {
       els.featureRecords.innerHTML = `<div class="planning-empty"><strong>${errorMessage ? "Unable to load Features" : (queryText ? "No matching Features" : "No Features yet")}</strong>${escapeHtml(errorMessage || (queryText ? "Try another search term or PI." : "Create a PI first, then add Features and connect User Stories to them."))}</div>`;
@@ -395,7 +611,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const tasks = appState.allTasks.filter((task) => task.raw.featureId === feature.id || task.feature === feature.name);
       const done = tasks.filter((task) => task.statusKey === "done").length;
       const progress = tasks.length ? Math.round(done / tasks.length * 100) : 0;
-      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><h4>${escapeHtml(feature.name)}</h4><span class="planning-status ${statusClass(feature.status)}">${escapeHtml(String(feature.status || "PLANNED").replaceAll("_", " "))}</span><span class="planning-status">${escapeHtml(String(feature.priority || "MEDIUM"))} priority</span></div><p class="planning-record-description">${escapeHtml(feature.description || "No description added.")}</p><div class="planning-record-meta"><span>PI: <strong>${escapeHtml(pi?.name || "Missing PI")}</strong></span><span>Owner: <strong>${escapeHtml(feature.owner || "Unassigned")}</strong></span><span><strong>${stories.length}</strong> Stories</span><span><strong>${tasks.length}</strong> Tasks</span><span><strong>${progress}%</strong> task completion</span></div><div class="planning-record-progress"><span style="width:${progress}%"></span></div></div><div class="planning-record-actions"><button type="button" data-edit-feature="${escapeHtml(feature.id)}">Edit</button><button type="button" data-delete-feature="${escapeHtml(feature.id)}" data-delete-name="${escapeHtml(feature.name)}">Archive</button></div></article>`;
+      return `<article class="planning-record"><div class="planning-record-main"><div class="planning-record-title"><span class="planning-record-code">${escapeHtml(feature.code || "ID pending")}</span><h4>${escapeHtml(feature.name)}</h4><span class="planning-status ${statusClass(feature.status)}">${escapeHtml(String(feature.status || "PLANNED").replaceAll("_", " "))}</span><span class="planning-status">${escapeHtml(String(feature.priority || "MEDIUM"))} priority</span></div><p class="planning-record-description">${escapeHtml(feature.description || "No description added.")}</p><div class="planning-record-meta"><span>PI: <strong>${escapeHtml(pi ? `${pi.code || "ID pending"} · ${pi.name}` : "Missing PI")}</strong></span><span>Owner: <strong>${escapeHtml(feature.owner || "Unassigned")}</strong></span><span><strong>${stories.length}</strong> Stories</span><span><strong>${tasks.length}</strong> Tasks</span><span><strong>${progress}%</strong> task completion</span></div><div class="planning-record-progress"><span style="width:${progress}%"></span></div></div><div class="planning-record-actions"><button type="button" data-edit-feature="${escapeHtml(feature.id)}">Edit</button><button type="button" data-delete-feature="${escapeHtml(feature.id)}" data-delete-name="${escapeHtml(feature.name)}">Archive</button></div></article>`;
     }).join("");
     els.featureRecords.querySelectorAll("[data-edit-feature]").forEach((button) => button.addEventListener("click", () => editFeature(button.dataset.editFeature)));
     els.featureRecords.querySelectorAll("[data-delete-feature]").forEach((button) => button.addEventListener("click", () => archiveFeature(button.dataset.deleteFeature, button.dataset.deleteName)));
@@ -440,7 +656,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.piSaveBtn.disabled = true;
     try {
       if (id) await updateDoc(planningReference("pi", id), data);
-      else await addDoc(planningCollection("pi"), { ...data, createdAt: serverTimestamp() });
+      else await createRecordWithBusinessCode(planningCollection("pi"), "pi", { ...data, createdAt: serverTimestamp() });
       resetPIForm();
       await loadPlanningRecords();
     } catch (error) {
@@ -466,6 +682,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     }
   }
 
+  let featureOwnerLoadToken = 0;
+  let featureOwnersReady = Promise.resolve();
   function resetFeatureForm() {
     els.featureForm.reset();
     els.featureRecordId.value = "";
@@ -473,6 +691,15 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.featureSaveBtn.textContent = "Create Feature";
     els.featureFormError.textContent = "";
     refreshPlanningSelectors();
+    const token = ++featureOwnerLoadToken;
+    els.featureSaveBtn.disabled = true;
+    featureOwnersReady = populateFeatureOwners().catch((error) => {
+      console.error("Could not load Feature owners", error);
+      if (token === featureOwnerLoadToken) els.featureFormError.textContent = "Could not load owners. Check project membership permissions and try again.";
+      return false;
+    }).finally(() => {
+      if (token === featureOwnerLoadToken) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
+    });
   }
 
   function editFeature(id) {
@@ -482,18 +709,27 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.featureNameInput.value = feature.name || "";
     els.featurePIInput.value = feature.piId || "";
     els.featureDescriptionInput.value = feature.description || "";
-    els.featureOwnerInput.value = feature.owner || "";
     els.featurePriorityInput.value = feature.priority || "MEDIUM";
     els.featureStatusInput.value = feature.status || "PLANNED";
     els.featureFormTitle.textContent = "Edit Feature";
     els.featureSaveBtn.textContent = "Save Feature";
     els.featureFormError.textContent = "";
+    const token = ++featureOwnerLoadToken;
+    els.featureSaveBtn.disabled = true;
+    featureOwnersReady = populateFeatureOwners(feature).catch((error) => {
+      console.error("Could not load Feature owners", error);
+      if (token === featureOwnerLoadToken) els.featureFormError.textContent = "Could not load owners. Check project membership permissions and try again.";
+      return false;
+    }).finally(() => {
+      if (token === featureOwnerLoadToken) els.featureSaveBtn.disabled = !planningCanEdit() || !appState.programIncrements.length;
+    });
     els.featureNameInput.focus();
   }
 
   async function saveFeature(event) {
     event.preventDefault();
     if (!planningCanEdit()) { els.featureFormError.textContent = "You have read-only access to this project."; return; }
+    if (await featureOwnersReady === false) return;
     const id = els.featureRecordId.value;
     const name = els.featureNameInput.value.trim();
     const piId = els.featurePIInput.value;
@@ -502,11 +738,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (!pi) { els.featureFormError.textContent = "Select a valid Program Increment first."; return; }
     if (appState.features.some((feature) => feature.name.toLowerCase() === name.toLowerCase() && feature.id !== id)) { els.featureFormError.textContent = "A Feature with this name already exists in this project."; return; }
     const previous = appState.features.find((feature) => feature.id === id);
-    const data = { name, piId, pi: pi.name, description: els.featureDescriptionInput.value.trim(), owner: els.featureOwnerInput.value.trim(), priority: els.featurePriorityInput.value, status: els.featureStatusInput.value, archived: false, createdBy: previous?.createdBy || appState.user.uid, updatedAt: serverTimestamp() };
+    const ownerUid = els.featureOwnerInput.value;
+    const selectedOwner = els.featureOwnerInput.selectedOptions[0];
+    const owner = selectedOwner?.dataset.displayName || "";
+    const data = { name, piId, pi: pi.name, description: els.featureDescriptionInput.value.trim(), owner, ownerUid, priority: els.featurePriorityInput.value, status: els.featureStatusInput.value, archived: false, createdBy: previous?.createdBy || appState.user.uid, updatedAt: serverTimestamp() };
     els.featureSaveBtn.disabled = true;
     try {
       if (id) await updateDoc(planningReference("feature", id), data);
-      else await addDoc(planningCollection("feature"), { ...data, createdAt: serverTimestamp() });
+      else await createRecordWithBusinessCode(planningCollection("feature"), "feature", { ...data, createdAt: serverTimestamp() });
       resetFeatureForm();
       await loadPlanningRecords();
     } catch (error) {
@@ -629,6 +868,20 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.piViewBtn?.addEventListener("click", () => setActiveView("pis"));
     els.featuresViewBtn?.addEventListener("click", () => setActiveView("features"));
     els.piForm?.addEventListener("submit", saveProgramIncrement);
+    els.sprintForm?.addEventListener("submit", saveSprint);
+    els.sprintExecutionBoard?.addEventListener("change", async (event) => {
+      const control = event.target.closest("[data-execution-status]");
+      if (!control || !COLUMN_KEYS.includes(control.value)) return;
+      control.disabled = true;
+      const taskId = control.dataset.executionStatus;
+      const saved = await updateTaskStatus(taskId, control.value);
+      if (saved) {
+        const task = appState.allTasks.find((item) => item.id === taskId);
+        if (task) { task.raw = { ...task.raw, status: statusDisplay(control.value) }; refreshNormalizedTasksFromCatalog(); applyFiltersAndRender(); }
+      }
+      renderSprintPlanning();
+    });
+    els.sprintCancelBtn?.addEventListener("click", resetSprintForm);
     els.featureForm?.addEventListener("submit", saveFeature);
     els.piCancelBtn?.addEventListener("click", resetPIForm);
     els.featureCancelBtn?.addEventListener("click", resetFeatureForm);
@@ -767,9 +1020,10 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (appState.unsubscribeTasks) appState.unsubscribeTasks();
     if (appState.unsubscribeStories) appState.unsubscribeStories();
     loadPlanningRecords();
+    loadSprints();
     appState.unsubscribeStories = onSnapshot(userStoryCollection(), (snapshot) => {
       appState.userStories = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      applyFiltersAndRender();
+      fetchAssignableMembers().then(() => applyFiltersAndRender()).catch((error) => { console.error("Could not resolve User Story owners", error); applyFiltersAndRender(); });
     }, (error) => {
       console.error("Could not load user stories", error);
       appState.userStories = [];
@@ -780,7 +1034,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       appState.allTasks = normalizeRecords(raw).filter((task) => task.archived !== true);
       appState.selectedTaskIds = new Set([...appState.selectedTaskIds].filter((taskId) => appState.allTasks.some((task) => task.id === taskId)));
       appState.hierarchy = groupByHierarchy(appState.allTasks);
-      appState.sprintCatalog = buildSprintCatalog(appState.allTasks);
+      appState.sprintCatalog = buildSprintCatalog(appState.allTasks, appState.sprints);
+      recordDailySprintSnapshots();
 
       populateCalendarMonthOptions();
       // Populate PI/Sprint/Feature immediately; await assignee options from the
@@ -796,6 +1051,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function bindEvents() {
+    els.resetFiltersBtn?.addEventListener("click", resetFilters);
     els.piFilter.addEventListener("change", onFilterChange);
     els.sprintFilter.addEventListener("change", onFilterChange);
     els.featureFilter.addEventListener("change", onFilterChange);
@@ -813,6 +1069,41 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.doneLimit.addEventListener("input", onWipLimitChange);
     els.logoutBtn.addEventListener("click", onLogoutClick);
     els.sidebarToggleBtn.addEventListener("click", () => setSidebarCollapsed(!els.appShell.classList.contains("sidebar-collapsed")));
+    els.mobileNavToggle?.addEventListener("click", () => {
+      const opening = !els.appShell.classList.contains("mobile-sidebar-open");
+      els.appShell.classList.toggle("mobile-sidebar-open", opening);
+      els.mobileNavToggle.setAttribute("aria-expanded", String(opening));
+      els.mobileNavToggle.setAttribute("aria-label", opening ? "Close navigation and filters" : "Open navigation and filters");
+      els.mobileNavToggle.textContent = "☰";
+    });
+    document.querySelectorAll(".sidebar a, .sidebar [data-sidebar-expand], #sidebarStoriesBtn").forEach((control) => {
+      control.addEventListener("click", () => {
+        if (window.matchMedia("(max-width: 680px)").matches) {
+          els.appShell.classList.remove("mobile-sidebar-open");
+          els.mobileNavToggle?.setAttribute("aria-expanded", "false");
+          if (els.mobileNavToggle) els.mobileNavToggle.textContent = "☰";
+        }
+      });
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && els.appShell.classList.contains("mobile-sidebar-open")) {
+        els.appShell.classList.remove("mobile-sidebar-open");
+        els.mobileNavToggle?.setAttribute("aria-expanded", "false");
+        if (els.mobileNavToggle) els.mobileNavToggle.textContent = "☰";
+      }
+    });
+    document.addEventListener("click", (event) => {
+      if (!window.matchMedia("(max-width: 1100px)").matches) return;
+      if (!els.appShell.classList.contains("mobile-sidebar-open")) return;
+      const target = event.target;
+      const sidebar = els.appShell.querySelector(":scope > .sidebar");
+      if (sidebar?.contains(target) || els.mobileNavToggle?.contains(target)) return;
+      els.appShell.classList.remove("mobile-sidebar-open");
+      els.mobileNavToggle?.setAttribute("aria-expanded", "false");
+      if (els.mobileNavToggle) els.mobileNavToggle.textContent = "☰";
+    });
+
+
     document.querySelectorAll("[data-sidebar-expand]").forEach((button) => {
       button.addEventListener("click", () => setSidebarCollapsed(false));
     });
@@ -841,6 +1132,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.insightsViewBtn.addEventListener("click", () => setActiveView("insights"));
     els.knowledgeViewBtn?.addEventListener("click", () => setActiveView("knowledge"));
     els.storiesViewBtn.addEventListener("click", () => setActiveView("stories"));
+    els.sprintPlanningViewBtn?.addEventListener("click", () => setActiveView("sprintPlanning"));
     els.sidebarStoriesBtn?.addEventListener("click", () => { setActiveView("stories"); if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true); });
     els.newStoryBtn.addEventListener("click", () => openStoryEditor());
     bindPlanningEvents();
@@ -856,6 +1148,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.closeStoryEditor.addEventListener("click", closeStoryEditor);
     els.storyEditorModal.addEventListener("click", (event) => { if (event.target === els.storyEditorModal) closeStoryEditor(); });
     els.profileViewBtn.addEventListener("click", () => setActiveView("profile"));
+    els.planningSprintSelect?.addEventListener("change", () => {
+      appState.planningSprintInitialized = true;
+      renderSprintPlanning();
+    });
+    [els.planningBacklogList, els.planningSprintList].forEach((list) => list?.addEventListener("change", (event) => {
+      const select = event.target.closest("[data-task-sprint]");
+      if (select) updateSprintAssignment(select.dataset.taskSprint, select.value);
+    }));
     els.profileForm.addEventListener("submit", saveProfile);
     els.calendarMonth.addEventListener("change", onCalendarMonthChange);
 
@@ -931,6 +1231,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     persistPreferences();
     updateMembersControl();
     loadPlanningRecords();
+    loadSprints();
     loadData();
   }
 
@@ -947,7 +1248,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const cleaned = trimObjectKeys(record);
       const statusRaw = getString(cleaned.status || cleaned.Status);
       const statusKey = normalizeStatus(statusRaw);
-      const priorityRaw = getString(cleaned.Priority || cleaned.Severity || cleaned.Rank);
+      const priorityRaw = getString(cleaned.priority || cleaned.Priority || cleaned.Severity || cleaned.Rank);
+      const priority = normalizePriority(priorityRaw);
+      const priorityText = priority === "none" ? "No Priority" : priority.charAt(0).toUpperCase() + priority.slice(1);
 
       const startDate = parseDate(cleaned.startDate || cleaned["Start Date"]);
       const endDate = parseDate(cleaned.endDate || cleaned["End Date"]);
@@ -962,6 +1265,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
       return {
         id: getString(cleaned.id) || `task-${index + 1}`,
+        code: getString(cleaned.code),
         originalIndex: index,
         raw: cleaned,
         archived: cleaned.archived === true,
@@ -985,8 +1289,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         statusRaw,
         statusKey,
         statusLabel: statusDisplay(statusKey),
-        priority: normalizePriority(priorityRaw),
-        priorityText: priorityRaw || "No Priority",
+        priority,
+        priorityText,
         startDate,
         dueDate,
         overdue: Boolean(dueDate && isPast(dueDate) && statusKey !== "done"),
@@ -1037,6 +1341,16 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
+  function getDateRange(startDate, endDate) {
+    if (!(startDate instanceof Date) || !(endDate instanceof Date)) return [];
+    const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return [];
+    const dates = [];
+    for (const date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) dates.push(new Date(date));
+    return dates;
+  }
+
   function isPast(date) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1057,34 +1371,6 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       acc[task.pi][task.feature][task.story].push(task);
       return acc;
     }, {});
-  }
-
-  function buildSprintCatalog(tasks) {
-    const map = new Map();
-    tasks.forEach((task) => {
-      if (!map.has(task.sprintKey)) {
-        map.set(task.sprintKey, {
-          key: task.sprintKey,
-          sprint: task.sprint,
-          pi: task.pi,
-          startDate: task.sprintStartDate,
-          endDate: task.sprintEndDate,
-          tasks: []
-        });
-      }
-
-      const sprint = map.get(task.sprintKey);
-      sprint.tasks.push(task);
-      if (!sprint.startDate && task.sprintStartDate) sprint.startDate = task.sprintStartDate;
-      if (!sprint.endDate && task.sprintEndDate) sprint.endDate = task.sprintEndDate;
-    });
-
-    return [...map.values()].sort((a, b) => {
-      const at = a.startDate ? a.startDate.getTime() : Number.MAX_SAFE_INTEGER;
-      const bt = b.startDate ? b.startDate.getTime() : Number.MAX_SAFE_INTEGER;
-      if (at !== bt) return at - bt;
-      return a.sprint.localeCompare(b.sprint);
-    });
   }
 
   async function populateFilters(tasks) {
@@ -1140,18 +1426,31 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function populateCalendarMonthOptions() {
+    if (!els.calendarMonth) return;
+    const now = new Date();
     const monthMap = new Map();
-    appState.sprintCatalog.forEach((sprint) => {
-      if (sprint.startDate) monthMap.set(monthKey(sprint.startDate), sprint.startDate);
-      if (sprint.endDate) monthMap.set(monthKey(sprint.endDate), sprint.endDate);
-    });
-    if (monthMap.size === 0) {
-      const now = new Date();
-      monthMap.set(monthKey(now), now);
+    const addMonth = (date) => {
+      const first = new Date(date.getFullYear(), date.getMonth(), 1);
+      monthMap.set(monthKey(first), first);
+    };
+
+    // Always allow navigation around the current month, even when no sprint has dates.
+    for (let offset = -6; offset <= 12; offset += 1) {
+      addMonth(new Date(now.getFullYear(), now.getMonth() + offset, 1));
     }
 
-    const sorted = [...monthMap.entries()].sort((a, b) => a[1].getTime() - b[1].getTime());
-    els.calendarMonth.innerHTML = "";
+    // Include every month spanned by a sprint, not just its start and end months.
+    appState.sprintCatalog.forEach((sprint) => {
+      if (!sprint.startDate || !sprint.endDate) return;
+      const start = new Date(sprint.startDate.getFullYear(), sprint.startDate.getMonth(), 1);
+      const end = new Date(sprint.endDate.getFullYear(), sprint.endDate.getMonth(), 1);
+      if (end < start) return;
+      for (let cursor = new Date(start); cursor <= end; cursor.setMonth(cursor.getMonth() + 1)) addMonth(cursor);
+    });
+
+    const selected = appState.calendarMonth || monthKey(now);
+    const sorted = [...monthMap.entries()].sort((a, b) => a[1] - b[1]);
+    els.calendarMonth.replaceChildren();
     sorted.forEach(([key, date]) => {
       const option = document.createElement("option");
       option.value = key;
@@ -1159,7 +1458,25 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       els.calendarMonth.appendChild(option);
     });
 
-    appState.calendarMonth = appState.calendarMonth || sorted[sorted.length - 1][0];
+    appState.calendarMonth = monthMap.has(selected) ? selected : monthKey(now);
+    els.calendarMonth.value = appState.calendarMonth;
+  }
+
+  function resetFilters() {
+    appState.filters.pi = "all";
+    appState.filters.sprint = "all";
+    appState.filters.feature = "all";
+    appState.filters.assignee = "all";
+    appState.filters.search = "";
+    if (els.piFilter) els.piFilter.value = "all";
+    if (els.sprintFilter) els.sprintFilter.value = "all";
+    if (els.featureFilter) els.featureFilter.value = "all";
+    if (els.assigneeFilter) els.assigneeFilter.value = "all";
+    if (els.searchInput) els.searchInput.value = "";
+    const advancedFilters = document.querySelector(".advanced-filter-details");
+    if (advancedFilters) advancedFilters.open = false;
+    persistPreferences();
+    applyFiltersAndRender();
   }
 
   function onFilterChange() {
@@ -1350,10 +1667,15 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const title = String(record.title || "").trim();
       if (!title) return;
       groups.set(`id:${record.id}`, {
-        id: record.id, title, description: String(record.description || ""),
+        id: record.id, code: String(record.code || ""), title, description: String(record.description || ""),
         acceptanceCriteria: Array.isArray(record.acceptanceCriteria) ? record.acceptanceCriteria : [],
-        lifecycle: record.lifecycle || "Draft", pi: record.pi || "", feature: record.feature || "",
-        startDate: record.startDate || "", endDate: record.endDate || "", archived: record.archived === true, tasks: []
+        lifecycle: record.lifecycle || "Draft",
+        owner: String(record.owner || ""),
+        ownerUid: String(record.ownerUid || ""),
+        pi: record.pi || "", piId: record.piId || "",
+        feature: record.feature || "", featureId: record.featureId || "",
+        startDate: record.startDate || "", endDate: record.endDate || "",
+        archived: record.archived === true, tasks: []
       });
     });
     tasks.forEach((task) => {
@@ -1403,7 +1725,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const detailsOpen = appState.expandedStoryTaskIds.has(story.id);
       return `<article class="story-card story-row${story.archived ? " is-archived" : ""}${detailsOpen ? " is-expanded" : ""}">
         <div class="story-row-main">
-          <div class="story-row-title"><span class="story-card-label">${story.archived ? "ARCHIVED" : "USER STORY"}</span><h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p></div>
+          <div class="story-row-title"><span class="story-card-label">${story.archived ? "ARCHIVED" : "USER STORY"}</span><h3>${escapeHtml(story.title)}</h3><p class="story-description">${escapeHtml(story.description || "No description added yet.")}</p><div class="entity-id-line"><span>STORY ID</span><code>${escapeHtml(story.code || "Legacy / not assigned")}</code></div></div>
           <div class="story-row-status"><span class="story-lifecycle-pill">${escapeHtml(story.lifecycle)}</span><span class="story-task-count">${story.tasks.length} task${story.tasks.length===1?"":"s"}</span></div>
           <div class="story-row-progress"><div class="story-progress-copy"><span>Task progress</span><strong>${completion}%</strong></div><div class="story-progress-track"><span style="width:${completion}%"></span></div><small>${counts.done} of ${story.tasks.length} done</small></div>
           <div class="story-row-points"><small>Points</small><strong>${storyPoints}</strong></div>
@@ -1415,7 +1737,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
           <div class="story-detail-layout">
             <div class="story-detail-column">
               <section class="story-detail-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">◎</span><div><h5>Overview</h5><p>Lifecycle and delivery summary</p></div></div>
-                <div class="story-detail-stats"><div><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></div><div><small>Total tasks</small><strong>${story.tasks.length}</strong></div><div><small>Completed</small><strong>${counts.done} / ${story.tasks.length}</strong></div><div><small>Story points</small><strong>${storyPoints}</strong></div></div>
+                <div class="story-detail-stats"><div><small>Lifecycle</small><strong>${escapeHtml(story.lifecycle)}</strong></div><div><small>Owner</small><strong>${escapeHtml(story.owner || appState.memberDirectory.find((member) => member.uid === story.ownerUid)?.displayName || (story.ownerUid ? "Assigned member" : "Unassigned"))}</strong></div><div><small>Owner User ID</small><code>${escapeHtml(story.ownerUid || "—")}</code></div><div><small>Feature ID</small><code>${escapeHtml(story.featureId || "—")}</code></div><div><small>PI ID</small><code>${escapeHtml(story.piId || "—")}</code></div><div><small>Total tasks</small><strong>${story.tasks.length}</strong></div><div><small>Completed</small><strong>${counts.done} / ${story.tasks.length}</strong></div><div><small>Story points</small><strong>${storyPoints}</strong></div></div>
                 <div class="story-detail-status-line"><span class="story-status-dot todo"></span>To do <strong>${counts.todo}</strong><span class="story-status-dot progress"></span>In progress <strong>${counts.inprogress}</strong><span class="story-status-dot done"></span>Done <strong>${counts.done}</strong></div>
               </section>
               <section class="story-detail-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">✓</span><div><h5>Acceptance criteria</h5><p>Conditions for considering this story complete</p></div><span class="story-detail-count">${story.acceptanceCriteria.length}</span></div>
@@ -1423,7 +1745,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
               </section>
             </div>
             <section class="story-detail-panel story-linked-panel"><div class="story-detail-panel-title"><span class="story-detail-icon">☷</span><div><h5>Linked tasks</h5><p>Tasks contributing to this story's progress</p></div><span class="story-detail-count">${story.tasks.length}</span><button type="button" class="story-add-task story-detail-add" data-story-title="${escapeHtml(story.title)}" data-story-id="${escapeHtml(story.id)}" data-story-description="${escapeHtml(story.description)}" ${story.archived ? "disabled" : ""}>+ Add task</button></div>
-              ${story.tasks.length ? `<div class="story-linked-task-list">${story.tasks.map((task,index) => `<button type="button" class="story-linked-task" data-story-task="${escapeHtml(task.id)}"><span class="story-task-index">${index+1}</span><span class="story-linked-task-name">${escapeHtml(task.task)}<small>${Number(task.storyPoints)||0} points</small></span><span class="story-linked-status status-${escapeHtml(String(task.statusKey||"todo").toLowerCase())}">${escapeHtml(task.statusLabel)}</span><span class="story-linked-assignee" title="Task owner"><span class="story-assignee-avatar">${escapeHtml((task.assignee && task.assignee !== "Unassigned" ? task.assignee : "U").split(/\\s+/).map(part => part[0]).join("").slice(0,2).toUpperCase())}</span><span>${escapeHtml(task.assignee || "Unassigned")}</span></span><span class="story-linked-open" aria-hidden="true">›</span></button>`).join("")}</div>` : '<div class="story-detail-empty-box"><strong>No linked tasks</strong><p>Break this story into tasks to start tracking delivery.</p></div>'}
+              ${story.tasks.length ? `<div class="story-linked-task-list">${story.tasks.map((task,index) => `<button type="button" class="story-linked-task" data-story-task="${escapeHtml(task.id)}"><span class="story-task-index">${index+1}</span><span class="story-linked-task-name">${escapeHtml(task.task)}<small>TASK ID · ${escapeHtml(task.id)} · ${Number(task.storyPoints)||0} points</small></span><span class="story-linked-status status-${escapeHtml(String(task.statusKey||"todo").toLowerCase())}">${escapeHtml(task.statusLabel)}</span><span class="story-linked-assignee" title="Task owner"><span class="story-assignee-avatar">${escapeHtml((task.assignee && task.assignee !== "Unassigned" ? task.assignee : "U").split(/\\s+/).map(part => part[0]).join("").slice(0,2).toUpperCase())}</span><span>${escapeHtml(task.assignee || "Unassigned")}</span></span><span class="story-linked-open" aria-hidden="true">›</span></button>`).join("")}</div>` : '<div class="story-detail-empty-box"><strong>No linked tasks</strong><p>Break this story into tasks to start tracking delivery.</p></div>'}
             </section>
           </div>
         </div></article>`;
@@ -1490,12 +1812,23 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     }
   }
 
+  let storyOwnerLoadToken = 0;
+  let storyOwnersReady = Promise.resolve();
   function openStoryEditor(story = null) {
     appState.editingStoryId = story?.id || null;
     els.storyEditorForm.reset();
     els.storyEditorTitle.textContent = story ? "Edit User Story" : "Create User Story";
     els.saveStoryBtn.textContent = story ? "Save Changes" : "Create User Story";
     els.storyTitleInput.value = story?.title || "";
+    const token = ++storyOwnerLoadToken;
+    els.saveStoryBtn.disabled = true;
+    storyOwnersReady = populateStoryOwners(story).catch((error) => {
+      console.error("Could not load User Story owners", error);
+      if (token === storyOwnerLoadToken) els.storyEditorError.textContent = "Could not load owners. Check project membership permissions and try again.";
+      return false;
+    }).finally(() => {
+      if (token === storyOwnerLoadToken) els.saveStoryBtn.disabled = !planningCanEdit();
+    });
     els.storyDescriptionInput.value = story?.description || "";
     els.storyCriteriaInput.value = Array.isArray(story?.acceptanceCriteria) ? story.acceptanceCriteria.join("\n") : "";
     refreshPlanningSelectors();
@@ -1520,6 +1853,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   async function saveUserStory(event) {
     event.preventDefault();
+    if (await storyOwnersReady === false) return;
     const title = els.storyTitleInput.value.trim();
     const description = els.storyDescriptionInput.value.trim();
     const criteria = els.storyCriteriaInput.value.split("\n").map(value => value.trim()).filter(Boolean);
@@ -1540,6 +1874,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const previousTitle = existingStory?.title || "";
     const data = {
       title, description, acceptanceCriteria: criteria,
+      owner: els.storyOwnerInput.selectedOptions[0]?.dataset.displayName || "",
+      ownerUid: els.storyOwnerInput.value,
       piId: els.storyPiInput.value,
       pi: appState.programIncrements.find((pi) => pi.id === els.storyPiInput.value)?.name || "",
       featureId: els.storyFeatureInput.value,
@@ -1562,7 +1898,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         else {
           // Legacy stories are upgraded into independent records; linked task IDs are preserved.
           const legacyId = appState.editingStoryId;
-          await setDoc(userStoryReference(legacyId), { ...data, createdAt: serverTimestamp() });
+          await createRecordWithBusinessCode(userStoryCollection(), "story", { ...data, createdAt: serverTimestamp() }, legacyId)
           const linked = appState.allTasks.filter(task => String(task.raw.userStoryId || "") === legacyId || (!task.raw.userStoryId && String(task.raw.userStory || task.story || "").trim() === previousTitle));
           for (let start = 0; start < linked.length; start += 450) {
             const batch = writeBatch(db);
@@ -1572,14 +1908,14 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         }
       } else {
         data.createdAt = serverTimestamp();
-        await addDoc(userStoryCollection(), data);
+        await createRecordWithBusinessCode(userStoryCollection(), "story", data);
       }
       closeStoryEditor();
     } catch (error) {
       console.error("Could not save User Story", error);
       els.storyEditorError.textContent = "Could not save the User Story. Check project permissions and try again.";
     } finally {
-      els.saveStoryBtn.disabled = false;
+      els.saveStoryBtn.disabled = !planningCanEdit();
       els.saveStoryBtn.textContent = appState.editingStoryId ? "Save Changes" : "Create User Story";
     }
   }
@@ -1650,6 +1986,11 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const taskName = document.createElement("strong");
       taskName.textContent = task.task;
       taskText.appendChild(taskName);
+      const taskId = document.createElement("code");
+      taskId.className = "task-identity-inline";
+      taskId.textContent = "TASK ID · " + (task.code || "Legacy / not assigned");
+      taskId.title = "Firestore document ID: " + task.id;
+      taskText.appendChild(taskId);
       if (task.story && task.story !== "-") {
         const story = document.createElement("span");
         story.textContent = task.story;
@@ -1856,6 +2197,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     const overdueBadge = task.overdue ? '<span class="overdue-badge">Overdue</span>' : "";
 
     card.innerHTML = `
+      <div class="task-card-identity"><span>TASK ID</span><code>${escapeHtml(task.code || "Legacy / not assigned")}</code></div>
       <h4 class="card-title">${escapeHtml(task.task)}</h4>
       <p class="card-story">${escapeHtml(task.story)}</p>
       <div class="card-grid">
@@ -1958,133 +2300,135 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     renderSprintCalendar();
     const activeSprint = getActiveSprintMeta();
     const sprintTasks = activeSprint ? activeSprint.tasks : [];
-    updateAgileMetrics(sprintTasks);
-    renderBurndown(activeSprint, sprintTasks);
+    updateAgileMetrics(sprintTasks, activeSprint);
+    renderSprintWorkload(sprintTasks);
     renderVelocity();
+    renderSprintAnalytics();
   }
 
   function getActiveSprintMeta() {
     let pool = [...appState.sprintCatalog];
     if (appState.filters.pi !== "all") pool = pool.filter((s) => s.pi === appState.filters.pi);
     if (appState.filters.sprint !== "all") pool = pool.filter((s) => s.sprint === appState.filters.sprint);
-    if (pool.length === 0) return null;
-    return pool[pool.length - 1];
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dated = pool.filter((s) => s.startDate && s.endDate);
+    const active = dated.find((s) => today >= s.startDate && today <= s.endDate);
+    return active || [...dated].sort((a,b) => (a.startDate?.getTime() || 0) - (b.startDate?.getTime() || 0)).at(-1) || pool.at(-1) || null;
   }
 
-  function updateAgileMetrics(sprintTasks) {
+  function updateAgileMetrics(sprintTasks, sprintMeta) {
     const committed = sprintTasks.reduce((sum, task) => sum + pointsOf(task), 0);
-    const completed = sprintTasks.filter((task) => task.statusKey === "done").reduce((sum, task) => sum + pointsOf(task), 0);
-    const now = new Date();
-    const spillover = sprintTasks.filter((task) => task.sprintEndDate && task.sprintEndDate < now && task.statusKey !== "done").length;
+    const completedTasks = sprintTasks.filter((task) => task.statusKey === "done");
+    const completed = completedTasks.reduce((sum, task) => sum + pointsOf(task), 0);
+    const remaining = Math.max(0, committed - completed);
     const overdue = sprintTasks.filter((task) => task.overdue && task.statusKey !== "done").length;
-
+    const doneCount = completedTasks.length;
+    const progress = sprintTasks.length ? Math.round(doneCount / sprintTasks.length * 100) : 0;
+    const fmt = (date) => date ? formatDate(date) : "Dates not set";
     els.committedPoints.textContent = String(committed);
     els.completedPoints.textContent = String(completed);
-    els.spilloverTasks.textContent = String(spillover);
+    els.remainingPoints.textContent = String(remaining);
     els.overdueOpen.textContent = String(overdue);
+    els.reportSprintTitle.textContent = sprintMeta ? `${sprintMeta.sprint} · ${sprintMeta.pi}` : "No sprint selected";
+    els.reportSprintSubtitle.textContent = sprintMeta
+      ? `${fmt(sprintMeta.startDate)} – ${fmt(sprintMeta.endDate)} · ${sprintTasks.length} tasks in scope`
+      : "Assign sprint dates to tasks to generate sprint reporting.";
+    els.reportCompletion.textContent = `${progress}%`;
+    els.reportCompletionBar.style.width = `${progress}%`;
+    els.reportProgressSummary.textContent = `${doneCount} of ${sprintTasks.length} tasks complete`;
+    els.reportEffortCompletion.textContent = `${completed} / ${committed} points`;
   }
 
-  function renderBurndown(sprintMeta, sprintTasks) {
-    if (!els.burndownChart || typeof window.Chart === "undefined") return;
-    if (appState.charts.burndown) {
-      appState.charts.burndown.destroy();
-      appState.charts.burndown = null;
-    }
-
-    const chartCard = els.burndownChart.closest(".chart-card");
-    chartCard?.classList.remove("is-empty");
-    chartCard?.querySelector(".chart-empty-state")?.remove();
-
-    if (!sprintMeta || !sprintMeta.startDate || !sprintMeta.endDate) {
-      els.burndownSubtitle.textContent = "Sprint dates are needed to plot a burndown";
-      if (chartCard) {
-        chartCard.classList.add("is-empty");
-        const emptyState = document.createElement("div");
-        emptyState.className = "chart-empty-state";
-        emptyState.innerHTML = '<span class="chart-empty-icon" aria-hidden="true">↗</span><strong>No burndown data yet</strong><span>Add a sprint start and end date to tasks in this sprint. The chart will appear here.</span>';
-        chartCard.appendChild(emptyState);
-      }
-      return;
-    }
-
-    const dates = getDateRange(sprintMeta.startDate, sprintMeta.endDate);
-    const labels = dates.map((d) => `${d.getDate()}/${d.getMonth() + 1}`);
-    const total = sprintTasks.reduce((sum, task) => sum + pointsOf(task), 0);
-    const completed = sprintTasks.filter((task) => task.statusKey === "done").reduce((sum, task) => sum + pointsOf(task), 0);
-    const ideal = labels.map((_, i) => (labels.length === 1 ? 0 : Number((total - (total * i) / (labels.length - 1)).toFixed(2))));
-    const elapsed = getElapsedDaysInSprint(sprintMeta.startDate, sprintMeta.endDate);
-    const remainingNow = Math.max(total - completed, 0);
-
-    // Historical daily snapshots are not stored, so do not fabricate an "actual" burn curve.
-    // Display the current remaining-work snapshot as a flat reference across the sprint.
-    const remainingSnapshot = labels.map(() => remainingNow);
-
-    els.burndownSubtitle.textContent = `${sprintMeta.sprint} (${formatDate(sprintMeta.startDate)} - ${formatDate(sprintMeta.endDate)})`;
-
-    appState.charts.burndown = new window.Chart(els.burndownChart, {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          { label: "Ideal Remaining", data: ideal, borderColor: "#8aa2bf", borderDash: [6, 4], tension: 0.2 },
-          { label: "Current Remaining (snapshot)", data: remainingSnapshot, borderColor: "#0f5bd8", backgroundColor: "rgba(15, 91, 216, 0.08)", fill: false, tension: 0 }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: { y: { beginAtZero: true, title: { display: true, text: "Story Points" } } }
-      }
-    });
-  }
-
-  function getDateRange(start, end) {
-    const result = [];
-    const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-    while (cursor <= last) {
-      result.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return result;
-  }
-
-  function getElapsedDaysInSprint(start, end) {
-    const today = new Date();
-    const startOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    const endOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    if (todayOnly <= startOnly) return 1;
-    if (todayOnly >= endOnly) return getDateRange(startOnly, endOnly).length;
-    return getDateRange(startOnly, todayOnly).length;
+  function renderSprintWorkload(tasks) {
+    const groups = [
+      { key: "todo", label: "To do", color: "todo" },
+      { key: "inprogress", label: "In progress", color: "progress" },
+      { key: "done", label: "Done", color: "done" }
+    ];
+    const total = tasks.length;
+    els.reportStatusBreakdown.innerHTML = groups.map((group) => {
+      const count = tasks.filter((task) => task.statusKey === group.key).length;
+      const percentage = total ? Math.round(count / total * 100) : 0;
+      return `<div class="report-status-row"><div class="report-status-copy"><span><i class="report-dot ${group.color}"></i>${group.label}</span><strong>${count} <small>(${percentage}%)</small></strong></div><div class="report-status-track"><span class="${group.color}" style="width:${percentage}%"></span></div></div>`;
+    }).join("");
+    if (!total) els.reportStatusBreakdown.innerHTML = '<p class="report-empty-hint">No tasks are assigned to the selected sprint.</p>';
   }
 
   function renderVelocity() {
     if (!els.velocityChart || typeof window.Chart === "undefined") return;
-    if (appState.charts.velocity) appState.charts.velocity.destroy();
-
-    let eligibleSprints = [...appState.sprintCatalog];
-    if (appState.filters.pi !== "all") eligibleSprints = eligibleSprints.filter((s) => s.pi === appState.filters.pi);
-    const sprints = eligibleSprints.slice(-8);
-    const labels = sprints.map((s) => `${s.pi} · ${s.sprint}`);
-    const committed = sprints.map((s) => s.tasks.reduce((sum, t) => sum + pointsOf(t), 0));
-    const completed = sprints.map((s) => s.tasks.filter((t) => t.statusKey === "done").reduce((sum, t) => sum + pointsOf(t), 0));
-
+    if (appState.charts.velocity) { appState.charts.velocity.destroy(); appState.charts.velocity = null; }
+    let sprints = [...appState.sprintCatalog].filter((s) => s.startDate && s.endDate);
+    if (appState.filters.pi !== "all") sprints = sprints.filter((s) => s.pi === appState.filters.pi);
+    sprints = sprints.filter((s) => s.tasks.length > 0).slice(-8);
+    els.velocityEmpty.hidden = sprints.length > 0;
+    els.velocityChart.closest(".report-chart-wrap").classList.toggle("is-empty", sprints.length === 0);
+    const labels = sprints.map((s) => `${s.sprint}`);
+    const committed = sprints.map((s) => s.tasks.reduce((sum,t) => sum + pointsOf(t),0));
+    const completed = sprints.map((s) => s.tasks.filter((t) => t.statusKey === "done").reduce((sum,t) => sum + pointsOf(t),0));
     appState.charts.velocity = new window.Chart(els.velocityChart, {
       type: "bar",
-      data: {
-        labels,
-        datasets: [
-          { label: "Committed", data: committed, backgroundColor: "#b8d4fb" },
-          { label: "Completed", data: completed, backgroundColor: "#2c78df" }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: { y: { beginAtZero: true, title: { display: true, text: "Story Points" } } }
+      data: { labels, datasets: [
+        { label: "Total scope (points)", data: committed, backgroundColor: "#c9dafa", borderRadius: 5 },
+        { label: "Completed (points)", data: completed, backgroundColor: "#2365c8", borderRadius: 5 }
+      ]},
+      options: { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{position:"bottom",labels:{usePointStyle:true,boxWidth:8}}, tooltip:{callbacks:{afterBody:(items)=>{const sprint=sprints[items[0]?.dataIndex];return sprint?[ `PI: ${sprint.pi}`,`Dates: ${sprint.startDate.toLocaleDateString()} – ${sprint.endDate.toLocaleDateString()}`,`Tasks: ${sprint.tasks.length}`]:[];}}}},
+        scales:{y:{beginAtZero:true,title:{display:true,text:"Story points"},ticks:{precision:0}},x:{grid:{display:false}}}
       }
     });
+  }
+
+  function renderSprintAnalytics() {
+    const root = document.getElementById("sprintAnalytics");
+    if (!root) return;
+    const sprints = [...appState.sprints].filter((s) => s.startDate && s.endDate)
+      .sort((a, b) => String(a.endDate).localeCompare(String(b.endDate)));
+    sprints.forEach((sprint) => loadSprintSnapshots(sprint.id));
+    const rows = sprints.map((sprint) => {
+      const history = appState.sprintSnapshots[sprint.id] || [];
+      const finalSnapshot = history.filter((item) => String(item.date || "") <= String(sprint.endDate))
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0] || null;
+      const completedStatus = /^(completed|complete|closed|done)$/i.test(String(sprint.status || "").replaceAll("_", " ").trim());
+      const tasks = appState.allTasks.filter((task) => !task.archived && taskBelongsToSprint(task, sprint));
+      const currentPoints = tasks.reduce((sum, task) => sum + pointsOf(task), 0);
+      const currentCompleted = tasks.filter((task) => task.statusKey === "done")
+        .reduce((sum, task) => sum + pointsOf(task), 0);
+      return { sprint, history, finalSnapshot, completedStatus, tasks, currentPoints, currentCompleted };
+    });
+    const completed = rows.filter((row) => row.completedStatus);
+    const measurable = completed.filter((row) => row.finalSnapshot && Number.isFinite(Number(row.finalSnapshot.totalPoints)) && Number.isFinite(Number(row.finalSnapshot.completedPoints)));
+    const average = measurable.length ? measurable.reduce((sum, row) => sum + Number(row.finalSnapshot.completedPoints), 0) / measurable.length : null;
+    const averageRate = measurable.length ? measurable.reduce((sum, row) => {
+      const total = Number(row.finalSnapshot.totalPoints) || 0;
+      return sum + (total > 0 ? Number(row.finalSnapshot.completedPoints) / total * 100 : 0);
+    }, 0) / measurable.length : null;
+    const trend = rows.filter((row) => row.finalSnapshot).slice(-6);
+    const metric = (label, value, note) => '<article class="sprint-analytics-kpi"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong><small>' + escapeHtml(note) + '</small></article>';
+    const fmtPoints = (value) => Number(value).toLocaleString(undefined, {maximumFractionDigits: 1});
+    const kpis = [
+      metric("Average velocity", average === null ? "—" : fmtPoints(average) + " pts", measurable.length ? "Completed points per completed sprint · " + measurable.length + " measured" : "Needs completed sprints with a saved snapshot"),
+      metric("Average completion", averageRate === null ? "—" : Math.round(averageRate) + "%", measurable.length ? "Mean points completed ÷ points committed" : "No measurable completed sprint history"),
+      metric("Completed sprints", String(completed.length), measurable.length + " with final snapshot data"),
+      metric("Latest measured delivery", trend.length ? fmtPoints(Number(trend[trend.length - 1].finalSnapshot.completedPoints) || 0) + " pts" : "—", trend.length ? trend[trend.length - 1].sprint.name : "Daily snapshots build history from now on")
+    ].join("");
+    const maxDone = Math.max(1, ...trend.map((item) => Number(item.finalSnapshot.completedPoints) || 0));
+    const chart = trend.length ? '<div class="sprint-analytics-bars" role="img" aria-label="Completed points by sprint">' + trend.map((row) => {
+      const snapshot = row.finalSnapshot;
+      const total = Math.max(0, Number(snapshot.totalPoints) || 0);
+      const done = Math.max(0, Number(snapshot.completedPoints) || 0);
+      const height = Math.max(3, Math.round(done / maxDone * 100));
+      const rate = total > 0 ? Math.round(done / total * 100) : 0;
+      return '<div class="sprint-analytics-bar-item"><div class="sprint-analytics-bar-value">' + fmtPoints(done) + '</div><div class="sprint-analytics-bar-track"><span style="height:' + height + '%"></span></div><strong>' + escapeHtml(row.sprint.name) + '</strong><small>' + rate + '% of scope</small></div>';
+    }).join("") + '</div>' : '<div class="sprint-analytics-empty">No daily sprint snapshots are available yet. Keep the planner open during sprint activity; it records one snapshot per sprint per local calendar day.</div>';
+    const tableRows = rows.slice(-8).reverse().map((row) => {
+      const snap = row.finalSnapshot;
+      const total = snap ? Number(snap.totalPoints) || 0 : null;
+      const done = snap ? Number(snap.completedPoints) || 0 : null;
+      const rate = total > 0 ? Math.round(done / total * 100) + "%" : total === 0 ? "0%" : "—";
+      const label = row.completedStatus ? (snap ? "Measured" : "No final snapshot") : (snap ? "Snapshot available" : "In progress");
+      return '<tr><td><strong>' + escapeHtml(row.sprint.name) + '</strong><small>' + escapeHtml(row.sprint.startDate + " – " + row.sprint.endDate) + '</small></td><td>' + (total === null ? "—" : fmtPoints(total)) + '</td><td>' + (done === null ? "—" : fmtPoints(done)) + '</td><td>' + rate + '</td><td><span class="sprint-analytics-status ' + (snap ? "is-measured" : "") + '">' + escapeHtml(label) + '</span></td></tr>';
+    }).join("");
+    root.innerHTML = '<div class="sprint-analytics-kpis">' + kpis + '</div><section class="sprint-analytics-chart-panel"><header><div><h3>Delivery trend</h3><p>Completed points at the latest recorded snapshot on or before each sprint end date</p></div><span class="sprint-analytics-chart-unit">STORY POINTS</span></header>' + chart + '</section><section class="sprint-analytics-table-panel"><header><div><h3>Sprint outcomes</h3><p>Up to eight most recent dated sprints · missing history stays unavailable</p></div></header><div class="sprint-analytics-table-scroll"><table><thead><tr><th>Sprint</th><th>Committed</th><th>Completed</th><th>Completion</th><th>Data quality</th></tr></thead><tbody>' + (tableRows || '<tr><td colspan="5">Add sprint metadata with start and end dates to begin tracking outcomes.</td></tr>') + '</tbody></table></div></section><p class="sprint-analytics-footnote">Velocity uses saved daily snapshots, not current task status retroactively. Average velocity includes only sprints marked Completed/Closed/Done that have a snapshot on or before the sprint end date. Existing history is not backfilled.</p>';
   }
 
   function renderSprintLegend() {
@@ -2206,9 +2550,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
   }
 
   function setActiveView(view, persist = true) {
-    appState.activeView = ["dashboard", "board", "list", "stories", "pis", "features", "insights", "knowledge", "profile"].includes(view) ? view : "dashboard";
+    appState.activeView = ["dashboard", "board", "list", "stories", "sprintPlanning", "pis", "features", "insights", "knowledge", "profile"].includes(view) ? view : "dashboard";
     const dashboard = appState.activeView === "dashboard";
-    const board = appState.activeView === "board", list = appState.activeView === "list", stories = appState.activeView === "stories";
+    const board = appState.activeView === "board", list = appState.activeView === "list", stories = appState.activeView === "stories", sprintPlanning = appState.activeView === "sprintPlanning";
     const pis = appState.activeView === "pis", features = appState.activeView === "features";
     const insights = appState.activeView === "insights", knowledge = appState.activeView === "knowledge", profile = appState.activeView === "profile";
     els.dashboardView?.classList.toggle("is-hidden", !dashboard);
@@ -2218,6 +2562,9 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.boardView.classList.toggle("is-hidden", !board);
     els.listView.classList.toggle("is-hidden", !list);
     els.storiesView.classList.toggle("is-hidden", !stories);
+    els.sprintPlanningView?.classList.toggle("is-hidden", !sprintPlanning);
+    els.sprintPlanningViewBtn?.classList.toggle("is-active", sprintPlanning);
+    if (sprintPlanning) renderSprintPlanning();
     els.piManagementView?.classList.toggle("is-hidden", !pis);
     els.featuresManagementView?.classList.toggle("is-hidden", !features);
     els.piViewBtn?.classList.toggle("is-active", pis);
@@ -2234,6 +2581,192 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     if (persist) persistPreferences();
   }
 
+
+
+  function sprintSnapshotCollection(sprintId) {
+    return appState.activeProjectId === "default"
+      ? collection(db, "plannerSprints", sprintId, "dailySnapshots")
+      : collection(db, "plannerProjects", appState.activeProjectId, "sprints", sprintId, "dailySnapshots");
+  }
+
+  function recordDailySprintSnapshots() {
+    if (!appState.user || !appState.sprints.length) return;
+    const now = new Date();
+    const date = [now.getFullYear(), String(now.getMonth()+1).padStart(2,"0"), String(now.getDate()).padStart(2,"0")].join("-");
+    const projectId = appState.activeProjectId;
+    for (const sprint of appState.sprints) {
+      const sprintTasks = appState.allTasks.filter((task) => taskBelongsToSprint(task, sprint) && !task.archived);
+      if (!sprintTasks.length) continue;
+      const points = (task) => Math.max(0, Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0);
+      const status = (task) => task.statusKey || normalizeStatus(task.status || task.raw?.status || task.raw?.Status);
+      const doneTasks = sprintTasks.filter((task) => status(task) === "done");
+      const totalPoints = sprintTasks.reduce((sum, task) => sum + points(task), 0);
+      const completedPoints = doneTasks.reduce((sum, task) => sum + points(task), 0);
+      const payload = {
+        date, sprintId:sprint.id, sprintName:sprint.name, projectId,
+        taskCount:sprintTasks.length, totalPoints, completedPoints, remainingPoints:totalPoints-completedPoints,
+        todoCount:sprintTasks.filter((task)=>status(task)==="todo").length,
+        inProgressCount:sprintTasks.filter((task)=>status(task)==="inprogress").length,
+        doneCount:doneTasks.length, recordedBy:appState.user.uid, recordedAt:serverTimestamp()
+      };
+      setDoc(doc(sprintSnapshotCollection(sprint.id), date), payload, {merge:true})
+        .then(() => {
+          delete appState.sprintSnapshotLoads[sprint.id];
+          if (appState.activeProjectId === projectId) renderSprintPlanning();
+        })
+        .catch((error) => console.error("Could not record daily sprint progress", error));
+    }
+  }
+
+  function loadSprintSnapshots(sprintId) {
+    if (!sprintId || appState.sprintSnapshotLoads[sprintId]) return;
+    appState.sprintSnapshotLoads[sprintId] = true;
+    const projectId = appState.activeProjectId;
+    getDocs(query(sprintSnapshotCollection(sprintId), orderBy("date", "asc"))).then((snapshot) => {
+      if (appState.activeProjectId !== projectId) return;
+      appState.sprintSnapshots[sprintId] = snapshot.docs.map((item) => ({id:item.id,...item.data()}))
+        .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+      renderSprintPlanning();
+      renderSprintAnalytics();
+    }).catch((error) => {
+      delete appState.sprintSnapshotLoads[sprintId];
+      console.error("Could not load sprint history", error);
+    });
+  }
+
+  function renderSprintExecution(selected, sprintTasks, sprintMetadata, canEdit) {
+    const board = els.sprintExecutionBoard, summary = els.sprintBurndownSummary, chart = els.sprintBurndownChart;
+    if (!board || !summary || !chart) return;
+    if (selected === "all") {
+      board.innerHTML = '<div class="planning-empty execution-empty">Choose a specific sprint above to manage execution.</div>';
+      summary.innerHTML = '<div class="execution-summary-item"><span>Selected sprint</span><strong>All sprint work</strong></div>';
+      chart.innerHTML = '<div class="execution-chart-empty">Select one sprint to view its planned burndown.</div>';
+      return;
+    }
+    const columns = [{key:"todo",title:"To do"},{key:"inprogress",title:"In progress"},{key:"done",title:"Done"}];
+    const points = (task) => Math.max(0, Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0);
+    const taskStatus = (task) => COLUMN_KEYS.includes(task.statusKey) ? task.statusKey : normalizeStatus(task.status || task.raw?.status || task.raw?.Status);
+    let boardMarkup;
+    try {
+      boardMarkup = columns.map((column) => {
+      const items = sprintTasks.filter((task) => taskStatus(task) === column.key);
+      return '<section class="execution-column"><header><h4>' + column.title + '</h4><span class="execution-column-count">' + items.length + '</span></header><div class="execution-column-meta">' + items.reduce((sum, task) => sum + points(task), 0) + ' story points</div>' +
+        (items.length ? items.map((task) => '<article class="execution-task"><div class="execution-task-top"><span class="planning-task-id">' + escapeHtml(task.id || "TASK") + '</span><span class="execution-task-points">' + points(task) + ' pts</span></div><h5>' + escapeHtml(task.task || task.title || "Untitled task") + '</h5><p>' + escapeHtml(task.assignee || "Unassigned") + '</p><label class="execution-status-control"><span>Move to</span><select data-execution-status="' + escapeHtml(task.id) + '"' + (canEdit ? "" : " disabled") + '>' + columns.map((option) => '<option value="' + option.key + '"' + (option.key === column.key ? " selected" : "") + '>' + option.title + '</option>').join("") + '</select></label></article>').join("") : '<div class="execution-column-empty">No tasks in this stage</div>') + '</section>';
+      }).join("");
+    } catch (error) {
+      console.error("Could not render sprint execution board", error);
+      boardMarkup = '<div class="planning-empty execution-empty">Sprint tasks could not be grouped for the execution board.</div>';
+    }
+    board.innerHTML = boardMarkup;
+    const total = sprintTasks.reduce((sum, task) => sum + points(task), 0);
+    const remaining = sprintTasks.filter((task) => taskStatus(task) !== "done").reduce((sum, task) => sum + points(task), 0);
+    const completed = total - remaining, capacity = Math.max(0, Number(sprintMetadata?.capacity) || 0);
+    summary.innerHTML = [["Remaining",remaining+" pts",total?Math.round(remaining/total*100)+"% of committed effort":"No estimates available"],["Completed",completed+" pts",sprintTasks.filter((task)=>taskStatus(task)==="done").length+" of "+sprintTasks.length+" tasks"],["Capacity",capacity?capacity+" pts":"Not set",capacity&&total>capacity?(total-capacity)+" pts over capacity":"Configured sprint capacity"]].map(([label,value,note])=>'<div class="execution-summary-item"><span>'+escapeHtml(label)+'</span><strong>'+escapeHtml(value)+'</strong><small>'+escapeHtml(note)+'</small></div>').join("");
+    const day = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value||"")) ? new Date(value+"T12:00:00") : null;
+    const start = day(sprintMetadata?.startDate), end = day(sprintMetadata?.endDate);
+    if (!start || !end || end < start) { chart.innerHTML='<div class="execution-chart-empty">Add valid sprint start and end dates to calculate the planned trajectory.</div>'; return; }
+    const days=Math.max(1,Math.round((end-start)/86400000)),w=520,h=210,l=42,r=12,t=16,b=30,max=Math.max(total,remaining,1);
+    const x=(d)=>l+(w-l-r)*d/days,y=(v)=>t+(h-t-b)*(1-v/max);
+    const ideal=Array.from({length:days+1},(_,d)=>x(d).toFixed(1)+","+y(total*(1-d/days)).toFixed(1)).join(" ");
+    const today=new Date();today.setHours(12,0,0,0);const elapsed=Math.max(0,Math.min(days,Math.round((today-start)/86400000)));
+    const history = (appState.sprintSnapshots?.[sprintMetadata?.id] || []).filter((item) => item.date >= sprintMetadata.startDate && item.date <= sprintMetadata.endDate);
+    const actualPoints = history.map((item) => {
+      const dayIndex = Math.max(0, Math.min(days, Math.round((new Date(item.date + "T12:00:00") - start) / 86400000)));
+      return x(dayIndex).toFixed(1) + "," + y(Math.max(0, Number(item.remainingPoints) || 0)).toFixed(1);
+    }).join(" ");
+    chart.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" class="execution-burndown-svg" aria-hidden="true"><line x1="'+l+'" y1="'+(h-b)+'" x2="'+(w-r)+'" y2="'+(h-b)+'" class="execution-axis"/>'+[0,.5,1].map(v=>'<line x1="'+l+'" y1="'+y(max*v)+'" x2="'+(w-r)+'" y2="'+y(max*v)+'" class="execution-gridline"/><text x="'+(l-7)+'" y="'+(y(max*v)+4)+'" text-anchor="end" class="execution-chart-label">'+Math.round(max*v)+'</text>').join("")+'<polyline points="'+ideal+'" class="execution-planned-line"/>'+(actualPoints ? '<polyline points="'+actualPoints+'" class="execution-actual-line"/>' : '')+'<circle cx="'+x(elapsed)+'" cy="'+y(remaining)+'" r="5" class="execution-current-point"/></svg><div class="execution-chart-legend"><span><i class="execution-line-key"></i>Ideal pace</span>'+(actualPoints ? '<span><i class="execution-actual-key"></i>Daily recorded actuals</span>' : '')+'<span><i class="execution-point-key"></i>Current remaining: '+remaining+' pts</span></div>';
+    if(els.sprintBurndownNote) { const delta=remaining-total*(1-elapsed/days); els.sprintBurndownNote.textContent=(delta>0.5?"Current remaining effort is "+Math.round(delta)+" points above ideal pace. ":delta<-.5?"Current remaining effort is "+Math.round(-delta)+" points ahead of ideal pace. ":"Current remaining effort is close to ideal pace. ")+(history.length ? history.length+" daily snapshot(s) are plotted; snapshots are captured while the planner is open and data refreshes." : "Daily actuals appear after the planner records its first daily snapshot."); }
+    try { loadSprintSnapshots(sprintMetadata?.id); }
+    catch (error) { console.error("Could not start loading sprint history", error); }
+  }
+
+  function renderSprintPlanning() {
+    if (!els.planningSprintSelect || !els.planningSprintStats) return;
+    const previous = appState.planningSprintInitialized ? els.planningSprintSelect.value : "";
+    const sprintNames = [...new Set([...appState.sprints.map((s) => String(s.name || "").trim()), ...appState.allTasks.map((task) => String(task.raw?.sprint ?? task.raw?.Sprint ?? "").trim())].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    els.planningSprintSelect.replaceChildren(new Option("All sprint work", "all"));
+    sprintNames.forEach((name) => els.planningSprintSelect.add(new Option(name, name)));
+    const activeSprintName = String(getActiveSprintMeta()?.sprint || "").trim();
+    els.planningSprintSelect.value = sprintNames.includes(previous) || previous === "all"
+      ? previous
+      : (sprintNames.includes(activeSprintName) ? activeSprintName : "all");
+    if (sprintNames.includes(activeSprintName)) appState.planningSprintInitialized = true;
+
+    const selected = els.planningSprintSelect.value;
+    const projectTasks = (appState.filteredTasks || []).filter((task) => !task.archived);
+    const sprintOf = (task) => String(task.raw?.sprint ?? task.raw?.Sprint ?? "").trim();
+    const sprintTasks = projectTasks.filter((task) => sprintOf(task) && (selected === "all" || sprintOf(task) === selected));
+    const backlog = projectTasks.filter((task) => !sprintOf(task) || (selected !== "all" && sprintOf(task) !== selected));
+    const done = sprintTasks.filter((task) => task.statusKey === "done").length;
+    const points = (list) => list.reduce((sum, task) => sum + (Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0), 0);
+    const sprintMetadata = appState.sprints.find((s) => s.name === selected);
+    const capacity = selected !== "all" && sprintMetadata ? (Number(sprintMetadata.capacity) || 0)
+      : Number(sprintTasks.find((task) => Number(task.raw?.sprintCapacity ?? task.raw?.capacity ?? task.raw?.Capacity) > 0)?.raw?.sprintCapacity
+        ?? sprintTasks.find((task) => Number(task.raw?.sprintCapacity ?? task.raw?.capacity ?? task.raw?.Capacity) > 0)?.raw?.capacity
+        ?? sprintTasks.find((task) => Number(task.raw?.Capacity) > 0)?.raw?.Capacity ?? 0);
+    els.planningSprintStats.innerHTML = [
+      ["Committed tasks", sprintTasks.length, selected === "all" ? "Across named sprints" : selected],
+      ["Story points", points(sprintTasks), "Based on available task estimates"],
+      ["Completed", done, sprintTasks.length ? Math.round(done / sprintTasks.length * 100) + "% of committed tasks" : "No sprint tasks yet"],
+      ["Capacity", capacity || "Not set", capacity ? (points(sprintTasks) > capacity ? "Over capacity by " + (points(sprintTasks) - capacity) + " points" : Math.max(0, capacity - points(sprintTasks)) + " points remaining") : "Capacity data is not configured"],
+      ["Sprint dates", sprintMetadata ? (sprintMetadata.startDate + " → " + sprintMetadata.endDate) : "Not set", sprintMetadata ? (String(sprintMetadata.status || "PLANNED").replaceAll("_", " ") + (sprintMetadata.goal ? " · " + sprintMetadata.goal : "")) : "Create sprint metadata below"]
+    ].map(([label, value, note]) => '<article class="planning-metric"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value)) + '</strong><small>' + escapeHtml(note) + '</small></article>').join("");
+
+    const canEdit = planningCanEdit();
+    const card = (task) => {
+      const currentSprint = sprintOf(task);
+      const options = ['<option value="">Backlog</option>', ...sprintNames.map((name) =>
+        '<option value="' + escapeHtml(name) + '"' + (name === currentSprint ? " selected" : "") + '>' + escapeHtml(name) + '</option>')].join("");
+      return '<article class="planning-task-card"><div class="planning-task-card-top"><span class="planning-task-id">' + escapeHtml(task.id || task.taskId || "TASK") + '</span><span class="planning-status">' + escapeHtml(task.statusLabel || task.status || "To Do") + '</span></div><h4>' + escapeHtml(task.task || task.title || "Untitled task") + '</h4><div class="planning-task-meta"><span>' + escapeHtml(task.assignee || "Unassigned") + '</span><span>' + escapeHtml(task.story || task.userStory || "No linked story") + '</span><span>' + escapeHtml(String(Number(task.raw?.storyPoints ?? task.raw?.points ?? task.raw?.estimate ?? task.storyPoints) || 0) + " pts") + '</span></div><label class="planning-assignment"><span>Sprint assignment</span><select data-task-sprint="' + escapeHtml(task.id) + '"' + (canEdit ? "" : " disabled") + ' aria-label="Sprint assignment for ' + escapeHtml(task.task || task.title || task.id) + '">' + options + '</select></label></article>';
+    };
+    els.planningBacklogCount.textContent = String(backlog.length);
+    els.planningSprintCount.textContent = String(sprintTasks.length);
+    els.planningBacklogList.innerHTML = backlog.length ? backlog.map(card).join("") : '<div class="planning-empty">No backlog tasks for the current filters.</div>';
+    els.planningSprintList.innerHTML = sprintTasks.length ? sprintTasks.map(card).join("") : '<div class="planning-empty">No tasks assigned to ' + escapeHtml(selected === "all" ? "a sprint" : selected) + ' yet.</div>';
+    renderSprintExecution(selected, sprintTasks, sprintMetadata, canEdit);
+
+    const risks = [];
+    const unassigned = sprintTasks.filter((task) => !String(task.raw?.assigneeUid || task.raw?.assignee || task.raw?.Assignee || "").trim()).length;
+    const undated = sprintTasks.filter((task) => !task.raw?.dueDate && !task.raw?.endDate && !task.raw?.["End Date"]).length;
+    if (capacity && points(sprintTasks) > capacity) risks.push(["Capacity exceeded", (points(sprintTasks) - capacity) + " story points above the configured capacity."]);
+    if (unassigned) risks.push(["Unassigned work", unassigned + " sprint task(s) have no identifiable assignee."]);
+    if (undated) risks.push(["Missing target dates", undated + " sprint task(s) have no due/end date."]);
+    if (!canEdit) risks.push(["Read-only access", "You can review sprint assignments, but only project owners and editors can change them."]);
+    els.planningRiskPanel.innerHTML = risks.length ? risks.map(([title, body]) => '<div class="planning-risk"><span aria-hidden="true">!</span><div><strong>' + escapeHtml(title) + '</strong>' + escapeHtml(body) + '</div></div>').join("") : '<div class="planning-risk is-clear"><span aria-hidden="true">✓</span><div><strong>No obvious planning warnings</strong>Based on the fields currently available in task records.</div></div>';
+  }
+
+  async function updateSprintAssignment(taskId, sprintName) {
+    if (!planningCanEdit()) {
+      window.alert("Your project role does not allow sprint planning changes.");
+      renderSprintPlanning();
+      return;
+    }
+    const task = appState.allTasks.find((item) => item.id === taskId);
+    if (!task) {
+      window.alert("This task is no longer available. Refresh and try again.");
+      return;
+    }
+    const nextSprint = String(sprintName || "").trim();
+    const matches = appState.sprints.filter((item) => item.name === nextSprint);
+    const selectedSprint = matches.length === 1 ? matches[0] : null;
+    const patch = { sprintId: selectedSprint?.id || "", sprint: selectedSprint?.name || "", updatedAt: serverTimestamp() };
+    const controls = [...document.querySelectorAll('[data-task-sprint="' + CSS.escape(taskId) + '"]')];
+    controls.forEach((control) => { control.disabled = true; });
+    try {
+      await updateDoc(taskReference(taskId), patch);
+      task.raw = { ...task.raw, ...patch };
+      refreshNormalizedTasksFromCatalog();
+      applyFiltersAndRender();
+      renderSprintPlanning();
+    } catch (error) {
+      console.error("Could not update sprint assignment", error);
+      window.alert("Could not save the sprint assignment. Check your project permissions and try again.");
+      renderSprintPlanning();
+    } finally {
+      controls.forEach((control) => { control.disabled = false; });
+    }
+  }
+
   function renderProfile() {
     if (!appState.user) return;
     const project = appState.projects.find((item) => item.id === appState.activeProjectId);
@@ -2243,6 +2776,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.profileEmail.textContent = appState.user.email || "No email available";
     els.profileUid.textContent = appState.user.uid;
     els.profileProject.textContent = project?.name || "Default Project";
+    const projectIdCard = document.getElementById("profileProjectId");
+    if (projectIdCard) projectIdCard.textContent = appState.activeProjectId || "default";
     els.profileRole.textContent = project?.role ? project.role[0].toUpperCase() + project.role.slice(1) : "Shared member";
     els.profileFirstNameInput.value = parts[0] || "";
     els.profileLastNameInput.value = parts.slice(1).join(" ");
@@ -2331,7 +2866,13 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.modalTitle.textContent = task.task;
     els.modalBody.innerHTML = `
       <section class="task-detail-grid" aria-label="Task information">
+        ${modalRow("Task ID", task.code || "Legacy / not assigned")}
+        ${modalRow("Firestore Document ID", task.id)}
+        ${modalRow("Project ID", appState.activeProjectId)}
+        ${modalRow("Created by User ID", task.raw.createdBy || "—")}
+        ${modalRow("Assignee User ID", task.raw.assigneeUid || task.raw.assigneeId || task.raw.ownerUid || "—")}
         ${modalRow("PI", task.pi)}
+        ${modalRow("PI ID", task.raw.piId || "—")}
         ${modalRow("Sprint", task.sprint)}
         ${modalRow("Feature", `${task.feature} (${task.featureId})`)}
         ${modalRow("Story", `${task.storyId} - ${task.story}`)}
@@ -2410,7 +2951,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const dependencyId = String(new FormData(dependencyForm).get("dependencyId") || "");
       const dependencies = [...(task.raw.dependencies || [])];
       if (!dependencyId || dependencies.includes(dependencyId)) return;
-      if (wouldCreateDependencyCycle(task.id, dependencyId)) {
+      if (wouldCreateDependencyCycle(task.id, dependencyId, appState.allTasks, [...dependencies, dependencyId])) {
         window.alert("This link would create a dependency cycle. Choose a different prerequisite.");
         return;
       }
@@ -2422,19 +2963,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     }));
   }
 
-  function wouldCreateDependencyCycle(taskId, prerequisiteId) {
-    const visited = new Set();
-    const visit = (id) => {
-      if (id === taskId) return true;
-      if (visited.has(id)) return false;
-      visited.add(id);
-      const task = appState.allTasks.find((item) => item.id === id);
-      return (task?.raw.dependencies || []).some(visit);
-    };
-    return visit(prerequisiteId);
-  }
-
   async function saveTaskBreakdown(task, patch) {
+    const validationError = validateTaskBreakdownPatch(task, patch, appState.allTasks);
+    if (validationError) {
+      window.alert(validationError);
+      return;
+    }
     try {
       await updateDoc(taskReference(task.id), { ...patch, updatedAt: serverTimestamp() });
       task.raw = { ...task.raw, ...patch };
@@ -2481,15 +3015,33 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
 
   const STORY_LIFECYCLE_STATES = ["Draft", "Ready", "In Progress", "In Review", "Accepted"];
 
+  function linkedUserStory(task) {
+    const storyId = String(task?.raw?.userStoryId || "").trim();
+    return storyId ? appState.userStories.find((story) => story.id === storyId) || null : null;
+  }
+
   function renderStoryLifecycle(task) {
-    const state = STORY_LIFECYCLE_STATES.includes(task.raw.userStoryStatus) ? task.raw.userStoryStatus : "Draft";
+    const story = linkedUserStory(task);
+    const legacyStoryTitle = String(task.raw.userStory || task.story || "").trim();
+    const hasLegacyStory = Boolean(legacyStoryTitle && legacyStoryTitle !== "-");
+    if (!story && !hasLegacyStory && !String(task.raw.userStoryId || "").trim()) return "";
+    const taskState = String(task.raw.userStoryStatus || "");
+    const state = STORY_LIFECYCLE_STATES.includes(story?.lifecycle)
+      ? story.lifecycle
+      : (STORY_LIFECYCLE_STATES.includes(taskState) ? taskState : "Draft");
+    const hasUnresolvedStoryLink = Boolean(String(task.raw.userStoryId || "").trim() && !story);
+    const note = story
+      ? "Changing this status updates the linked User Story. Task copies are not independently changed."
+      : (hasUnresolvedStoryLink
+        ? "The linked User Story is unavailable, so its lifecycle cannot be changed here."
+        : "This is a legacy task-only story. Changing this status updates matching legacy tasks by title.");
     return `
       <section class="task-breakdown story-lifecycle">
         <div class="breakdown-heading"><div><h3>User Story lifecycle</h3><p>Track the delivery state of the story linked to this task.</p></div></div>
         <label class="story-lifecycle-control" for="userStoryStatusSelect"><span>Story status</span>
-          <select id="userStoryStatusSelect">${STORY_LIFECYCLE_STATES.map((value) => `<option value="${value}" ${value === state ? "selected" : ""}>${value}</option>`).join("")}</select>
+          <select id="userStoryStatusSelect"${hasUnresolvedStoryLink ? " disabled" : ""}>${STORY_LIFECYCLE_STATES.map((value) => `<option value="${value}" ${value === state ? "selected" : ""}>${value}</option>`).join("")}</select>
         </label>
-        <p class="story-lifecycle-note">Changing this status updates tasks linked by stable User Story ID; legacy tasks without an ID are matched by title.</p>
+        <p class="story-lifecycle-note">${note}</p>
       </section>`;
   }
 
@@ -2499,13 +3051,31 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
       const nextState = select.value;
       if (!STORY_LIFECYCLE_STATES.includes(nextState)) return;
       select.disabled = true;
+      const story = linkedUserStory(task);
+      if (story) {
+        try {
+          await updateDoc(userStoryReference(story.id), {
+            lifecycle: nextState,
+            updatedAt: serverTimestamp()
+          });
+          story.lifecycle = nextState;
+          openTaskModal(appState.allTasks.find((item) => item.id === task.id) || task);
+        } catch (error) {
+          console.error("Could not update User Story lifecycle", error);
+          window.alert("Could not save the User Story lifecycle. Check project permissions and try again.");
+          select.disabled = false;
+        }
+        return;
+      }
       const storyTitle = String(task.raw.userStory || task.story || "").trim();
       const storyId = String(task.raw.userStoryId || "");
-      const linkedTasks = storyId
-        ? appState.allTasks.filter((item) => String(item.raw.userStoryId || "") === storyId)
-        : (storyTitle && storyTitle !== "-"
-          ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
-          : [task]);
+      if (storyId) {
+        select.disabled = true;
+        return;
+      }
+      const linkedTasks = storyTitle && storyTitle !== "-"
+        ? appState.allTasks.filter((item) => String(item.raw.userStory || item.story || "").trim() === storyTitle)
+        : [task];
       if (linkedTasks.length > 500) {
         window.alert("This story is linked to more than 500 tasks. Status was not changed; split the update into smaller groups.");
         select.disabled = false;
@@ -2561,7 +3131,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         userStory: task.raw.userStoryId || (task.raw.userStory ? `legacy:${task.raw.userStory}` : ""),
         userStoryDescription: task.raw.userStoryDescription || "",
         pi: task.raw.piId || appState.programIncrements.find((pi) => pi.name === task.raw.pi)?.id || "",
-        sprint: task.raw.sprint || "",
+        sprint: task.raw.sprintId || (() => { const matches = appState.sprints.filter((item) => item.name === String(task.raw.sprint || "").trim()); return matches.length === 1 ? matches[0].id : (task.raw.sprint ? "legacy:" + task.raw.sprint : ""); })(),
         feature: task.raw.featureId || appState.features.find((feature) => feature.name === task.raw.feature)?.id || "",
         assigneeUid: task.raw.assigneeUid || "",
         storyPoints: task.raw.storyPoints ?? 0,
@@ -2600,21 +3170,113 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     els.newTaskName.focus();
   }
 
+  async function populateFeatureOwners(feature = null) {
+    const select = els.featureOwnerInput;
+    if (!select) return;
+    const previousUid = feature?.ownerUid || "";
+    const legacyName = feature?.owner || "";
+    select.innerHTML = '<option value="">Unassigned</option>';
+    const members = await fetchAssignableMembers();
+    members.forEach((member) => {
+      const option = document.createElement("option");
+      option.value = member.uid;
+      option.textContent = member.uid === appState.user.uid ? `${member.displayName} (you)` : member.displayName;
+      option.dataset.displayName = member.displayName;
+      select.appendChild(option);
+    });
+    if (previousUid && !members.some((member) => member.uid === previousUid)) {
+      const option = document.createElement("option");
+      option.value = previousUid;
+      option.textContent = legacyName || "Previously assigned member";
+      option.dataset.displayName = legacyName;
+      select.appendChild(option);
+    } else if (!previousUid && legacyName) {
+      const matches = members.filter((member) => member.displayName.trim().toLocaleLowerCase() === legacyName.trim().toLocaleLowerCase());
+      if (matches.length === 1) select.value = matches[0].uid;
+      else {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = matches.length > 1 ? `${legacyName} (duplicate name — select a member)` : `${legacyName} (legacy owner — not mapped)`;
+        option.dataset.displayName = legacyName;
+        option.selected = true;
+        select.appendChild(option);
+      }
+    } else {
+      select.value = previousUid;
+    }
+  }
+
+  async function populateStoryOwners(story = null) {
+    const select = els.storyOwnerInput;
+    if (!select) return;
+    const previousUid = story?.ownerUid || "";
+    const legacyName = story?.owner || "";
+    select.innerHTML = '<option value="">Unassigned</option>';
+    const members = await fetchAssignableMembers();
+    members.forEach((member) => {
+      const option = document.createElement("option");
+      option.value = member.uid;
+      option.textContent = member.uid === appState.user.uid ? `${member.displayName} (you)` : member.displayName;
+      option.dataset.displayName = member.displayName;
+      select.appendChild(option);
+    });
+    if (previousUid && !members.some((member) => member.uid === previousUid)) {
+      const option = document.createElement("option");
+      option.value = previousUid;
+      option.textContent = legacyName || "Previously assigned member";
+      option.dataset.displayName = legacyName;
+      select.appendChild(option);
+    } else if (!previousUid && legacyName) {
+      const matches = members.filter((member) => member.displayName.trim().toLocaleLowerCase() === legacyName.trim().toLocaleLowerCase());
+      if (matches.length === 1) select.value = matches[0].uid;
+      else {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = matches.length > 1 ? `${legacyName} (duplicate name — select a member)` : `${legacyName} (legacy owner — not mapped)`;
+        option.dataset.displayName = legacyName;
+        option.selected = true;
+        select.appendChild(option);
+      }
+    } else select.value = previousUid;
+  }
+
   async function fetchAssignableMembers() {
     let members = [];
     if (appState.activeProjectId === "default") {
-      // Default Project uses the same directory from which task assignment choices are built.
+      // Ensure the signed-in user has a directory entry so they can at least assign work to themselves.
+      // Firestore rules only allow each user to write their own directory record.
+      if (appState.user?.uid) {
+        const displayName = String(appState.user.displayName || appState.user.email || "").trim();
+        if (displayName) {
+          await setDoc(doc(db, "plannerDirectory", appState.user.uid), {
+            uid: appState.user.uid,
+            displayName,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        }
+      }
       const snapshot = await getDocs(query(collection(db, "plannerDirectory"), orderBy("displayName")));
       members = snapshot.docs.map((item) => item.data()).filter((user) => user.uid && user.displayName);
     } else {
       const snapshot = await getDocs(collection(db, "plannerProjects", appState.activeProjectId, "members"));
-      members = snapshot.docs.map((item) => item.data()).filter((member) => member.uid && member.displayName);
+      // Older membership documents may omit uid even though their document ID is the user's UID.
+      // Normalize them here so valid project members are available to owner/assignee dropdowns.
+      members = snapshot.docs.map((item) => {
+        const member = item.data() || {};
+        return {
+          ...member,
+          uid: String(member.uid || item.id || "").trim(),
+          displayName: String(member.displayName || "").trim()
+        };
+      }).filter((member) => member.uid && member.displayName);
     }
     // Always return a predictable array of assignable identities.
-    return [...new Map((Array.isArray(members) ? members : [])
+    const uniqueMembers = [...new Map((Array.isArray(members) ? members : [])
       .filter((member) => member && member.uid && member.displayName)
       .map((member) => [member.uid, member])).values()]
       .sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
+    appState.memberDirectory = uniqueMembers;
+    return uniqueMembers;
   }
 
   async function populateTaskAssignees(task = null) {
@@ -2634,18 +3296,21 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
     // Older tasks stored only a display name. Keep that assignment visible until
     // a real directory identity is selected, rather than silently unassigning it.
     if (legacyName && !previousUid) {
-      const matchingMember = uniqueMembers.find((member) => member.displayName === legacyName);
-      if (matchingMember) {
-        select.value = matchingMember.uid;
+      const matchingMembers = uniqueMembers.filter((member) => member.displayName.trim().toLocaleLowerCase() === legacyName.trim().toLocaleLowerCase());
+      if (matchingMembers.length === 1) {
+        select.value = matchingMembers[0].uid;
       } else {
         const legacy = document.createElement("option");
         legacy.value = `__legacy__:${legacyName}`;
-        legacy.textContent = `${legacyName} (legacy assignment — reselect a member to link)`;
+        legacy.textContent = matchingMembers.length > 1
+          ? `${legacyName} (duplicate name — reselect a member)`
+          : `${legacyName} (legacy assignment — reselect a member to link)`;
         select.appendChild(legacy);
         select.value = legacy.value;
       }
+    } else {
+      select.value = previousUid;
     }
-    select.value = previousUid;
     if (previousUid && !uniqueMembers.some((member) => member.uid === previousUid)) {
       const missing = document.createElement("option");
       missing.value = previousUid;
@@ -2725,7 +3390,8 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         userStoryDescription: String(form.get("userStoryDescription") || "").trim(),
         piId: mappedPI?.id || String(form.get("pi") || "").trim(),
         pi: mappedPI?.name || appState.programIncrements.find((item) => item.id === String(form.get("pi") || "").trim())?.name || String(editingTask?.raw.pi || ""),
-        sprint: String(form.get("sprint") || "").trim(),
+        sprintId: (() => { const value = String(form.get("sprint") || "").trim(); return value && !value.startsWith("legacy:") ? value : (editingTask?.raw.sprintId || ""); })(),
+        sprint: (() => { const value = String(form.get("sprint") || "").trim(); const selected = appState.sprints.find((item) => item.id === value); return selected ? selected.name : (value.startsWith("legacy:") ? value.slice(7) : ""); })(),
         featureId: mappedFeature?.id || String(form.get("feature") || "").trim(),
         feature: mappedFeature?.name || appState.features.find((item) => item.id === String(form.get("feature") || "").trim())?.name || String(editingTask?.raw.feature || ""),
         assignee: assigneeName,
@@ -2763,7 +3429,7 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
             batch.update(taskReference(item.id), { userStoryId: storyId, piId: taskData.piId, pi: taskData.pi, featureId: taskData.featureId, feature: taskData.feature, updatedAt: serverTimestamp() });
           });
           batch.update(taskReference(appState.editingTaskId), taskData);
-          if (shouldCreateStoryRecord) batch.set(userStoryReference(storyId), storyRecordData);
+          if (shouldCreateStoryRecord) { const storyCode = await allocateBusinessCode(userStoryCollection(), "story"); batch.set(userStoryReference(storyId), { ...storyRecordData, code: storyCode }); }
           await batch.commit();
         } else {
           await updateDoc(taskReference(appState.editingTaskId), taskData);
@@ -2781,11 +3447,12 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
           matchingStoryTasks.filter((item) => !item.raw.userStoryId).forEach((item) => {
             batch.update(taskReference(item.id), { userStoryId: storyId, piId: taskData.piId, pi: taskData.pi, featureId: taskData.featureId, feature: taskData.feature, updatedAt: serverTimestamp() });
           });
-          if (shouldCreateStoryRecord) batch.set(userStoryReference(storyId), storyRecordData);
-          batch.set(doc(taskCollection()), newTaskData);
+          if (shouldCreateStoryRecord) { storyRecordData.code = await allocateBusinessCode(userStoryCollection(), "story"); batch.set(userStoryReference(storyId), storyRecordData); }
+          const taskCode = await allocateBusinessCode(taskCollection(), "task");
+          batch.set(doc(taskCollection()), { ...newTaskData, code: taskCode });
           await batch.commit();
         } else {
-          await addDoc(taskCollection(), newTaskData);
+          await createRecordWithBusinessCode(taskCollection(), "task", newTaskData);
         }
       }
       closeTaskEditor();
@@ -3010,16 +3677,29 @@ import { getAuthenticatedPlannerUser, signOutUser, updatePlannerProfile } from "
         collection(db, "plannerDirectory"),
         orderBy("displayName")
       ));
+      const active = appState.projects.find((project) => project.id === appState.activeProjectId);
+      const currentMembers = active
+        ? await getDocs(collection(db, "plannerProjects", active.id, "members"))
+        : null;
+      const existingUids = new Set((currentMembers?.docs || []).map((item) => {
+        const member = item.data() || {};
+        return String(member.uid || item.id || "");
+      }));
       els.memberSelect.innerHTML = '<option value="">Choose a user</option>';
+      let availableCount = 0;
       results.docs.forEach((item) => {
-        const user = item.data();
+        const user = item.data() || {};
+        const uid = String(user.uid || item.id || "").trim();
+        const displayName = String(user.displayName || "").trim();
+        if (!uid || !displayName || existingUids.has(uid)) return;
         const option = document.createElement("option");
-        option.value = user.uid;
-        option.textContent = user.displayName;
-        option.dataset.displayName = user.displayName;
+        option.value = uid;
+        option.textContent = displayName;
+        option.dataset.displayName = displayName;
         els.memberSelect.appendChild(option);
+        availableCount += 1;
       });
-      if (results.empty) els.memberSelect.innerHTML = '<option value="">No signed-in users available</option>';
+      if (availableCount === 0) els.memberSelect.innerHTML = '<option value="">No new users available to add</option>';
     } catch (error) {
       console.error("Could not load users", error);
       els.memberSelect.innerHTML = '<option value="">Could not load users</option>';
