@@ -1,5 +1,5 @@
 import {
-  addDoc, collection, collectionGroup, deleteDoc, doc, getDocs, getDoc, onSnapshot,
+  addDoc, collection, collectionGroup, deleteDoc, doc, getDocs, getDoc, limit, onSnapshot,
   orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch
 } from "firebase/firestore";
 import { db } from "./firebase.js";
@@ -12,9 +12,11 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
   "use strict";
 
   const COLUMN_KEYS = ["todo", "inprogress", "done"];
+  const BOOTSTRAP_ADMIN_UID = "UosH0j7JVLYCKYwTYOeAJXqk7Ge2";
   const STORAGE_KEYS = {
     statusMap: "cliniqPlanner.statusMap.v1",
-    preferences: "cliniqPlanner.preferences.v1"
+    preferences: "cliniqPlanner.preferences.v1",
+    panelWidths: "cliniqPlanner.panelWidths.v1"
   };
 
   const appState = {
@@ -35,12 +37,14 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
       sprint: "all",
       feature: "all",
       assignee: "all",
+      status: "all",
       search: ""
     },
     sortBy: "default",
     listSort: { key: "default", direction: "asc" },
     selectedTaskIds: new Set(),
     activeView: "dashboard",
+    sidebarCollapsed: true,
     calendarMonth: "",
     planningSprintInitialized: false,
     wipLimits: { todo: null, inprogress: null, done: null },
@@ -49,6 +53,10 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     charts: { burndown: null, velocity: null, dashboardBurndown: null, dashboardVelocity: null },
     user: null,
     unsubscribeTasks: null,
+    unsubscribeTaskUpdatesFeed: null,
+    unsubscribeViewedTaskUpdates: null,
+    taskUpdates: [],
+    taskUpdatesFallbackProjectId: null,
     unsubscribeStories: null,
     editingStoryId: null,
     showArchivedStories: false,
@@ -62,6 +70,9 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     ownedProjects: [],
     memberProjects: [],
     pointerProjects: [],
+    adminProjects: [],
+    isAdmin: false,
+    unsubscribeAdminProjects: null,
     programIncrements: [],
     features: [],
     unsubscribePlanning: null,
@@ -77,6 +88,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     sprintFilter: document.getElementById("sprintFilter"),
     featureFilter: document.getElementById("featureFilter"),
     assigneeFilter: document.getElementById("assigneeFilter"),
+    statusFilter: document.getElementById("statusFilter"),
     resetFiltersBtn: document.getElementById("resetFiltersBtn"),
     sortBy: document.getElementById("sortBy"),
     todoLimit: document.getElementById("todoLimit"),
@@ -102,6 +114,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     appShell: document.querySelector(".app-shell"),
     sidebarToggleBtn: document.getElementById("sidebarToggleBtn"),
     mobileNavToggle: document.getElementById("mobileNavToggle"),
+    topbarOverviewBtn: document.getElementById("topbarOverviewBtn"),
     currentUserName: document.getElementById("currentUserName"),
     accountMenuBtn: document.getElementById("accountMenuBtn"),
     accountMenu: document.getElementById("accountMenu"),
@@ -118,6 +131,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     copyTaskBtn: document.getElementById("copyTaskBtn"),
     deleteTaskBtn: document.getElementById("deleteTaskBtn"),
     taskStatusSelect: document.getElementById("taskStatusSelect"),
+    taskUpdatesPanel: document.getElementById("taskUpdatesPanel"),
     saveStatusBtn: document.getElementById("saveStatusBtn"),
     newTaskBtn: document.getElementById("newTaskBtn"),
     taskEditorModal: document.getElementById("taskEditorModal"),
@@ -135,6 +149,16 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     projectEditorError: document.getElementById("projectEditorError"),
     newProjectName: document.getElementById("newProjectName"),
     membersBtn: document.getElementById("membersBtn"),
+    adminUsersBtn: document.getElementById("adminUsersBtn"),
+    adminUsersModal: document.getElementById("adminUsersModal"),
+    closeAdminUsers: document.getElementById("closeAdminUsers"),
+    adminInviteForm: document.getElementById("adminInviteForm"),
+    saveAdminInviteBtn: document.getElementById("saveAdminInviteBtn"),
+    adminProjectAccessForm: document.getElementById("adminProjectAccessForm"),
+    adminAccessUserSelect: document.getElementById("adminAccessUserSelect"),
+    adminAccessProjectSelect: document.getElementById("adminAccessProjectSelect"),
+    adminUsersError: document.getElementById("adminUsersError"),
+    adminUserList: document.getElementById("adminUserList"),
     membersModal: document.getElementById("membersModal"),
     closeMembers: document.getElementById("closeMembers"),
     memberForm: document.getElementById("memberForm"),
@@ -145,9 +169,11 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     dashboardViewBtn: document.getElementById("dashboardViewBtn"),
     dashboardView: document.getElementById("dashboardView"),
     dashboardTasks: document.getElementById("dashboardTasks"),
+    viewAllTasksBtn: document.getElementById("viewAllTasksBtn"),
     dashboardVelocityChart: document.getElementById("dashboardVelocityChart"),
     dashboardBurndownChart: document.getElementById("dashboardBurndownChart"),
     dashboardBurndownSubtitle: document.getElementById("dashboardBurndownSubtitle"),
+    dashboardUpdates: document.getElementById("dashboardUpdates"),
     portfolioHero: document.getElementById("portfolioHero"),
     overviewStats: document.getElementById("overviewStats"),
     boardViewBtn: document.getElementById("boardViewBtn"),
@@ -166,6 +192,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     sprintStartInput: document.getElementById("sprintStartInput"),
     sprintEndInput: document.getElementById("sprintEndInput"),
     sprintCapacityInput: document.getElementById("sprintCapacityInput"),
+    sprintMemberCapacityToggle: document.getElementById("sprintMemberCapacityToggle"),
     sprintMemberCapacityInputs: document.getElementById("sprintMemberCapacityInputs"),
     sprintStatusInput: document.getElementById("sprintStatusInput"),
     sprintFormTitle: document.getElementById("sprintFormTitle"),
@@ -175,6 +202,12 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     sprintRecords: document.getElementById("sprintRecords"),
     sprintCount: document.getElementById("sprintCount"),
     planningSprintStats: document.getElementById("planningSprintStats"),
+    sprintCalendarModal: document.getElementById("sprintCalendarModal"),
+    closeSprintCalendarModal: document.getElementById("closeSprintCalendarModal"),
+    sprintCalendarModalTitle: document.getElementById("sprintCalendarModalTitle"),
+    sprintCalendarModalSubtitle: document.getElementById("sprintCalendarModalSubtitle"),
+    sprintCalendarModalSchedule: document.getElementById("sprintCalendarModalSchedule"),
+    sprintCalendarModalGrid: document.getElementById("sprintCalendarModalGrid"),
     planningBacklogCount: document.getElementById("planningBacklogCount"),
     planningSprintCount: document.getElementById("planningSprintCount"),
     planningBacklogList: document.getElementById("planningBacklogList"),
@@ -220,6 +253,8 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     profileView: document.getElementById("profileView"),
     profileFirstName: document.getElementById("profileFirstName"),
     profileLastName: document.getElementById("profileLastName"),
+    profileDisplayName: document.getElementById("profileDisplayName"),
+    profileAvatarInitials: document.getElementById("profileAvatarInitials"),
     profileEmail: document.getElementById("profileEmail"),
     profileUid: document.getElementById("profileUid"),
     profileProject: document.getElementById("profileProject"),
@@ -419,6 +454,75 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     }
   }
 
+  function toggleSprintMemberCapacity() {
+    const section = els.sprintMemberCapacityToggle?.closest(".sprint-member-capacity");
+    if (!section) return;
+    const expanded = section.classList.contains("is-collapsed");
+    section.classList.toggle("is-collapsed", !expanded);
+    els.sprintMemberCapacityToggle.setAttribute("aria-expanded", String(expanded));
+    const label = els.sprintMemberCapacityToggle.querySelector(".sr-only");
+    if (label) label.textContent = expanded ? "Hide individual capacity" : "Show individual capacity";
+  }
+
+  function openSprintCalendarModal() {
+    if (!els.sprintCalendarModal) return;
+    const selected = els.planningSprintSelect?.value || "all";
+    const sprints = appState.sprints.filter((sprint) => sprint.startDate && sprint.endDate && (selected === "all" || sprint.name === selected));
+    els.sprintCalendarModalTitle.textContent = selected === "all" ? "All sprint dates" : `${selected} dates`;
+    els.sprintCalendarModalSubtitle.textContent = selected === "all" ? "Configured sprint windows for this project." : "Start and end dates for the selected sprint.";
+    els.sprintCalendarModalSchedule.innerHTML = sprints.length
+      ? sprints.map((sprint) => '<article><strong>' + escapeHtml(sprint.name || "Unnamed sprint") + '</strong><span>' + escapeHtml(sprint.startDate) + ' → ' + escapeHtml(sprint.endDate) + '</span></article>').join("")
+      : '<p class="sprint-calendar-modal-empty">No sprint dates are configured for this selection.</p>';
+    renderSprintCalendarModalMonths(sprints);
+    els.sprintCalendarModal.classList.add("is-open");
+    els.sprintCalendarModal.setAttribute("aria-hidden", "false");
+    els.closeSprintCalendarModal?.focus();
+  }
+
+  function closeSprintCalendarModal() {
+    if (!els.sprintCalendarModal) return;
+    els.sprintCalendarModal.classList.remove("is-open");
+    els.sprintCalendarModal.setAttribute("aria-hidden", "true");
+    document.getElementById("sprintDatesMetric")?.focus();
+  }
+
+  function renderSprintCalendarModalMonths(sprints) {
+    const root = els.sprintCalendarModalGrid;
+    if (!root) return;
+    root.innerHTML = "";
+    if (!sprints.length) return;
+    const monthKeys = new Set();
+    sprints.forEach((sprint) => {
+      const start = new Date(`${sprint.startDate}T00:00:00`);
+      const end = new Date(`${sprint.endDate}T00:00:00`);
+      for (let cursor = new Date(start.getFullYear(), start.getMonth(), 1); cursor <= end; cursor.setMonth(cursor.getMonth() + 1)) monthKeys.add(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+    });
+    [...monthKeys].sort().forEach((key) => {
+      const [yearText, monthText] = key.split("-");
+      const year = Number(yearText), month = Number(monthText) - 1;
+      const monthSection = document.createElement("section");
+      monthSection.className = "sprint-calendar-modal-month";
+      const title = document.createElement("h3");
+      title.textContent = new Date(year, month, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      monthSection.appendChild(title);
+      const grid = document.createElement("div");
+      grid.className = "sprint-calendar-modal-days";
+      ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].forEach((dayName) => { const head = document.createElement("span"); head.className = "sprint-calendar-modal-day-head"; head.textContent = dayName; grid.appendChild(head); });
+      const first = new Date(year, month, 1), last = new Date(year, month + 1, 0), totalCells = Math.ceil((first.getDay() + last.getDate()) / 7) * 7;
+      for (let index = 0; index < totalCells; index += 1) {
+        const date = new Date(year, month, index - first.getDay() + 1), cell = document.createElement("div");
+        cell.className = "sprint-calendar-modal-day" + (date.getMonth() === month ? "" : " is-muted");
+        const number = document.createElement("span"); number.textContent = String(date.getDate()); cell.appendChild(number);
+        const matches = sprints.filter((sprint) => date >= new Date(`${sprint.startDate}T00:00:00`) && date <= new Date(`${sprint.endDate}T00:00:00`));
+        matches.slice(0, 2).forEach((sprint) => { const pill = document.createElement("small"); pill.textContent = sprint.name || "Sprint"; pill.title = `${sprint.name || "Sprint"}: ${sprint.startDate} to ${sprint.endDate}`; cell.appendChild(pill); });
+        if (matches.length > 2) { const extra = document.createElement("small"); extra.textContent = `+${matches.length - 2} more`; cell.appendChild(extra); }
+        grid.appendChild(cell);
+      }
+      monthSection.appendChild(grid);
+      root.appendChild(monthSection);
+    });
+  }
+
   function editSprint(id) {
     if (!planningCanEdit()) return; const s = appState.sprints.find((item) => item.id === id); if (!s) return;
     appState.editingSprintId = id; els.sprintRecordId.value = id; els.sprintNameInput.value = s.name || ""; els.sprintGoalInput.value = s.goal || "";
@@ -460,6 +564,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
   }
 
   function planningCanEdit() {
+    if (appState.isAdmin) return true;
     if (appState.activeProjectId === "default") return true;
     const project = appState.projects.find((item) => item.id === appState.activeProjectId);
     return Boolean(project && (project.role === "owner" || project.role === "editor"));
@@ -872,6 +977,12 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     els.featuresViewBtn?.addEventListener("click", () => setActiveView("features"));
     els.piForm?.addEventListener("submit", saveProgramIncrement);
     els.sprintForm?.addEventListener("submit", saveSprint);
+    els.sprintMemberCapacityToggle?.addEventListener("click", toggleSprintMemberCapacity);
+    els.planningSprintStats?.addEventListener("click", (event) => {
+      if (event.target.closest("#sprintDatesMetric")) openSprintCalendarModal();
+    });
+    els.closeSprintCalendarModal?.addEventListener("click", closeSprintCalendarModal);
+    els.sprintCalendarModal?.addEventListener("click", (event) => { if (event.target === els.sprintCalendarModal) closeSprintCalendarModal(); });
     els.sprintExecutionBoard?.addEventListener("change", async (event) => {
       const control = event.target.closest("[data-execution-status]");
       if (!control || !COLUMN_KEYS.includes(control.value)) return;
@@ -917,19 +1028,50 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     }
 
     appState.user = session.user;
+    await loadAdminStatus();
     els.currentUserName.textContent = session.user.displayName || session.user.email || "Signed-in user";
     updateAccountAvatar(els.currentUserName.textContent);
     els.newTaskBtn.addEventListener("click", openTaskEditor);
     loadPreferences();
+    setSidebarCollapsed(appState.sidebarCollapsed, false);
     bindEvents();
-    if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true);
+    setActiveView(appState.activeView, false);
+    if (window.matchMedia("(max-width: 1100px)").matches) setSidebarCollapsed(true, false);
     loadProjects();
+  }
+
+  async function loadAdminStatus() {
+    if (!appState.user) return;
+    if (appState.user.uid === BOOTSTRAP_ADMIN_UID) {
+      appState.isAdmin = true;
+      return;
+    }
+    try {
+      const access = await getDoc(doc(db, "plannerAdmins", appState.user.uid));
+      appState.isAdmin = access.exists();
+    } catch (error) {
+      console.error("Could not load administrator access", error);
+      appState.isAdmin = false;
+    }
   }
 
   function loadProjects() {
     if (appState.unsubscribeProjects) appState.unsubscribeProjects();
     if (appState.unsubscribeOwnedProjects) appState.unsubscribeOwnedProjects();
     if (appState.unsubscribeUserProjectPointers) appState.unsubscribeUserProjectPointers();
+    if (appState.unsubscribeAdminProjects) appState.unsubscribeAdminProjects();
+    if (appState.isAdmin) {
+      appState.unsubscribeAdminProjects = onSnapshot(collection(db, "plannerProjects"), (snapshot) => {
+        appState.adminProjects = snapshot.docs.map((project) => ({ id: project.id, ...project.data(), role: "admin" }));
+        syncProjects();
+      }, (error) => {
+        console.error("Could not load administrator projects", error);
+        appState.adminProjects = [];
+        syncProjects();
+      });
+    } else {
+      appState.adminProjects = [];
+    }
     const ownedProjects = query(collection(db, "plannerProjects"), where("ownerId", "==", appState.user.uid));
     appState.unsubscribeOwnedProjects = onSnapshot(ownedProjects, (snapshot) => {
       appState.ownedProjects = snapshot.docs.map((project) => ({
@@ -985,7 +1127,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
 
   function syncProjects() {
     const byId = new Map();
-    [...appState.memberProjects, ...appState.pointerProjects, ...appState.ownedProjects]
+    [...appState.memberProjects, ...appState.pointerProjects, ...appState.ownedProjects, ...appState.adminProjects]
       .filter((project) => project.archived !== true)
       .forEach((project) => byId.set(project.id, project));
     appState.projects = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -1022,6 +1164,10 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
   function loadData() {
     if (appState.unsubscribeTasks) appState.unsubscribeTasks();
     if (appState.unsubscribeStories) appState.unsubscribeStories();
+    if (appState.unsubscribeTaskUpdatesFeed) appState.unsubscribeTaskUpdatesFeed();
+    appState.taskUpdates = [];
+    appState.taskUpdatesFallbackProjectId = null;
+    loadTaskUpdatesFeed();
     loadPlanningRecords();
     loadSprints();
     appState.unsubscribeStories = onSnapshot(userStoryCollection(), (snapshot) => {
@@ -1035,6 +1181,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     appState.unsubscribeTasks = onSnapshot(taskCollection(), async (snapshot) => {
       const raw = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       appState.allTasks = normalizeRecords(raw).filter((task) => task.archived !== true);
+      void loadTaskUpdatesFallbackFromTasks(appState.allTasks);
       appState.selectedTaskIds = new Set([...appState.selectedTaskIds].filter((taskId) => appState.allTasks.some((task) => task.id === taskId)));
       appState.hierarchy = groupByHierarchy(appState.allTasks);
       appState.sprintCatalog = buildSprintCatalog(appState.allTasks, appState.sprints);
@@ -1059,11 +1206,17 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     els.sprintFilter.addEventListener("change", onFilterChange);
     els.featureFilter.addEventListener("change", onFilterChange);
     els.assigneeFilter.addEventListener("change", onFilterChange);
+    els.statusFilter.addEventListener("change", onFilterChange);
     els.searchInput.addEventListener("input", onSearchInput);
     els.sortBy.addEventListener("change", onSortChange);
     els.selectAllTasks.addEventListener("change", toggleAllVisibleTasks);
     els.archiveSelectedTasksBtn.addEventListener("click", archiveSelectedTasks);
     els.applyBulkStatusBtn.addEventListener("click", updateSelectedTaskStatuses);
+    els.dashboardUpdates?.addEventListener("click", (event) => {
+      const row = event.target.closest("[data-update-task-id]");
+      const task = appState.allTasks.find((item) => item.id === row?.dataset.updateTaskId);
+      if (task) openTaskModal(task);
+    });
     document.querySelectorAll(".list-sort-button").forEach((button) => {
       button.addEventListener("click", () => onListSort(button.dataset.listSort));
     });
@@ -1121,6 +1274,9 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeAccountMenu();
     });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && els.sprintCalendarModal?.classList.contains("is-open")) closeSprintCalendarModal();
+    });
     els.projectSelect.addEventListener("change", onProjectChange);
     els.newProjectBtn.addEventListener("click", openProjectEditor);
     els.editProjectBtn.addEventListener("click", () => {
@@ -1129,7 +1285,10 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     });
     els.archiveProjectBtn.addEventListener("click", archiveActiveProject);
     els.membersBtn.addEventListener("click", openMembers);
+    els.adminUsersBtn?.addEventListener("click", openAdminUsers);
+    els.topbarOverviewBtn?.addEventListener("click", () => setActiveView("dashboard"));
     els.dashboardViewBtn?.addEventListener("click", () => setActiveView("dashboard"));
+    els.viewAllTasksBtn?.addEventListener("click", () => setActiveView("list"));
     els.boardViewBtn.addEventListener("click", () => setActiveView("board"));
     els.listViewBtn.addEventListener("click", () => setActiveView("list"));
     els.insightsViewBtn.addEventListener("click", () => setActiveView("insights"));
@@ -1206,6 +1365,94 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     });
     els.memberForm.addEventListener("submit", addMember);
     els.memberSelect.addEventListener("change", selectMember);
+    els.closeAdminUsers?.addEventListener("click", closeAdminUsers);
+    els.adminUsersModal?.addEventListener("click", (event) => { if (event.target === els.adminUsersModal) closeAdminUsers(); });
+    els.adminInviteForm?.addEventListener("submit", createAdminInvitation);
+    els.adminProjectAccessForm?.addEventListener("submit", manageProjectAccess);
+    bindResizablePanels();
+  }
+
+  function bindResizablePanels() {
+    const desktopQuery = window.matchMedia("(min-width: 761px)");
+    let savedWidths = {};
+    try {
+      savedWidths = JSON.parse(localStorage.getItem(STORAGE_KEYS.panelWidths) || "{}") || {};
+    } catch (error) {
+      console.warn("Could not read saved panel widths", error);
+    }
+
+    document.querySelectorAll("[data-panel-resizer]").forEach((resizer) => {
+      const layoutName = resizer.dataset.panelResizer;
+      const layout = document.querySelector(`[data-resizable-layout="${layoutName}"]`);
+      const minWidth = Number(resizer.dataset.minWidth || 40);
+      const maxWidth = Number(resizer.dataset.maxWidth || 70);
+      if (!layout) return;
+
+      const setWidth = (width, persist = false) => {
+        const nextWidth = Math.min(maxWidth, Math.max(minWidth, Math.round(width)));
+        layout.style.setProperty("--resizable-panel-width", `${nextWidth}%`);
+        resizer.setAttribute("aria-valuemin", String(minWidth));
+        resizer.setAttribute("aria-valuemax", String(maxWidth));
+        resizer.setAttribute("aria-valuenow", String(nextWidth));
+        if (!persist) return;
+        savedWidths[layoutName] = nextWidth;
+        try {
+          localStorage.setItem(STORAGE_KEYS.panelWidths, JSON.stringify(savedWidths));
+        } catch (error) {
+          console.warn("Could not save panel width", error);
+        }
+      };
+
+      const storedWidth = Number(savedWidths[layoutName]);
+      if (Number.isFinite(storedWidth)) setWidth(storedWidth);
+      else setWidth(parseFloat(getComputedStyle(layout).getPropertyValue("--resizable-panel-width")) || 60);
+
+      const widthFromPointer = (clientX) => {
+        const bounds = layout.getBoundingClientRect();
+        return ((clientX - bounds.left) / bounds.width) * 100;
+      };
+
+      resizer.addEventListener("pointerdown", (event) => {
+        if (!desktopQuery.matches || event.button !== 0) return;
+        event.preventDefault();
+        resizer.setPointerCapture?.(event.pointerId);
+        resizer.classList.add("is-resizing");
+        document.body.classList.add("is-resizing-panel");
+        setWidth(widthFromPointer(event.clientX));
+
+        const finish = (pointerEvent) => {
+          setWidth(widthFromPointer(pointerEvent.clientX), true);
+          resizer.classList.remove("is-resizing");
+          document.body.classList.remove("is-resizing-panel");
+          resizer.releasePointerCapture?.(pointerEvent.pointerId);
+          resizer.removeEventListener("pointermove", move);
+          resizer.removeEventListener("pointerup", finish);
+          resizer.removeEventListener("pointercancel", finish);
+        };
+        const move = (pointerEvent) => setWidth(widthFromPointer(pointerEvent.clientX));
+        resizer.addEventListener("pointermove", move);
+        resizer.addEventListener("pointerup", finish);
+        resizer.addEventListener("pointercancel", finish);
+      });
+
+      resizer.addEventListener("keydown", (event) => {
+        if (!desktopQuery.matches) return;
+        const currentWidth = Number(resizer.getAttribute("aria-valuenow")) || minWidth;
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          setWidth(currentWidth - 2, true);
+        } else if (event.key === "ArrowRight") {
+          event.preventDefault();
+          setWidth(currentWidth + 2, true);
+        } else if (event.key === "Home") {
+          event.preventDefault();
+          setWidth(minWidth, true);
+        } else if (event.key === "End") {
+          event.preventDefault();
+          setWidth(maxWidth, true);
+        }
+      });
+    });
   }
 
   function taskCollection() {
@@ -1216,6 +1463,56 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
 
   function taskReference(taskId) {
     return doc(taskCollection(), taskId);
+  }
+
+  function taskUpdateCollection(taskId) {
+    return collection(taskReference(taskId), "updates");
+  }
+
+  function loadTaskUpdatesFeed() {
+    const activeProjectId = appState.activeProjectId;
+    const updatesQuery = query(
+      collectionGroup(db, "updates"),
+      where("projectId", "==", activeProjectId),
+      orderBy("createdAt", "desc"),
+      limit(50)
+    );
+    appState.unsubscribeTaskUpdatesFeed = onSnapshot(updatesQuery, (snapshot) => {
+      const updates = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      if (updates.length || !appState.taskUpdates.length) {
+        appState.taskUpdates = updates;
+      } else {
+        mergeTaskUpdatesIntoDashboard(updates);
+      }
+      renderDashboardUpdates();
+    }, (error) => {
+      console.error("Could not load task updates", error);
+      appState.taskUpdates = [];
+      renderDashboardUpdates("Task updates are unavailable for this project.");
+    });
+  }
+
+  async function loadTaskUpdatesFallbackFromTasks(tasks) {
+    const projectId = appState.activeProjectId;
+    if (appState.taskUpdates.length || appState.taskUpdatesFallbackProjectId === projectId || !tasks.length) return;
+    appState.taskUpdatesFallbackProjectId = projectId;
+    try {
+      const snapshots = await Promise.all(tasks.map((task) => getDocs(query(
+        taskUpdateCollection(task.id),
+        where("projectId", "==", projectId),
+        orderBy("createdAt", "desc"),
+        limit(50)
+      ))));
+      if (appState.activeProjectId !== projectId) return;
+      const updates = snapshots.flatMap((snapshot) => snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+      mergeTaskUpdatesIntoDashboard(updates);
+    } catch (error) {
+      console.error("Could not load task updates from task histories", error);
+    }
+  }
+
+  function canPostTaskUpdates() {
+    return planningCanEdit();
   }
 
   function userStoryCollection() {
@@ -1243,6 +1540,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     els.membersBtn.classList.toggle("is-hidden", !active || active.role !== "owner");
     els.editProjectBtn.classList.toggle("is-hidden", !active || active.role !== "owner");
     els.archiveProjectBtn.classList.toggle("is-hidden", !active || active.role !== "owner");
+    els.adminUsersBtn.classList.toggle("is-hidden", !appState.isAdmin);
     renderProfile();
   }
 
@@ -1379,6 +1677,10 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
   async function populateFilters(tasks) {
     populatePlanningFilterOptions();
     fillSelect(els.sprintFilter, collectUnique(tasks, "sprint"), "All Sprints");
+    fillSelect(els.statusFilter, ["todo", "inprogress", "done"], "All statuses");
+    const selectedStatus = appState.filters.status;
+    els.statusFilter.value = ["todo", "inprogress", "done"].includes(selectedStatus) ? selectedStatus : "all";
+    appState.filters.status = els.statusFilter.value;
     const selectedAssignee = appState.filters.assignee;
     try {
       const memberResult = await fetchAssignableMembers();
@@ -1470,11 +1772,13 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     appState.filters.sprint = "all";
     appState.filters.feature = "all";
     appState.filters.assignee = "all";
+    appState.filters.status = "all";
     appState.filters.search = "";
     if (els.piFilter) els.piFilter.value = "all";
     if (els.sprintFilter) els.sprintFilter.value = "all";
     if (els.featureFilter) els.featureFilter.value = "all";
     if (els.assigneeFilter) els.assigneeFilter.value = "all";
+    if (els.statusFilter) els.statusFilter.value = "all";
     if (els.searchInput) els.searchInput.value = "";
     const advancedFilters = document.querySelector(".advanced-filter-details");
     if (advancedFilters) advancedFilters.open = false;
@@ -1487,6 +1791,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     appState.filters.sprint = els.sprintFilter.value;
     appState.filters.feature = els.featureFilter.value;
     appState.filters.assignee = els.assigneeFilter.value;
+    appState.filters.status = els.statusFilter.value;
     persistPreferences();
     applyFiltersAndRender();
   }
@@ -1589,8 +1894,9 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
       const matchesSprint = appState.filters.sprint === "all" || task.sprint === appState.filters.sprint;
       const matchesFeature = appState.filters.feature === "all" || task.feature === appState.filters.feature;
       const matchesAssignee = appState.filters.assignee === "all" || task.assignee === appState.filters.assignee;
+      const matchesStatus = appState.filters.status === "all" || task.statusKey === appState.filters.status;
       const matchesSearch = matchesTaskSearch(task, appState.filters.search);
-      return matchesPi && matchesSprint && matchesFeature && matchesAssignee && matchesSearch;
+      return matchesPi && matchesSprint && matchesFeature && matchesAssignee && matchesStatus && matchesSearch;
     });
 
     appState.listPage = 1;
@@ -1607,19 +1913,46 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     if (!els.dashboardTasks) return;
     const ordered = sortTasks(tasks, appState.sortBy).slice(0, 6);
     renderDashboardCharts();
+    renderDashboardUpdates();
     els.dashboardTasks.innerHTML = "";
     if (!ordered.length) {
       els.dashboardTasks.innerHTML = '<div class="dashboard-empty"><strong>No tasks match these filters</strong><span>Adjust the filters in the sidebar or create a task.</span></div>';
       return;
     }
-    ordered.forEach((task) => {
+    ordered.forEach((task, index) => {
       const item = document.createElement("button");
       item.type = "button";
-      item.className = "dashboard-task-row";
-      item.innerHTML = '<span class="dashboard-task-main"><strong>' + escapeHtml(task.task) + '</strong><small>' + escapeHtml(task.feature) + ' · ' + escapeHtml(task.assignee || "Unassigned") + '</small></span><span class="dashboard-task-status status-' + escapeHtml(task.statusKey) + '">' + escapeHtml(task.statusLabel || "To Do") + '</span>';
+      item.className = "dashboard-task-row status-" + escapeHtml(task.statusKey);
+      item.innerHTML = '<span class="dashboard-task-sequence" aria-hidden="true">' + String(index + 1).padStart(2, "0") + '</span><span class="dashboard-task-main"><strong>' + escapeHtml(task.task) + '</strong><small>' + escapeHtml(task.feature) + ' <i aria-hidden="true">·</i> ' + escapeHtml(task.assignee || "Unassigned") + '</small></span><span class="dashboard-task-status">' + escapeHtml(task.statusLabel || "To Do") + '</span><span class="dashboard-task-open" aria-hidden="true">→</span>';
       item.addEventListener("click", () => openTaskModal(task));
       els.dashboardTasks.appendChild(item);
     });
+  }
+
+  function renderDashboardUpdates(errorMessage = "") {
+    if (!els.dashboardUpdates) return;
+    const updates = [...appState.taskUpdates].sort((a, b) => updateTimestamp(b.createdAt) - updateTimestamp(a.createdAt)).slice(0, 20);
+    if (errorMessage || !updates.length) {
+      els.dashboardUpdates.innerHTML = '<div class="dashboard-updates-empty"><strong>' + escapeHtml(errorMessage || "No task updates yet") + '</strong><span>Open a task and add the first daily update or discussion note.</span></div>';
+      return;
+    }
+    els.dashboardUpdates.innerHTML = updates.map((update) => '<button type="button" class="dashboard-update-row" data-update-task-id="' + escapeHtml(update.taskId) + '"><span class="dashboard-update-avatar">' + escapeHtml(initialsFor(update.authorName || "User")) + '</span><span class="dashboard-update-content"><span class="dashboard-update-heading"><strong>' + escapeHtml(update.taskName || "Task") + '</strong><time>' + escapeHtml(formatUpdateTime(update.createdAt)) + '</time></span><span class="dashboard-update-summary"><b>' + escapeHtml(update.authorName || "Unknown user") + '</b><span aria-hidden="true">·</span><em>' + escapeHtml(update.body || "") + '</em></span></span><span class="dashboard-task-open" aria-hidden="true">→</span></button>').join("");
+  }
+
+  function updateTimestamp(value) {
+    if (value?.toDate) return value.toDate().getTime();
+    if (value instanceof Date) return value.getTime();
+    const parsed = new Date(value || 0).getTime();
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function formatUpdateTime(value) {
+    const timestamp = updateTimestamp(value);
+    return timestamp ? new Date(timestamp).toLocaleString(undefined, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Saving…";
+  }
+
+  function initialsFor(value) {
+    return String(value || "").trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "U";
   }
 
   function renderDashboardCharts() {
@@ -2045,11 +2378,6 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
       const taskName = document.createElement("strong");
       taskName.textContent = task.task;
       taskText.appendChild(taskName);
-      const taskId = document.createElement("code");
-      taskId.className = "task-identity-inline";
-      taskId.textContent = "TASK ID · " + (task.code || "Legacy / not assigned");
-      taskId.title = "Firestore document ID: " + task.id;
-      taskText.appendChild(taskId);
       if (task.story && task.story !== "-") {
         const story = document.createElement("span");
         story.textContent = task.story;
@@ -2089,6 +2417,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
   }
 
   function canArchiveTask(task) {
+    if (appState.isAdmin) return true;
     if (appState.activeProjectId === "default") return task.raw.createdBy === appState.user.uid;
     const active = appState.projects.find((project) => project.id === appState.activeProjectId);
     return Boolean(active && ["owner", "editor"].includes(active.role));
@@ -2610,6 +2939,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
 
   function setActiveView(view, persist = true) {
     appState.activeView = ["dashboard", "board", "list", "stories", "sprintPlanning", "pis", "features", "insights", "knowledge", "profile"].includes(view) ? view : "dashboard";
+    document.documentElement.dataset.initialView = appState.activeView;
     const dashboard = appState.activeView === "dashboard";
     const board = appState.activeView === "board", list = appState.activeView === "list", stories = appState.activeView === "stories", sprintPlanning = appState.activeView === "sprintPlanning";
     const pis = appState.activeView === "pis", features = appState.activeView === "features";
@@ -2769,7 +3099,9 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
       ["Completed", done, sprintTasks.length ? Math.round(done / sprintTasks.length * 100) + "% of committed tasks" : "No sprint tasks yet"],
       ["Capacity", capacity || "Not set", capacity ? (points(sprintTasks) > capacity ? "Over capacity by " + (points(sprintTasks) - capacity) + " points" : Math.max(0, capacity - points(sprintTasks)) + " points remaining") : "Capacity data is not configured"],
       ["Sprint dates", sprintMetadata ? (sprintMetadata.startDate + " → " + sprintMetadata.endDate) : "Not set", sprintMetadata ? (String(sprintMetadata.status || "PLANNED").replaceAll("_", " ") + (sprintMetadata.goal ? " · " + sprintMetadata.goal : "")) : "Create sprint metadata below"]
-    ].map(([label, value, note]) => '<article class="planning-metric"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value)) + '</strong><small>' + escapeHtml(note) + '</small></article>').join("");
+    ].map(([label, value, note], index) => index === 4
+      ? '<button id="sprintDatesMetric" class="planning-metric planning-dates-metric" type="button" aria-label="Open sprint dates calendar"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value)) + '</strong><small>' + escapeHtml(note) + '</small><em>View calendar</em></button>'
+      : '<article class="planning-metric"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(String(value)) + '</strong><small>' + escapeHtml(note) + '</small></article>').join("");
 
     const canEdit = planningCanEdit();
     const card = (task) => {
@@ -2830,8 +3162,11 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     if (!appState.user) return;
     const project = appState.projects.find((item) => item.id === appState.activeProjectId);
     const parts = (appState.user.displayName || "").trim().split(/\s+/).filter(Boolean);
+    const displayName = appState.user.displayName || appState.user.email || "Account";
     els.profileFirstName.textContent = parts[0] || "Not set";
     els.profileLastName.textContent = parts.slice(1).join(" ") || "Not set";
+    els.profileDisplayName.textContent = displayName;
+    els.profileAvatarInitials.textContent = ((parts[0]?.[0] || appState.user.email?.[0] || "A") + (parts[1]?.[0] || "")).toUpperCase();
     els.profileEmail.textContent = appState.user.email || "No email available";
     els.profileUid.textContent = appState.user.uid;
     els.profileProject.textContent = project?.name || "Default Project";
@@ -2899,11 +3234,13 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     els.accountMenuBtn.textContent = initials || "U";
   }
 
-  function setSidebarCollapsed(collapsed) {
+  function setSidebarCollapsed(collapsed, shouldPersist = true) {
+    appState.sidebarCollapsed = collapsed;
     els.appShell.classList.toggle("sidebar-collapsed", collapsed);
     els.sidebarToggleBtn.setAttribute("aria-expanded", String(!collapsed));
     els.sidebarToggleBtn.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
     els.sidebarToggleBtn.textContent = collapsed ? "☰" : "×";
+    if (shouldPersist) persistPreferences();
   }
 
   function toggleAccountMenu() {
@@ -2925,22 +3262,14 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     els.modalTitle.textContent = task.task;
     els.modalBody.innerHTML = `
       <section class="task-detail-grid" aria-label="Task information">
-        ${modalRow("Task ID", task.code || "Legacy / not assigned")}
-        ${modalRow("Firestore Document ID", task.id)}
-        ${modalRow("Project ID", appState.activeProjectId)}
-        ${modalRow("Created by User ID", task.raw.createdBy || "—")}
-        ${modalRow("Assignee User ID", task.raw.assigneeUid || task.raw.assigneeId || task.raw.ownerUid || "—")}
         ${modalRow("PI", task.pi)}
-        ${modalRow("PI ID", task.raw.piId || "—")}
         ${modalRow("Sprint", task.sprint)}
-        ${modalRow("Feature", `${task.feature} (${task.featureId})`)}
-        ${modalRow("Story", `${task.storyId} - ${task.story}`)}
+        ${modalRow("Feature", task.feature)}
+        ${modalRow("User story", task.story)}
         ${modalRow("Assignee", task.assignee)}
         ${modalRow("Priority", task.priorityText)}
         ${modalRow("Story points", String(task.storyPoints))}
-        ${modalRow("Start date", formattedStartDate)}
-        ${modalRow("End date", formattedDueDate)}
-        ${modalRow("App", task.app)}
+        ${modalRow("Schedule", `${formattedStartDate} → ${formattedDueDate}`)}
       </section>
       <section class="task-detail-description"><h3>User story description</h3><p>${escapeHtml(task.raw.userStoryDescription || "No user story description added.")}</p></section>
       <section class="task-detail-description"><h3>Task description</h3><p>${escapeHtml(task.description || "No description added.")}</p></section>
@@ -2948,10 +3277,13 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
       ${renderAcceptanceCriteria(task)}
       ${renderStoryLifecycle(task)}
     `;
+    els.taskUpdatesPanel.innerHTML = renderTaskUpdates(task);
 
     bindTaskBreakdownActions(task);
     bindAcceptanceCriteriaActions(task);
     bindStoryLifecycleActions(task);
+    bindTaskUpdateActions(task);
+    loadTaskUpdatesForViewedTask(task);
     els.modal.classList.add("is-open");
     els.modal.setAttribute("aria-hidden", "false");
     els.taskStatusSelect.value = task.statusKey;
@@ -2959,6 +3291,116 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     const isCreator = task.raw.createdBy === appState.user.uid;
     els.editTaskBtn.classList.toggle("is-hidden", isDefault && !isCreator);
     els.deleteTaskBtn.classList.toggle("is-hidden", isDefault && !isCreator);
+  }
+
+  function renderTaskUpdates(task) {
+    const canPost = canPostTaskUpdates();
+    return `
+      <section class="task-updates" aria-label="Task updates and discussion">
+        <div class="task-updates-heading"><div><h3>Daily updates & discussion</h3><p>Notes are kept as a dated work log for this task.</p></div></div>
+        ${canPost ? `<form id="taskUpdateForm" class="task-update-form">
+          <label for="taskUpdateBody">Add an update</label>
+          <textarea id="taskUpdateBody" name="body" rows="3" maxlength="2000" required placeholder="Share progress, a decision, blocker, or discussion note"></textarea>
+          <div><p id="taskUpdateError" class="form-error" role="alert"></p><button type="submit">Post update</button></div>
+        </form>` : '<p class="task-updates-readonly">Your project role can view this work log but cannot post updates.</p>'}
+        <div id="taskUpdatesList" class="task-updates-list" aria-live="polite"><p class="task-updates-loading">Loading updates…</p></div>
+      </section>`;
+  }
+
+  function bindTaskUpdateActions(task) {
+    const form = document.getElementById("taskUpdateForm");
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await postTaskUpdate(task, form);
+    });
+  }
+
+  function loadTaskUpdatesForViewedTask(task) {
+    if (appState.unsubscribeViewedTaskUpdates) appState.unsubscribeViewedTaskUpdates();
+    const updatesQuery = query(
+      taskUpdateCollection(task.id),
+      where("projectId", "==", appState.activeProjectId),
+      orderBy("createdAt", "desc"),
+      limit(50)
+    );
+    appState.unsubscribeViewedTaskUpdates = onSnapshot(updatesQuery, (snapshot) => {
+      const updates = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      mergeTaskUpdatesIntoDashboard(updates);
+      renderTaskUpdatesList(updates);
+    }, (error) => {
+      console.error("Could not load task updates", error);
+      renderTaskUpdatesList([], "Task updates are unavailable right now.");
+    });
+  }
+
+  function mergeTaskUpdatesIntoDashboard(updates) {
+    if (!updates.length) return;
+    const byId = new Map(appState.taskUpdates.map((update) => [update.id, update]));
+    updates.forEach((update) => byId.set(update.id, update));
+    appState.taskUpdates = [...byId.values()]
+      .filter((update) => update.projectId === appState.activeProjectId)
+      .sort((a, b) => updateTimestamp(b.createdAt) - updateTimestamp(a.createdAt))
+      .slice(0, 50);
+    renderDashboardUpdates();
+  }
+
+  function renderTaskUpdatesList(updates, errorMessage = "") {
+    const container = document.getElementById("taskUpdatesList");
+    if (!container) return;
+    if (errorMessage || !updates.length) {
+      container.innerHTML = `<p class="task-updates-empty">${escapeHtml(errorMessage || "No updates yet. Add the first work note above.")}</p>`;
+      return;
+    }
+    container.innerHTML = updates.map((update) => `
+      <article class="task-update-item">
+        <span class="task-update-avatar">${escapeHtml(initialsFor(update.authorName || "User"))}</span>
+        <div><header><strong>${escapeHtml(update.authorName || "Unknown user")}</strong><time>${escapeHtml(formatUpdateTime(update.createdAt))}</time></header><p>${escapeHtml(update.body || "")}</p></div>
+      </article>`).join("");
+  }
+
+  async function postTaskUpdate(task, form) {
+    const body = String(new FormData(form).get("body") || "").trim();
+    const error = document.getElementById("taskUpdateError");
+    const button = form.querySelector("button[type=submit]");
+    if (!body) {
+      if (error) error.textContent = "Write an update before posting.";
+      return;
+    }
+    if (!canPostTaskUpdates()) {
+      if (error) error.textContent = "Your project role cannot post task updates.";
+      return;
+    }
+    if (error) error.textContent = "";
+    button.disabled = true;
+    button.textContent = "Posting…";
+    try {
+      const updateRef = await addDoc(taskUpdateCollection(task.id), {
+        taskId: task.id,
+        projectId: appState.activeProjectId,
+        taskName: task.task,
+        body,
+        authorUid: appState.user.uid,
+        authorName: appState.user.displayName || appState.user.email || "Signed-in user",
+        createdAt: serverTimestamp()
+      });
+      mergeTaskUpdatesIntoDashboard([{
+        id: updateRef.id,
+        taskId: task.id,
+        projectId: appState.activeProjectId,
+        taskName: task.task,
+        body,
+        authorUid: appState.user.uid,
+        authorName: appState.user.displayName || appState.user.email || "Signed-in user",
+        createdAt: new Date()
+      }]);
+      form.reset();
+    } catch (postError) {
+      console.error("Could not post task update", postError);
+      if (error) error.textContent = "Could not post the update. Check your project permissions and try again.";
+    } finally {
+      button.disabled = false;
+      button.textContent = "Post update";
+    }
   }
 
   function renderTaskBreakdown(task) {
@@ -2979,7 +3421,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
           const dependency = appState.allTasks.find((item) => item.id === id);
           return dependency ? `<div class="dependency-item"><span class="dependency-status ${dependency.statusKey}"></span><span><b>${escapeHtml(dependency.task)}</b><small>${escapeHtml(dependency.statusLabel)}</small></span><button type="button" data-remove-dependency="${escapeHtml(id)}">Remove</button></div>` : "";
         }).join("") || '<p class="breakdown-empty">No dependencies linked.</p>'}</div>
-        <form id="addDependencyForm" class="breakdown-add-form"><select name="dependencyId" required><option value="">Select a prerequisite task</option>${candidates.filter((item) => !dependencies.includes(item.id)).map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.task)} — ${escapeHtml(item.statusLabel)}</option>`).join("")}</select><button type="submit">Link task</button></form>
+        <form id="addDependencyForm" class="breakdown-add-form"><div class="dependency-picker"><input id="dependencySearchInput" type="search" placeholder="Search prerequisite tasks" autocomplete="off" aria-label="Search prerequisite tasks"><select name="dependencyId" required><option value="">Select a prerequisite task</option>${candidates.filter((item) => !dependencies.includes(item.id)).map((item) => `<option value="${escapeHtml(item.id)}" data-dependency-search="${escapeHtml(`${item.task} ${item.statusLabel}`.toLowerCase())}">${escapeHtml(item.task)} — ${escapeHtml(item.statusLabel)}</option>`).join("")}</select></div><button type="submit">Link task</button></form>
       </section>`;
   }
 
@@ -3005,6 +3447,13 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
       await saveTaskBreakdown(task, { subtasks: items });
     }));
     const dependencyForm = document.getElementById("addDependencyForm");
+    const dependencySearch = document.getElementById("dependencySearchInput");
+    dependencySearch?.addEventListener("input", () => {
+      const search = dependencySearch.value.trim().toLowerCase();
+      dependencyForm?.querySelectorAll("option[data-dependency-search]").forEach((option) => {
+        option.hidden = Boolean(search) && !option.dataset.dependencySearch.includes(search);
+      });
+    });
     dependencyForm?.addEventListener("submit", async (event) => {
       event.preventDefault();
       const dependencyId = String(new FormData(dependencyForm).get("dependencyId") || "");
@@ -3174,6 +3623,10 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
   }
 
   function closeModal() {
+    if (appState.unsubscribeViewedTaskUpdates) {
+      appState.unsubscribeViewedTaskUpdates();
+      appState.unsubscribeViewedTaskUpdates = null;
+    }
     els.modal.classList.remove("is-open");
     els.modal.setAttribute("aria-hidden", "true");
     appState.viewedTaskId = null;
@@ -3658,6 +4111,198 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     }
   }
 
+  async function openAdminUsers() {
+    if (!appState.isAdmin) return;
+    els.adminUsersError.textContent = "";
+    els.adminUsersModal.classList.add("is-open");
+    els.adminUsersModal.setAttribute("aria-hidden", "false");
+    await renderAdminUsers();
+  }
+
+  function closeAdminUsers() {
+    els.adminUsersModal.classList.remove("is-open");
+    els.adminUsersModal.setAttribute("aria-hidden", "true");
+  }
+
+  async function renderAdminUsers() {
+    if (!appState.isAdmin) return;
+    try {
+      const [profilesSnapshot, adminsSnapshot] = await Promise.all([
+        getDocs(collection(db, "plannerUsers")),
+        getDocs(collection(db, "plannerAdmins"))
+      ]);
+      const admins = new Map(adminsSnapshot.docs.map((item) => [item.id, item.data()]));
+      const users = profilesSnapshot.docs.map((item) => ({ uid: item.id, ...item.data() }))
+        .sort((a, b) => String(a.displayName || a.email || "").localeCompare(String(b.displayName || b.email || "")));
+      const isAdminUser = (user) => user.uid === BOOTSTRAP_ADMIN_UID || admins.has(user.uid);
+
+      els.adminAccessUserSelect.replaceChildren(new Option("Choose a user", ""));
+      users.forEach((user) => els.adminAccessUserSelect.add(new Option(user.displayName || user.email || user.uid, user.uid)));
+      els.adminAccessProjectSelect.replaceChildren(new Option("Choose a project", ""));
+      appState.adminProjects.filter((project) => project.archived !== true)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach((project) => els.adminAccessProjectSelect.add(new Option(project.name, project.id)));
+
+      els.adminUserList.replaceChildren();
+      if (!users.length) {
+        els.adminUserList.textContent = "No registered users are available yet.";
+        return;
+      }
+      users.forEach((user) => {
+        const row = document.createElement("div");
+        row.className = "member-row admin-user-row";
+        const details = document.createElement("span");
+        const role = isAdminUser(user) ? "Admin" : "Normal";
+        details.textContent = `${user.displayName || "Unnamed user"} — ${user.email || "No email"} — ${role}`;
+        row.appendChild(details);
+        if (user.uid !== appState.user.uid) {
+          const roleButton = document.createElement("button");
+          roleButton.type = "button";
+          roleButton.className = "secondary-action";
+          roleButton.textContent = isAdminUser(user) ? "Revoke admin" : "Make admin";
+          roleButton.addEventListener("click", () => updateAdminRole(user, isAdminUser(user)));
+          row.appendChild(roleButton);
+          const revokeButton = document.createElement("button");
+          revokeButton.type = "button";
+          revokeButton.className = "danger-action";
+          revokeButton.textContent = "Revoke app access";
+          revokeButton.addEventListener("click", () => revokeApplicationAccess(user));
+          row.appendChild(revokeButton);
+        }
+        els.adminUserList.appendChild(row);
+      });
+    } catch (error) {
+      console.error("Could not load user access", error);
+      els.adminUsersError.textContent = "Could not load user access. Check your administrator permissions.";
+    }
+  }
+
+  async function createAdminInvitation(event) {
+    event.preventDefault();
+    if (!appState.isAdmin) return;
+    const form = new FormData(els.adminInviteForm);
+    const firstName = String(form.get("firstName") || "").trim();
+    const lastName = String(form.get("lastName") || "").trim();
+    const email = String(form.get("email") || "").trim().toLowerCase();
+    const role = String(form.get("role") || "normal");
+    if (!firstName || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !["normal", "admin"].includes(role)) {
+      els.adminUsersError.textContent = "Enter a first name, valid email, and role.";
+      return;
+    }
+    els.saveAdminInviteBtn.disabled = true;
+    els.adminUsersError.textContent = "";
+    try {
+      await setDoc(doc(db, "plannerInvites", email), {
+        email,
+        firstName,
+        lastName,
+        role,
+        createdBy: appState.user.uid,
+        createdAt: serverTimestamp()
+      });
+      els.adminInviteForm.reset();
+      els.adminUsersError.textContent = "Invitation saved. The user can create their own password from the sign-in screen.";
+    } catch (error) {
+      console.error("Could not create invitation", error);
+      els.adminUsersError.textContent = "Could not create the invitation.";
+    } finally {
+      els.saveAdminInviteBtn.disabled = false;
+    }
+  }
+
+  async function updateAdminRole(user, alreadyAdmin) {
+    if (!appState.isAdmin || user.uid === appState.user.uid) return;
+    try {
+      if (alreadyAdmin) {
+        await deleteDoc(doc(db, "plannerAdmins", user.uid));
+      } else {
+        await setDoc(doc(db, "plannerAdmins", user.uid), {
+          uid: user.uid,
+          email: user.email || "",
+          displayName: user.displayName || "Unnamed user",
+          grantedBy: appState.user.uid,
+          grantedAt: serverTimestamp()
+        });
+      }
+      await renderAdminUsers();
+    } catch (error) {
+      console.error("Could not update administrator role", error);
+      els.adminUsersError.textContent = "Could not update the administrator role.";
+    }
+  }
+
+  async function revokeApplicationAccess(user) {
+    if (!appState.isAdmin || user.uid === appState.user.uid) return;
+    try {
+      await setDoc(doc(db, "plannerAccountRevocations", user.uid), {
+        uid: user.uid,
+        revokedBy: appState.user.uid,
+        revokedAt: serverTimestamp()
+      });
+      els.adminUsersError.textContent = "Application access revoked for the selected user.";
+    } catch (error) {
+      console.error("Could not revoke application access", error);
+      els.adminUsersError.textContent = "Could not revoke application access.";
+    }
+  }
+
+  async function manageProjectAccess(event) {
+    event.preventDefault();
+    if (!appState.isAdmin) return;
+    const form = new FormData(els.adminProjectAccessForm);
+    const uid = String(form.get("uid") || "");
+    const projectId = String(form.get("projectId") || "");
+    const action = event.submitter?.dataset.accessAction || "revoke";
+    if (!uid || !projectId) {
+      els.adminUsersError.textContent = "Choose both a user and a project.";
+      return;
+    }
+    try {
+      const batch = writeBatch(db);
+      const memberRef = doc(db, "plannerProjects", projectId, "members", uid);
+      const pointerRef = doc(db, "plannerUserProjects", uid, "projects", projectId);
+      const revocationRef = doc(db, "plannerProjects", projectId, "accessRevocations", uid);
+      const [userSnapshot, projectSnapshot] = await Promise.all([
+        getDoc(doc(db, "plannerUsers", uid)),
+        getDoc(doc(db, "plannerProjects", projectId))
+      ]);
+      if (!projectSnapshot.exists()) throw new Error("Selected project is unavailable.");
+      const isProjectOwner = projectSnapshot.data().ownerId === uid;
+      if (action === "grant") {
+        if (!isProjectOwner) {
+          const user = userSnapshot.data();
+          batch.set(memberRef, {
+            uid,
+            displayName: user?.displayName || user?.email || "Unnamed user",
+            role: "viewer",
+            addedAt: serverTimestamp()
+          });
+          batch.set(pointerRef, { role: "viewer", addedAt: serverTimestamp() });
+        }
+        batch.delete(revocationRef);
+        els.adminUsersError.textContent = isProjectOwner
+          ? "Project owner access restored for the selected user."
+          : "Project access granted as Viewer for the selected user.";
+      } else {
+        if (!isProjectOwner) {
+          batch.delete(memberRef);
+          batch.delete(pointerRef);
+        }
+        batch.set(revocationRef, {
+          uid,
+          revokedBy: appState.user.uid,
+          revokedAt: serverTimestamp()
+        });
+        els.adminUsersError.textContent = "Project access revoked for the selected user.";
+      }
+      await batch.commit();
+      els.adminProjectAccessForm.reset();
+    } catch (error) {
+      console.error(`Could not ${action} project access`, error);
+      els.adminUsersError.textContent = `Could not ${action} project access.`;
+    }
+  }
+
   function renderMembers(members) {
     els.memberList.innerHTML = "";
     members.sort((a, b) => a.role.localeCompare(b.role)).forEach((member) => {
@@ -3820,12 +4465,14 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
         appState.filters.sprint = prefs.filters.sprint || "all";
         appState.filters.feature = prefs.filters.feature || "all";
         appState.filters.assignee = prefs.filters.assignee || "all";
+        appState.filters.status = prefs.filters.status || "all";
         appState.filters.search = prefs.filters.search || "";
       }
 
       if (prefs.sortBy) appState.sortBy = prefs.sortBy;
       if (typeof prefs.activeProjectId === "string") appState.activeProjectId = prefs.activeProjectId;
       if (prefs.activeView) appState.activeView = prefs.activeView;
+      if (typeof prefs.sidebarCollapsed === "boolean") appState.sidebarCollapsed = prefs.sidebarCollapsed;
       if (prefs.calendarMonth) appState.calendarMonth = prefs.calendarMonth;
 
       if (prefs.wipLimits) {
@@ -3848,6 +4495,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
           wipLimits: appState.wipLimits,
           activeProjectId: appState.activeProjectId,
           activeView: appState.activeView,
+          sidebarCollapsed: appState.sidebarCollapsed,
           calendarMonth: appState.calendarMonth
         })
       );
@@ -3861,6 +4509,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     setSelectValue(els.sprintFilter, appState.filters.sprint);
     setSelectValue(els.featureFilter, appState.filters.feature);
     setSelectValue(els.assigneeFilter, appState.filters.assignee);
+    setSelectValue(els.statusFilter, appState.filters.status);
 
     els.searchInput.value = appState.filters.search;
     els.sortBy.value = appState.sortBy;
@@ -3881,10 +4530,13 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     if (selectEl === els.sprintFilter) appState.filters.sprint = selectEl.value;
     if (selectEl === els.featureFilter) appState.filters.feature = selectEl.value;
     if (selectEl === els.assigneeFilter) appState.filters.assignee = selectEl.value;
+    if (selectEl === els.statusFilter) appState.filters.status = selectEl.value;
   }
 
   async function onLogoutClick() {
     if (appState.unsubscribeTasks) appState.unsubscribeTasks();
+    if (appState.unsubscribeTaskUpdatesFeed) appState.unsubscribeTaskUpdatesFeed();
+    if (appState.unsubscribeViewedTaskUpdates) appState.unsubscribeViewedTaskUpdates();
     await signOutUser();
     window.location.replace("login.html");
   }

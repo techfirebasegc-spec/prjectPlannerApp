@@ -1,12 +1,16 @@
 {
   "indexes": [
     {
-      "collectionGroup": "members",
+      "collectionGroup": "updates",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "uid",
+          "fieldPath": "projectId",
           "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
         }
       ]
     }

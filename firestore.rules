@@ -1,8 +1,23 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isVerifiedUser() {
+    function isVerifiedFirebaseUser() {
       return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isAppAccessRevoked(uid) {
+      return exists(/databases/$(database)/documents/plannerAccountRevocations/$(uid));
+    }
+
+    function isVerifiedUser() {
+      return isVerifiedFirebaseUser() && !isAppAccessRevoked(request.auth.uid);
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.uid == "UosH0j7JVLYCKYwTYOeAJXqk7Ge2"
+        || exists(/databases/$(database)/documents/plannerAdmins/$(request.auth.uid))
+      );
     }
 
     function validTask(data) {
@@ -59,29 +74,68 @@ service cloud.firestore {
         && data.archived == false;
     }
 
+    function validTaskUpdate(data) {
+      return data.keys().hasOnly(["taskId", "projectId", "taskName", "body", "authorUid", "authorName", "createdAt"])
+        && data.taskId is string && data.taskId.size() > 0 && data.taskId.size() <= 160
+        && data.projectId is string && data.projectId.size() > 0 && data.projectId.size() <= 160
+        && data.taskName is string && data.taskName.size() > 0 && data.taskName.size() <= 160
+        && data.body is string && data.body.size() > 0 && data.body.size() <= 2000
+        && data.authorUid == request.auth.uid
+        && data.authorName is string && data.authorName.size() > 0 && data.authorName.size() <= 160
+        && data.createdAt is timestamp;
+    }
+
     function isProjectOwner(projectId) {
-      return get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId == request.auth.uid;
+      return !exists(/databases/$(database)/documents/plannerProjects/$(projectId)/accessRevocations/$(request.auth.uid))
+        && get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId == request.auth.uid;
+    }
+
+    // Project membership is mirrored in the member subcollection and in the
+    // signed-in user's project-access list. Both records are written together
+    // by the client, but accepting either preserves access for older projects
+    // where only the user-scoped record remains.
+    function hasProjectMemberRecord(projectId) {
+      return exists(/databases/$(database)/documents/plannerProjects/$(projectId)/members/$(request.auth.uid));
+    }
+
+    function hasProjectAccessRecord(projectId) {
+      return exists(/databases/$(database)/documents/plannerUserProjects/$(request.auth.uid)/projects/$(projectId));
+    }
+
+    function hasProjectAccessRevocation(projectId) {
+      return exists(/databases/$(database)/documents/plannerProjects/$(projectId)/accessRevocations/$(request.auth.uid));
     }
 
     function isProjectMember(projectId) {
-      return get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.archived != true
+      return isAdmin() || (!hasProjectAccessRevocation(projectId)
+        && get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.archived != true
         && (isProjectOwner(projectId)
-          || exists(/databases/$(database)/documents/plannerProjects/$(projectId)/members/$(request.auth.uid)));
+          || hasProjectMemberRecord(projectId)
+          || hasProjectAccessRecord(projectId)));
     }
 
     function canEditProject(projectId) {
-      return get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.archived != true
+      return isAdmin() || (!hasProjectAccessRevocation(projectId)
+        && get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.archived != true
         && (isProjectOwner(projectId)
-          || get(/databases/$(database)/documents/plannerProjects/$(projectId)/members/$(request.auth.uid)).data.role in ["owner", "editor"]);
+          || (hasProjectMemberRecord(projectId)
+            && get(/databases/$(database)/documents/plannerProjects/$(projectId)/members/$(request.auth.uid)).data.role in ["owner", "editor"])
+          || (hasProjectAccessRecord(projectId)
+            && get(/databases/$(database)/documents/plannerUserProjects/$(request.auth.uid)/projects/$(projectId)).data.role in ["owner", "editor"])));
     }
 
     match /plannerUsers/{uid} {
       allow create: if isVerifiedUser()
         && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(["uid", "email", "displayName", "firstName", "lastName", "createdAt", "updatedAt"])
+        && request.resource.data.keys().hasOnly(["uid", "email", "displayName", "firstName", "lastName", "role", "createdAt", "updatedAt"])
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.email == request.auth.token.email;
-      allow get: if isVerifiedUser() && request.auth.uid == uid;
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role in ["normal", "admin"]
+        && (request.resource.data.role == "normal" || (
+          exists(/databases/$(database)/documents/plannerInvites/$(request.auth.token.email))
+          && get(/databases/$(database)/documents/plannerInvites/$(request.auth.token.email)).data.role == "admin"
+        ));
+      allow get, list: if isVerifiedUser() && (request.auth.uid == uid || isAdmin());
       allow update: if isVerifiedUser()
         && request.auth.uid == uid
         && request.resource.data.uid == resource.data.uid
@@ -92,6 +146,32 @@ service cloud.firestore {
         && request.resource.data.lastName is string
         && request.resource.diff(resource.data).affectedKeys().hasOnly(["firstName", "lastName", "displayName", "preferences", "updatedAt"]);
       allow list, delete: if false;
+    }
+
+    match /plannerAdmins/{uid} {
+      allow get: if isVerifiedUser() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        || (isVerifiedUser() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(["uid", "email", "displayName", "grantedBy", "grantedAt"])
+          && request.resource.data.uid == uid
+          && request.resource.data.email == request.auth.token.email
+          && exists(/databases/$(database)/documents/plannerInvites/$(request.auth.token.email))
+          && get(/databases/$(database)/documents/plannerInvites/$(request.auth.token.email)).data.role == "admin");
+      allow update, delete: if isAdmin() && request.auth.uid != uid;
+    }
+
+    match /plannerInvites/{email} {
+      // Allow an authenticated user to check only the invitation addressed to
+      // their own verified email. This also permits a safe "not invited" read.
+      allow get: if isVerifiedUser() && email == request.auth.token.email;
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /plannerAccountRevocations/{uid} {
+      allow get: if isVerifiedFirebaseUser() && (request.auth.uid == uid || isAdmin());
+      allow list, create, update, delete: if isAdmin();
     }
 
     // Contains only display names and UIDs so project owners can search users by name.
@@ -250,6 +330,13 @@ service cloud.firestore {
       allow delete: if isVerifiedUser() && resource.data.createdBy == request.auth.uid;
     }
 
+    match /plannerTasks/{taskId}/updates/{updateId} {
+      allow get, list: if isVerifiedUser() && resource.data.projectId == "default";
+      allow create: if isVerifiedUser() && validTaskUpdate(request.resource.data)
+        && request.resource.data.projectId == "default" && request.resource.data.taskId == taskId;
+      allow update, delete: if false;
+    }
+
     match /plannerProjects/{projectId} {
       allow create: if isVerifiedUser()
         && request.resource.data.keys().hasOnly(["name", "description", "ownerId", "archived", "createdAt", "updatedAt"])
@@ -259,7 +346,7 @@ service cloud.firestore {
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.archived == false;
       allow get, list: if isVerifiedUser()
-        && (resource.data.ownerId == request.auth.uid || isProjectMember(projectId));
+        && (isAdmin() || isProjectMember(projectId));
       allow update: if isVerifiedUser() && isProjectOwner(projectId)
         && request.resource.data.keys().hasOnly(["name", "description", "ownerId", "archived", "createdAt", "updatedAt"])
         && request.resource.data.ownerId == resource.data.ownerId
@@ -273,7 +360,7 @@ service cloud.firestore {
     }
 
     match /plannerProjects/{projectId}/members/{memberId} {
-      allow get: if isVerifiedUser() && (resource.data.uid == request.auth.uid || isProjectOwner(projectId));
+      allow get: if isVerifiedUser() && (isAdmin() || resource.data.uid == request.auth.uid || isProjectOwner(projectId));
       allow list: if isVerifiedUser() && isProjectMember(projectId);
       allow create: if isVerifiedUser() && (
         (memberId == request.auth.uid && request.resource.data.uid == request.auth.uid
@@ -281,20 +368,24 @@ service cloud.firestore {
           && request.resource.data.displayName is string
           && request.resource.data.keys().hasOnly(["uid", "displayName", "role", "addedAt"])
           && getAfter(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId == request.auth.uid)
-        || (isProjectOwner(projectId)
+        || ((isProjectOwner(projectId) || isAdmin())
           && request.resource.data.uid == memberId
           && request.resource.data.keys().hasOnly(["uid", "displayName", "role", "addedAt"])
           && request.resource.data.role in ["editor", "viewer"]
           && request.resource.data.displayName is string)
       );
-      allow update: if isVerifiedUser() && isProjectOwner(projectId)
+      allow update: if isVerifiedUser() && (isProjectOwner(projectId) || isAdmin())
         && memberId != get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId
         && request.resource.data.keys().hasOnly(["uid", "displayName", "role", "addedAt"])
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.displayName is string
         && request.resource.data.role in ["editor", "viewer"];
-      allow delete: if isVerifiedUser() && isProjectOwner(projectId)
+      allow delete: if isVerifiedUser() && (isProjectOwner(projectId) || isAdmin())
         && memberId != get(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId;
+    }
+
+    match /plannerProjects/{projectId}/accessRevocations/{uid} {
+      allow get, list, create, update, delete: if isAdmin();
     }
 
     // Collection-group queries for the signed-in user's project memberships.
@@ -309,16 +400,16 @@ service cloud.firestore {
       allow create: if isVerifiedUser() && request.resource.data.keys().hasOnly(["role", "addedAt"])
         && request.resource.data.role in ["owner", "editor", "viewer"]
         && (
-          isProjectOwner(projectId)
+          isProjectOwner(projectId) || isAdmin()
           || (request.auth.uid == uid
             && request.resource.data.role == "owner"
             && getAfter(/databases/$(database)/documents/plannerProjects/$(projectId)).data.ownerId == request.auth.uid)
         );
-      allow update: if isVerifiedUser() && isProjectOwner(projectId)
+      allow update: if isVerifiedUser() && (isProjectOwner(projectId) || isAdmin())
         && request.resource.data.keys().hasOnly(["role", "addedAt"])
         && request.resource.data.role in ["editor", "viewer"];
       allow delete: if isVerifiedUser()
-        && (request.auth.uid == uid || isProjectOwner(projectId));
+        && (request.auth.uid == uid || isProjectOwner(projectId) || isAdmin());
     }
 
     match /plannerProjects/{projectId}/sequences/{entityType} {
@@ -455,6 +546,15 @@ service cloud.firestore {
             && request.resource.data.archived is bool)
         );
       allow delete: if isVerifiedUser() && canEditProject(projectId);
+    }
+
+    match /plannerProjects/{projectId}/tasks/{taskId}/updates/{updateId} {
+      allow get, list: if isVerifiedUser() && isProjectMember(projectId)
+        && resource.data.projectId == projectId;
+      allow create: if isVerifiedUser() && canEditProject(projectId)
+        && validTaskUpdate(request.resource.data)
+        && request.resource.data.projectId == projectId && request.resource.data.taskId == taskId;
+      allow update, delete: if false;
     }
 
     match /{document=**} {

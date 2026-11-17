@@ -9,14 +9,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    try {
+      const preferences = JSON.parse(localStorage.getItem("cliniqPlanner.preferences.v1") || "{}");
+      const validViews = ["dashboard", "board", "list", "stories", "sprintPlanning", "pis", "features", "insights", "knowledge", "profile"];
+      if (validViews.includes(preferences.activeView)) document.documentElement.dataset.initialView = preferences.activeView;
+    } catch (_) {}
+  </script>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="./sprint-execution.css">
 </head>
 <body>
   <a class="skip-link" href="#boardView">Skip to planner content</a>
-  <div class="app-shell">
+  <div class="app-shell sidebar-collapsed">
     <aside class="sidebar" aria-label="Planner navigation and controls">
-      <button id="sidebarToggleBtn" class="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true">☰</button>
+      <button id="sidebarToggleBtn" class="sidebar-toggle" type="button" aria-label="Expand sidebar" aria-expanded="false">☰</button>
       <nav class="sidebar-shortcuts" aria-label="Collapsed sidebar">
         <button type="button" data-sidebar-expand title="Show filters" aria-label="Show filters">⌕</button>
         <button type="button" data-sidebar-expand title="Show board controls" aria-label="Show board controls">☷</button>
@@ -57,6 +64,13 @@
             <select id="assigneeFilter" class="filter-select">
               <option value="all">All Assignees</option>
             </select>
+            <label for="statusFilter">Status</label>
+            <select id="statusFilter" class="filter-select">
+              <option value="all">All statuses</option>
+              <option value="todo">To Do</option>
+              <option value="inprogress">In Progress</option>
+              <option value="done">Done</option>
+            </select>
           </div>
         </details>
       </section>
@@ -89,21 +103,22 @@
     <button id="mobileNavToggle" class="mobile-nav-toggle" type="button" aria-label="Open navigation and filters" aria-expanded="false">☰</button>
     <div class="workspace">
       <header class="topbar">
-        <span id="currentUserName" class="user-name nav-user-name"></span>
+        <button id="topbarOverviewBtn" class="topbar-identity" type="button" aria-label="Open Arcflow overview"><span class="topbar-label">Portfolio view</span><strong class="topbar-product-name">Arcflow</strong><span class="topbar-tagline">Plan with clarity</span><span id="currentUserName" class="user-name topbar-user-context"></span></button>
         <label class="search-wrap" for="searchInput">
           <span class="search-icon" aria-hidden="true">&#128269;</span>
           <input id="searchInput" type="search" placeholder="Search tasks, stories, people..." autocomplete="off">
         </label>
 
         <div class="topbar-right">
-          <div class="topbar-actions">
-            <select id="projectSelect" class="project-select" aria-label="Select project">
+          <div class="topbar-project-control"><label for="projectSelect">Project</label><select id="projectSelect" class="project-select" aria-label="Select project">
               <option value="default">Default Project</option>
-            </select>
+            </select></div>
+          <div class="topbar-actions">
             <button id="newProjectBtn" class="secondary-action" type="button">+ Project</button>
             <button id="editProjectBtn" class="secondary-action is-hidden" type="button">Project Details</button>
             <button id="archiveProjectBtn" class="danger-action is-hidden" type="button">Archive Project</button>
             <button id="membersBtn" class="secondary-action is-hidden" type="button">Members</button>
+            <button id="adminUsersBtn" class="secondary-action is-hidden" type="button">User Access</button>
             <button id="newTaskBtn" class="new-task-btn" type="button" onclick="document.getElementById('taskEditorModal').classList.add('is-open'); document.getElementById('taskEditorModal').setAttribute('aria-hidden', 'false'); document.getElementById('newTaskName').focus();">+ New Task</button>
             <div class="account-menu-wrap">
               <button id="accountMenuBtn" class="account-avatar" type="button" aria-label="Open account menu" aria-expanded="false">--</button>
@@ -116,7 +131,7 @@
         </div>
       </header>
 
-      <section class="view-switch" aria-label="View switcher">
+      <nav class="view-switch" aria-label="Workspace navigation">
         <button id="dashboardViewBtn" class="view-btn is-active" type="button">Overview</button>
         <button id="listViewBtn" class="view-btn" type="button">Work Items</button>
         <button id="boardViewBtn" class="view-btn" type="button">Board</button>
@@ -127,7 +142,7 @@
         <button id="insightsViewBtn" class="view-btn" type="button">Reports</button>
         <button id="knowledgeViewBtn" class="view-btn" type="button">Knowledge</button>
         <button id="profileViewBtn" class="view-btn is-hidden" type="button">Profile</button>
-      </section>
+      </nav>
 
 
       <section id="dashboardView" aria-label="Dashboard overview">
@@ -161,7 +176,7 @@
 
       <div class="dashboard-main-grid">
         <section class="dashboard-work-panel dashboard-focus-panel" aria-label="Dashboard task overview">
-          <div class="dashboard-panel-heading"><div><p class="brand-kicker">WORK OVERVIEW</p><h2>Tasks to focus on</h2><p>Priority work at a glance</p></div><span class="dashboard-preview-count">Top 6</span></div>
+          <div class="dashboard-panel-heading"><div><p class="brand-kicker">WORK OVERVIEW</p><h2>Tasks to focus on</h2><p>Priority work at a glance</p></div><div class="dashboard-panel-actions"><span class="dashboard-preview-count">Top 6</span><button id="viewAllTasksBtn" class="dashboard-view-all" type="button">View all <span aria-hidden="true">→</span></button></div></div>
           <div id="dashboardTasks" class="dashboard-task-list"></div>
         </section>
         <section class="dashboard-work-panel dashboard-chart-panel" aria-label="Sprint velocity chart">
@@ -173,6 +188,10 @@
       <section class="dashboard-work-panel dashboard-burndown-panel" aria-label="Sprint burndown chart">
         <div class="dashboard-panel-heading"><div><p class="brand-kicker">CURRENT SPRINT</p><h2>Burndown</h2><p id="dashboardBurndownSubtitle">Remaining story points</p></div></div>
         <div class="dashboard-chart-canvas dashboard-burndown-canvas"><canvas id="dashboardBurndownChart" height="120"></canvas></div>
+      </section>
+      <section class="dashboard-work-panel dashboard-updates-panel" aria-label="Latest task updates">
+        <div class="dashboard-panel-heading"><div><p class="brand-kicker">WORK LOG</p><h2>Latest task updates</h2><p>Daily notes and discussions from your project team</p></div></div>
+        <div id="dashboardUpdates" class="dashboard-updates-list" aria-live="polite"></div>
       </section>
 
       </section>
@@ -220,9 +239,9 @@
           <div class="list-title-wrap">
             <div class="list-title-copy"><p class="list-eyebrow">WORK MANAGEMENT</p><h2>Tasks <span class="list-title-divider">/</span> <span class="list-title-context">All work items</span></h2><p>Review ownership, delivery status and upcoming deadlines.</p></div>
           </div>
-          <div class="list-toolbar-actions">
+          <div class="list-toolbar-actions" aria-label="Bulk actions for selected tasks">
             <span id="listSummary" class="list-summary"></span>
-            <label class="bulk-status-label" for="bulkTaskStatus">Move to</label><select id="bulkTaskStatus" class="bulk-status-select" aria-label="Status for selected tasks"><option value="todo">To Do</option><option value="inprogress">In Progress</option><option value="done">Done</option></select><button id="applyBulkStatusBtn" class="secondary-action bulk-status-apply" type="button" disabled>Update status</button><button id="archiveSelectedTasksBtn" class="list-archive-btn" type="button" disabled>Archive selected</button>
+            <label class="bulk-status-label" for="bulkTaskStatus">Move selected to</label><select id="bulkTaskStatus" class="bulk-status-select" aria-label="New status for selected tasks"><option value="todo">To Do</option><option value="inprogress">In Progress</option><option value="done">Done</option></select><button id="applyBulkStatusBtn" class="secondary-action bulk-status-apply" type="button" disabled>Update status</button><button id="archiveSelectedTasksBtn" class="list-archive-btn" type="button" disabled>Archive selected</button>
           </div>
         </div>
         <div class="task-table-wrap">
@@ -268,7 +287,7 @@
               <label>Sprint goal<textarea id="sprintGoalInput" maxlength="1200" rows="3" placeholder="Outcome the team intends to deliver"></textarea></label>
               <div class="planning-form-row"><label>Start date<input id="sprintStartInput" type="date" required></label><label>End date<input id="sprintEndInput" type="date" required></label></div>
               <label>Team capacity (story points)<input id="sprintCapacityInput" type="number" min="0" max="10000" step="0.5" required value="0"></label>
-              <section class="sprint-member-capacity" aria-labelledby="sprintMemberCapacityTitle"><div class="sprint-member-capacity-heading"><div><h4 id="sprintMemberCapacityTitle">Individual capacity</h4><p>Optional available story points for each project member.</p></div></div><div id="sprintMemberCapacityInputs" class="sprint-member-capacity-list" aria-live="polite"></div></section>
+              <section class="sprint-member-capacity is-collapsed" aria-labelledby="sprintMemberCapacityTitle"><div class="sprint-member-capacity-heading"><div><h4 id="sprintMemberCapacityTitle">Individual capacity</h4><p>Optional available story points for each project member.</p></div><button id="sprintMemberCapacityToggle" class="sprint-member-capacity-toggle" type="button" aria-expanded="false" aria-controls="sprintMemberCapacityInputs"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"></path></svg><span class="sr-only">Show individual capacity</span></button></div><div id="sprintMemberCapacityInputs" class="sprint-member-capacity-list" aria-live="polite"></div></section>
               <label>Status<select id="sprintStatusInput"><option value="PLANNED">Planned</option><option value="ACTIVE">Active</option><option value="COMPLETED">Completed</option></select></label>
               <p id="sprintFormError" class="task-editor-error" aria-live="polite"></p>
               <div class="planning-form-actions"><button id="sprintCancelBtn" class="secondary-action" type="button">Clear</button><button id="sprintSaveBtn" class="save-task-btn" type="submit">Create sprint</button></div>
@@ -427,29 +446,48 @@
           <h2>Your Profile</h2>
           <p>Your signed-in account and access for the selected project.</p>
         </header>
-        <div class="profile-grid">
-          <article class="profile-card"><p>First name</p><strong id="profileFirstName">-</strong></article>
-          <article class="profile-card"><p>Last name</p><strong id="profileLastName">-</strong></article>
-          <article class="profile-card"><p>Email</p><strong id="profileEmail">-</strong></article>
-          <article class="profile-card profile-card-wide"><p>Firebase UID</p><code id="profileUid">-</code></article>
-          <article class="profile-card"><p>Selected project</p><strong id="profileProject">-</strong></article>
-          <article class="profile-card profile-card-wide"><p>Project ID</p><code id="profileProjectId">-</code></article>
-          <article class="profile-card"><p>Your role</p><strong id="profileRole">-</strong></article>
-        </div>
-        <form id="profileForm" class="profile-form" novalidate>
-          <h3>Edit profile</h3>
-          <label>First name<input id="profileFirstNameInput" name="firstName" required maxlength="80" autocomplete="given-name"></label>
-          <label>Last name<input id="profileLastNameInput" name="lastName" maxlength="80" autocomplete="family-name"></label>
-          <button id="saveProfileBtn" class="save-task-btn" type="submit">Save Profile</button>
-          <p id="profileError" class="task-editor-error" aria-live="polite"></p>
-        </form>
-        <section class="profile-access">
-          <h3>Your project access</h3>
-          <div id="profileAccessList" class="profile-access-list"></div>
+        <section class="profile-summary" aria-label="Account summary">
+          <div class="profile-identity">
+            <span id="profileAvatarInitials" class="profile-avatar" aria-hidden="true">--</span>
+            <div><p class="profile-summary-label">Signed in as</p><h3 id="profileDisplayName">-</h3><p id="profileEmail" class="profile-email">-</p><span id="profileRole" class="profile-role-badge">-</span></div>
+          </div>
+          <div class="profile-current-project"><p>Selected project</p><strong id="profileProject">-</strong><code id="profileProjectId">-</code></div>
         </section>
+        <section class="profile-details" aria-label="Account details">
+          <header><h3>Account details</h3><p>Personal details and account reference.</p></header>
+          <div class="profile-grid">
+            <article class="profile-card"><p>First name</p><strong id="profileFirstName">-</strong></article>
+            <article class="profile-card"><p>Last name</p><strong id="profileLastName">-</strong></article>
+            <article class="profile-card profile-card-wide"><p>Firebase UID</p><code id="profileUid">-</code></article>
+          </div>
+        </section>
+        <div class="profile-management-grid">
+          <form id="profileForm" class="profile-form" novalidate>
+            <h3>Edit profile</h3>
+            <p class="profile-section-note">Update the name shown to your project team.</p>
+            <label>First name<input id="profileFirstNameInput" name="firstName" required maxlength="80" autocomplete="given-name"></label>
+            <label>Last name<input id="profileLastNameInput" name="lastName" maxlength="80" autocomplete="family-name"></label>
+            <button id="saveProfileBtn" class="save-task-btn" type="submit">Save Profile</button>
+            <p id="profileError" class="task-editor-error" aria-live="polite"></p>
+          </form>
+          <section class="profile-access">
+            <h3>Your project access</h3>
+            <p class="profile-section-note">Choose a project to open its board.</p>
+            <div id="profileAccessList" class="profile-access-list"></div>
+          </section>
+        </div>
       </section>
 
     </div>
+  </div>
+
+  <div id="sprintCalendarModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="sprintCalendarModalTitle">
+    <section class="modal-card sprint-calendar-modal" role="document">
+      <button id="closeSprintCalendarModal" class="modal-close" type="button" aria-label="Close sprint calendar">&times;</button>
+      <header class="sprint-calendar-modal-header"><p class="brand-kicker">Sprint schedule</p><h2 id="sprintCalendarModalTitle">Sprint dates</h2><p id="sprintCalendarModalSubtitle">Review planned delivery windows.</p></header>
+      <div id="sprintCalendarModalSchedule" class="sprint-calendar-modal-schedule"></div>
+      <div id="sprintCalendarModalGrid" class="sprint-calendar-modal-grid" aria-live="polite"></div>
+    </section>
   </div>
 
   <div id="taskModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
@@ -459,8 +497,9 @@
         <span class="task-editor-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2.2"></rect><path d="M9 3.5h6v3H9zM8.5 11h7M8.5 15h7"></path></svg></span>
         <div><h2 id="modalTitle"></h2><p>Task details</p></div>
       </header>
-      <div class="task-detail-layout">
+      <div class="task-detail-layout" data-resizable-layout="task-detail">
         <div id="modalBody" class="modal-body"></div>
+        <button class="panel-resizer" type="button" data-panel-resizer="task-detail" data-min-width="42" data-max-width="72" aria-label="Resize task details and updates panels" aria-orientation="vertical" role="separator" tabindex="0"></button>
         <aside class="task-detail-side">
           <label class="status-editor" for="taskStatusSelect">Status
             <select id="taskStatusSelect">
@@ -469,6 +508,7 @@
               <option value="done">Done</option>
             </select>
           </label>
+          <div id="taskUpdatesPanel"></div>
         </aside>
       </div>
       <div class="task-editor-actions">
@@ -516,6 +556,29 @@
     </section>
   </div>
 
+  <div id="adminUsersModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="adminUsersTitle">
+    <section class="modal-card task-editor admin-users-editor">
+      <button id="closeAdminUsers" class="modal-close" type="button" aria-label="Close">&times;</button>
+      <h2 id="adminUsersTitle">User access</h2>
+      <p class="task-editor-subtitle">Invite a user to register and set their own password. Admins can access every project.</p>
+      <form id="adminInviteForm" class="task-form-grid" novalidate>
+        <label>First Name<input name="firstName" required maxlength="80" autocomplete="given-name"></label>
+        <label>Last Name<input name="lastName" maxlength="80" autocomplete="family-name"></label>
+        <label class="task-form-wide">Email<input name="email" type="email" required maxlength="254" autocomplete="email"></label>
+        <label>Role<select name="role"><option value="normal">Normal</option><option value="admin">Admin</option></select></label>
+        <div class="member-submit-wrap"><button id="saveAdminInviteBtn" class="save-task-btn" type="submit">Create invitation</button></div>
+      </form>
+      <form id="adminProjectAccessForm" class="task-form-grid admin-project-access" novalidate>
+        <h3 class="task-form-wide">Project access</h3>
+        <label>User<select id="adminAccessUserSelect" name="uid" required><option value="">Choose a user</option></select></label>
+        <label>Project<select id="adminAccessProjectSelect" name="projectId" required><option value="">Choose a project</option></select></label>
+        <div class="member-submit-wrap"><button class="save-task-btn" type="submit" data-access-action="grant">Grant access</button><button class="danger-action" type="submit" data-access-action="revoke">Revoke access</button></div>
+      </form>
+      <p id="adminUsersError" class="task-editor-error" aria-live="polite"></p>
+      <div id="adminUserList" class="member-list admin-user-list"></div>
+    </section>
+  </div>
+
   <div id="storyEditorModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="storyEditorTitle">
     <form id="storyEditorForm" class="modal-card task-editor story-editor" novalidate>
       <button id="closeStoryEditor" class="modal-close" type="button" aria-label="Close">&times;</button>
@@ -558,7 +621,7 @@
           <p class="task-editor-subtitle">Add the details needed to plan and track this work.</p>
         </div>
       </header>
-      <div class="task-editor-layout">
+      <div class="task-editor-layout" data-resizable-layout="task-editor">
         <section class="task-editor-fields" aria-label="Task details">
           <label class="task-form-wide">Task name<input id="newTaskName" name="task" required maxlength="160" autocomplete="off"></label>
           <div class="task-form-grid">
@@ -594,6 +657,7 @@
             </details>
           </div>
         </section>
+        <button class="panel-resizer" type="button" data-panel-resizer="task-editor" data-min-width="45" data-max-width="70" aria-label="Resize task fields and description panels" aria-orientation="vertical" role="separator" tabindex="0"></button>
         <section class="task-editor-notes" aria-label="Task description">
           <label>Description<textarea name="description" rows="8" maxlength="1000" placeholder="Add context, notes, or acceptance criteria"></textarea></label>
         </section>
