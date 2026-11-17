@@ -22,6 +22,8 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     userStories: [],
     memberDirectory: [],
     filteredTasks: [],
+    listPage: 1,
+    listPageSize: 10,
     sprintCatalog: [],
     sprints: [],
     sprintSnapshots: {},
@@ -208,6 +210,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
     boardView: document.getElementById("boardView"),
     listView: document.getElementById("listView"),
     taskTableBody: document.getElementById("taskTableBody"),
+    listPagination: document.getElementById("listPagination"),
     listSummary: document.getElementById("listSummary"),
     selectAllTasks: document.getElementById("selectAllTasks"),
     archiveSelectedTasksBtn: document.getElementById("archiveSelectedTasksBtn"),
@@ -1503,7 +1506,59 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
   function onListSort(key) {
     const nextDirection = appState.listSort.key === key && appState.listSort.direction === "asc" ? "desc" : "asc";
     appState.listSort = { key, direction: nextDirection };
+    appState.listPage = 1;
     renderList(appState.filteredTasks);
+  }
+
+  function changeListPage(page) {
+    const totalPages = Math.max(1, Math.ceil(appState.filteredTasks.length / appState.listPageSize));
+    appState.listPage = Math.min(totalPages, Math.max(1, page));
+    renderList(appState.filteredTasks);
+  }
+
+  function renderListPagination(totalItems) {
+    if (!els.listPagination) return;
+    const totalPages = Math.max(1, Math.ceil(totalItems / appState.listPageSize));
+    appState.listPage = Math.min(totalPages, Math.max(1, appState.listPage));
+    const start = totalItems ? (appState.listPage - 1) * appState.listPageSize + 1 : 0;
+    const end = Math.min(totalItems, appState.listPage * appState.listPageSize);
+    const pageButtons = [];
+    const addPage = (page) => pageButtons.push(
+      `<button type="button" class="list-page-number${page === appState.listPage ? " is-active" : ""}" data-list-page="${page}" aria-label="Go to page ${page}" aria-current="${page === appState.listPage ? "page" : "false"}">${page}</button>`
+    );
+    const first = Math.max(1, Math.min(appState.listPage - 2, totalPages - 4));
+    const last = Math.min(totalPages, first + 4);
+    if (first > 1) {
+      addPage(1);
+      if (first > 2) pageButtons.push('<span class="list-page-ellipsis" aria-hidden="true">…</span>');
+    }
+    for (let page = first; page <= last; page += 1) addPage(page);
+    if (last < totalPages) {
+      if (last < totalPages - 1) pageButtons.push('<span class="list-page-ellipsis" aria-hidden="true">…</span>');
+      addPage(totalPages);
+    }
+    els.listPagination.innerHTML = `
+      <div class="list-pagination-info" aria-live="polite">
+        <span>Showing <strong>${start}–${end}</strong> of <strong>${totalItems}</strong> tasks</span>
+        <label for="listPageSize">Rows per page
+          <select id="listPageSize" class="list-page-size" aria-label="Rows per page">
+            ${[10, 25, 50].map(size => `<option value="${size}" ${appState.listPageSize === size ? "selected" : ""}>${size}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <nav class="list-pagination-controls" aria-label="Work item pages">
+        <button type="button" class="list-page-nav" data-list-page="${appState.listPage - 1}" ${appState.listPage <= 1 ? "disabled" : ""} aria-label="Previous page">‹ <span>Previous</span></button>
+        <div class="list-page-numbers">${pageButtons.join("")}</div>
+        <button type="button" class="list-page-nav" data-list-page="${appState.listPage + 1}" ${appState.listPage >= totalPages ? "disabled" : ""} aria-label="Next page"><span>Next</span> ›</button>
+      </nav>`;
+    els.listPagination.querySelectorAll("[data-list-page]").forEach(button => {
+      button.addEventListener("click", () => changeListPage(Number(button.dataset.listPage)));
+    });
+    els.listPagination.querySelector("#listPageSize")?.addEventListener("change", event => {
+      appState.listPageSize = Number(event.target.value) || 10;
+      appState.listPage = 1;
+      renderList(appState.filteredTasks);
+    });
   }
 
   function onWipLimitChange() {
@@ -1538,6 +1593,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
       return matchesPi && matchesSprint && matchesFeature && matchesAssignee && matchesSearch;
     });
 
+    appState.listPage = 1;
     renderDashboard(appState.filteredTasks);
     renderBoard(appState.filteredTasks);
     renderList(appState.filteredTasks);
@@ -1943,6 +1999,9 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
       ? sortTasks(tasks, appState.sortBy)
       : sortListTasks(tasks, appState.listSort.key, appState.listSort.direction);
     updateListSortHeaders();
+    appState.listPage = Math.min(appState.listPage, Math.max(1, Math.ceil(sorted.length / appState.listPageSize)));
+    const pageTasks = sorted.slice((appState.listPage - 1) * appState.listPageSize, appState.listPage * appState.listPageSize);
+    renderListPagination(sorted.length);
     els.taskTableBody.innerHTML = "";
     els.listSummary.textContent = `${sorted.length} task${sorted.length === 1 ? "" : "s"}`;
     if (sorted.length === 0) {
@@ -1955,7 +2014,7 @@ import { buildSprintCatalog, normalizeSprintDate, taskBelongsToSprint } from "./
       updateBulkArchiveControls(sorted);
       return;
     }
-    sorted.forEach((task) => {
+    pageTasks.forEach((task) => {
       const row = document.createElement("tr");
       row.tabIndex = 0;
       row.addEventListener("click", () => openTaskModal(task));

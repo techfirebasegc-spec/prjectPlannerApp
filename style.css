@@ -4888,3 +4888,41 @@ textarea:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .app-shell > .sidebar { transition:none; }
 }
+
+
+/* Work Items pagination */
+.list-pagination {
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:14px 18px; border-top:1px solid #e8eef6; background:#fff;
+  border-radius:0 0 14px 14px;
+}
+.list-pagination-info { display:flex; align-items:center; flex-wrap:wrap; gap:14px; color:#71819a; font-size:.78rem; }
+.list-pagination-info strong { color:#243b5a; font-weight:800; font-variant-numeric:tabular-nums; }
+.list-pagination-info label { display:inline-flex; align-items:center; gap:8px; color:#71819a; font-weight:600; }
+.list-page-size { min-height:34px; padding:5px 25px 5px 9px; border:1px solid #dce5f0; border-radius:8px; background:#fff; color:#314766; font:inherit; font-weight:700; }
+.list-pagination-controls, .list-page-numbers { display:flex; align-items:center; gap:5px; }
+.list-page-nav, .list-page-number {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; min-width:34px; min-height:34px;
+  padding:0 9px; border:1px solid transparent; border-radius:8px; background:#fff; color:#526781;
+  font:inherit; font-size:.78rem; font-weight:700; cursor:pointer; transition:background .15s ease,border-color .15s ease,color .15s ease;
+}
+.list-page-nav { border-color:#e1e8f1; }
+.list-page-number:hover:not(.is-active), .list-page-nav:hover:not(:disabled) { background:#f3f7fc; border-color:#dbe5f1; color:#244f87; }
+.list-page-number.is-active { border-color:#d5e3fb; background:#edf4ff; color:#245fbd; box-shadow:inset 0 0 0 1px rgba(49,94,232,.04); }
+.list-page-nav:disabled { opacity:.42; cursor:not-allowed; }
+.list-page-ellipsis { padding:0 3px; color:#9aa9bc; font-size:.8rem; }
+.list-page-nav:focus-visible, .list-page-number:focus-visible, .list-page-size:focus-visible { outline:3px solid rgba(49,94,232,.25); outline-offset:2px; }
+@media(max-width:760px) {
+  .list-pagination { align-items:stretch; flex-direction:column; gap:12px; padding:13px 12px; }
+  .list-pagination-info { justify-content:space-between; gap:8px; }
+  .list-pagination-controls { justify-content:space-between; width:100%; }
+  .list-page-numbers { flex:1; justify-content:center; gap:3px; }
+  .list-page-nav, .list-page-number { min-width:32px; min-height:36px; padding:0 7px; }
+  .list-page-nav span { font-size:.72rem; }
+}
+@media(max-width:380px) {
+  .list-pagination-info { align-items:flex-start; flex-direction:column; }
+  .list-page-nav span { display:none; }
+  .list-page-nav { min-width:34px; }
+  .list-page-number { min-width:30px; padding:0 5px; }
+}
